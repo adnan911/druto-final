@@ -19,6 +19,7 @@ export const paymentInput = z.object({
   buyerLabel: z.string().max(255).optional(),
   returnUrl: z.string().max(2048).optional(),
   amount: z.string().regex(/^\d+(\.\d{1,6})?$/, "Amount must be a positive USDC decimal amount"),
+  orderContext: z.object({ items: z.array(z.object({ productId: z.string(), name: z.string(), seller: z.string(), unitPrice: z.number().nonnegative(), quantity: z.number().int().positive() })), delivery: z.string(), shippingAddress: z.object({ name: z.string(), line1: z.string(), city: z.string(), postalCode: z.string(), country: z.string() }), buyerEmail: z.string().email() }).optional(),
 });
 
 export const appRouter = router({
@@ -38,6 +39,7 @@ export const appRouter = router({
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
       const idempotencyKey = input.idempotencyKey ?? input.externalOrderId;
       const amountAtomic = amountToAtomicUsdc(input.amount);
+      const orderContext = input.orderContext ? JSON.stringify(input.orderContext) : null;
       const returnUrl = normalizeMarketplaceReturnUrl(input.returnUrl);
       const [existing] = await db.select().from(paymentIntents).where(eq(paymentIntents.idempotencyKey, idempotencyKey)).limit(1);
       if (existing) {
@@ -53,6 +55,7 @@ export const appRouter = router({
         itemName: input.itemName,
         buyerLabel: input.buyerLabel,
         returnUrl,
+        orderContext,
         amountAtomic,
         asset: "USDC",
         network: "arc-testnet",

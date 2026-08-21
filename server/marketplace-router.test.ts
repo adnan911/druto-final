@@ -38,13 +38,14 @@ describe("marketplace Payment Intent router contract", () => {
       buyerLabel: "Hackathon buyer",
       returnUrl: "/marketplace",
       amount: "1.00",
+      orderContext: { items: [{ productId: "api-pro", name: "Northstar API Pro", seller: "Northstar Labs", unitPrice: 1, quantity: 2 }], delivery: "Digital delivery", shippingAddress: { name: "Alex", line1: "1 Main St", city: "Arc City", postalCode: "10001", country: "United States" }, buyerEmail: "buyer@example.com" },
     });
 
-    expect(rows[0]).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/marketplace", externalOrderId: "NS-1842" });
+    expect(rows[0]).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/marketplace", externalOrderId: "NS-1842", orderContext: expect.stringContaining('"quantity":2') });
     expect(created).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/marketplace" });
 
     const intent = await caller.payments.getIntent({ id: created.id });
-    expect(intent).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/marketplace", itemName: "Northstar API Pro" });
+    expect(intent).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/marketplace", itemName: "Northstar API Pro", orderContext: expect.stringContaining('"productId":"api-pro"') });
   });
 
   it("defaults an omitted returnUrl at the router boundary", async () => {
