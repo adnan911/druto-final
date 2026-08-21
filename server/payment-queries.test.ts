@@ -33,3 +33,17 @@ describe("verified payment queries", () => {
     expect(await caller.payments.summary()).toMatchObject({ availableUsdc: "0.00", grossUsdc: "0.00", successfulCount: 0 });
   });
 });
+
+
+describe("marketplace handoff contract", () => {
+  it("accepts buyer context and a relative return URL", async () => {
+    const { paymentInput } = await import("./routers");
+    const parsed = paymentInput.parse({ externalOrderId: "NS-1842", idempotencyKey: "marketplace-ns-1842", itemName: "Northstar API Pro", buyerLabel: "Hackathon buyer", returnUrl: "/marketplace", amount: "1.00" });
+    expect(parsed).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/marketplace", amount: "1.00" });
+  });
+
+  it("rejects malformed marketplace input", async () => {
+    const { paymentInput } = await import("./routers");
+    expect(() => paymentInput.parse({ externalOrderId: "", itemName: "Item", returnUrl: "javascript:alert(1)", amount: "1.00" })).toThrow();
+  });
+});

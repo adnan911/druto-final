@@ -30,6 +30,8 @@ export const paymentIntents = mysqlTable("paymentIntents", {
   externalOrderId: varchar("externalOrderId", { length: 128 }).notNull(),
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).unique(),
   itemName: varchar("itemName", { length: 255 }).notNull(),
+  buyerLabel: varchar("buyerLabel", { length: 255 }),
+  returnUrl: varchar("returnUrl", { length: 2048 }),
   amountAtomic: varchar("amountAtomic", { length: 64 }).notNull(),
   asset: varchar("asset", { length: 16 }).notNull().default("USDC"),
   network: varchar("network", { length: 32 }).notNull().default("arc-testnet"),

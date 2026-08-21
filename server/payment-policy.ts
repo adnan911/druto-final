@@ -10,6 +10,16 @@ export function assertIdempotentMatch(existing: ExistingIntentDetails, requested
   }
 }
 
+export function normalizeMarketplaceReturnUrl(value?: string) {
+  if (!value) return "/marketplace";
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") return parsed.toString();
+  } catch { /* invalid URL handled below */ }
+  throw new Error("Return URL must be a relative path or an http(s) URL");
+}
+
 export function assertTransactionOwnership(storedIntentId: string, requestedIntentId: string) {
   if (storedIntentId !== requestedIntentId) throw new Error("Transaction hash is already attached to another Payment Intent");
 }

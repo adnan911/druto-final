@@ -9,13 +9,15 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { assertIdempotentMatch, assertTransactionOwnership } from "./payment-policy";
+import { assertIdempotentMatch, assertTransactionOwnership, normalizeMarketplaceReturnUrl } from "./payment-policy";
 import { summarizeVerifiedRows } from "./payment-summary";
 
-const paymentInput = z.object({
+export const paymentInput = z.object({
   externalOrderId: z.string().min(1).max(128),
   idempotencyKey: z.string().min(1).max(128).optional(),
   itemName: z.string().min(1).max(255),
+  buyerLabel: z.string().max(255).optional(),
+  returnUrl: z.string().max(2048).optional(),
   amount: z.string().regex(/^\d+(\.\d{1,6})?$/, "Amount must be a positive USDC decimal amount"),
 });
 
@@ -36,10 +38,11 @@ export const appRouter = router({
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
       const idempotencyKey = input.idempotencyKey ?? input.externalOrderId;
       const amountAtomic = amountToAtomicUsdc(input.amount);
+      const returnUrl = normalizeMarketplaceReturnUrl(input.returnUrl);
       const [existing] = await db.select().from(paymentIntents).where(eq(paymentIntents.idempotencyKey, idempotencyKey)).limit(1);
       if (existing) {
         try { assertIdempotentMatch(existing, { externalOrderId: input.externalOrderId, itemName: input.itemName, amountAtomic }); } catch (error) { throw new TRPCError({ code: "CONFLICT", message: error instanceof Error ? error.message : "Idempotency mismatch" }); }
-        return { id: existing.id, externalOrderId: existing.externalOrderId, itemName: existing.itemName, displayAmount: (Number(existing.amountAtomic) / 1_000_000).toFixed(6), asset: "USDC" as const, network: "arc-testnet" as const, merchantAddress: existing.merchantAddress, expiresAt: existing.expiresAt, checkoutUrl: `/checkout/${existing.id}` };
+        return { id: existing.id, externalOrderId: existing.externalOrderId, itemName: existing.itemName, buyerLabel: existing.buyerLabel, returnUrl: existing.returnUrl, displayAmount: (Number(existing.amountAtomic) / 1_000_000).toFixed(6), asset: "USDC" as const, network: "arc-testnet" as const, merchantAddress: existing.merchantAddress, expiresAt: existing.expiresAt, checkoutUrl: `/checkout/${existing.id}` };
       }
       const id = `pi_${nanoid(12)}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
@@ -48,6 +51,8 @@ export const appRouter = router({
         externalOrderId: input.externalOrderId,
         idempotencyKey,
         itemName: input.itemName,
+        buyerLabel: input.buyerLabel,
+        returnUrl,
         amountAtomic,
         asset: "USDC",
         network: "arc-testnet",
@@ -59,6 +64,8 @@ export const appRouter = router({
         id,
         externalOrderId: input.externalOrderId,
         itemName: input.itemName,
+        buyerLabel: input.buyerLabel,
+        returnUrl,
         displayAmount: input.amount,
         asset: "USDC" as const,
         network: "arc-testnet" as const,

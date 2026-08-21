@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertIdempotentMatch, assertTransactionOwnership } from "./payment-policy";
+import { assertIdempotentMatch, assertTransactionOwnership, normalizeMarketplaceReturnUrl } from "./payment-policy";
 
 describe("payment safety policies", () => {
   it("accepts an exact idempotent retry", () => {
@@ -18,6 +18,13 @@ describe("payment safety policies", () => {
 
   it("accepts a transaction retry for the same intent", () => {
     expect(() => assertTransactionOwnership("pi_1", "pi_1")).not.toThrow();
+  });
+
+  it("defaults and validates marketplace return URLs", () => {
+    expect(normalizeMarketplaceReturnUrl()).toBe("/marketplace");
+    expect(normalizeMarketplaceReturnUrl("/marketplace?paid=1")).toBe("/marketplace?paid=1");
+    expect(normalizeMarketplaceReturnUrl("https://market.example/return")).toBe("https://market.example/return");
+    expect(() => normalizeMarketplaceReturnUrl("//evil.example")).toThrow("Return URL");
   });
 
   it("rejects a transaction hash attached to another intent", () => {

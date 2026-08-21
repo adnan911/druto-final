@@ -35,3 +35,21 @@
 - [x] Remove or relabel all remaining Overview fallback money figures shown without summary data, including gross payments, to settle, and chart summary totals.
 - [x] Add an analytics empty-state message when no verified Arc transfers exist instead of rendering demo chart visuals as live metrics.
 - [x] Gate the Overview demo chart behind verified Arc activity and render a dedicated empty state when no verified rows exist.
+- [x] Define a shared marketplace-to-Druto Payment Intent contract with order, item, buyer, amount, merchant, and return URL fields.
+- [x] Add a marketplace demo route or package integration example that creates a real backend Payment Intent and opens the hosted checkout.
+- [x] Add buyer return/receipt handling that preserves the order context after checkout.
+- [x] Add seller activity refresh and explicit demo fallback controls for hackathon rehearsal.
+- [x] Add tests for marketplace handoff validation and return URL behavior.
+- [x] Run typecheck, build, tests, and browser verification for the integrated narrative.
+- [x] Add persisted marketplace buyer context and returnUrl fields to Payment Intents and the create-intent contract.
+- [x] Implement marketplace-aware receipt return navigation using the persisted returnUrl.
+- [x] Add explicit seller refresh controls for live verified activity.
+- [x] Add marketplace handoff and returnUrl tests.
+- [x] Verify marketplace → checkout → receipt end to end in the browser.
+- [x] Add receipt-page support for persisted returnUrl and a Return to marketplace action.
+- [x] Add Vitest/router tests for marketplace create-intent inputs, buyerLabel, and returnUrl persistence/behavior.
+- [x] Browser-verify /marketplace → /checkout/:id → /receipt/:id and marketplace return navigation.
+- [x] Add a router-level createIntent test that asserts buyerLabel and normalized returnUrl are persisted and returned.
+- [x] Add a getIntent persistence assertion proving receipt-facing marketplace context survives intent creation.
+- [x] Test router createIntent default returnUrl normalization when returnUrl is omitted.
+- [x] Test router createIntent rejects an invalid returnUrl at the procedure boundary.

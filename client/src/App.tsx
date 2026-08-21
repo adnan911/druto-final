@@ -15,6 +15,7 @@ function App() {
           <Toaster />
           <Switch>
             <Route path="/" component={Home} />
+            <Route path="/marketplace" component={Home} />
             <Route path="/checkout/:session" component={Home} />
             <Route path="/receipt/:session" component={Home} />
             <Route path="/payments" component={Home} />
