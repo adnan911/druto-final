@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMarketplaceCheckoutPayload, buildMarketplaceOrderContext, calculateMarketplaceTotals, updateMarketplaceQuantity } from "./marketplace";
+import { buildMarketplaceCheckoutPayload, buildMarketplaceOrderContext, calculateMarketplaceTotals, parseMarketplaceOrderContext, updateMarketplaceQuantity } from "./marketplace";
 
 const products = [{ id: "api", price: 1 }, { id: "kit", price: 2.5 }];
 
@@ -11,6 +11,13 @@ describe("marketplace cart helpers", () => {
 
   it("builds structured checkout order context", () => {
     expect(buildMarketplaceOrderContext([{ productId: "api", quantity: 2 }], [{ id: "api", name: "API Pro", seller: "Northstar Labs", price: 1 }], "Priority delivery", { name: "Alex", line1: "1 Main St", city: "Arc City", postalCode: "10001", country: "United States" }, "buyer@example.com")).toEqual({ items: [{ productId: "api", name: "API Pro", seller: "Northstar Labs", unitPrice: 1, quantity: 2 }], delivery: "Priority delivery", shippingAddress: { name: "Alex", line1: "1 Main St", city: "Arc City", postalCode: "10001", country: "United States" }, buyerEmail: "buyer@example.com" });
+  });
+
+  it("parses receipt order context and safely rejects malformed context", () => {
+    const serialized = JSON.stringify({ items: [{ productId: "api", name: "API Pro", seller: "Northstar Labs", unitPrice: 1, quantity: 2 }], delivery: "Priority delivery", shippingAddress: { name: "Alex", line1: "1 Main St", city: "Arc City", postalCode: "10001", country: "United States" }, buyerEmail: "buyer@example.com" });
+    expect(parseMarketplaceOrderContext(serialized)?.items?.[0]).toMatchObject({ name: "API Pro", quantity: 2 });
+    expect(parseMarketplaceOrderContext(serialized)?.shippingAddress).toMatchObject({ line1: "1 Main St", postalCode: "10001" });
+    expect(parseMarketplaceOrderContext("not-json")).toBeNull();
   });
 
   it("builds the exact Druto checkout handoff payload", () => {

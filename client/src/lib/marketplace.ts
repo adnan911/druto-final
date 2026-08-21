@@ -13,6 +13,17 @@ export function buildMarketplaceOrderContext(lines: MarketplaceCartLine[], produ
   return { items: lines.flatMap(line => { const product = products.find(item => item.id === line.productId); return product ? [{ productId: product.id, name: product.name, seller: product.seller, unitPrice: product.price, quantity: line.quantity }] : []; }), delivery, shippingAddress, buyerEmail };
 }
 
+export function parseMarketplaceOrderContext(serialized: string | null | undefined) {
+  if (!serialized) return null;
+  try {
+    const parsed = JSON.parse(serialized);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed as MarketplaceOrderContext;
+  } catch {
+    return null;
+  }
+}
+
 export function buildMarketplaceCheckoutPayload(orderId: string, itemName: string, amount: number, context: MarketplaceOrderContext) {
   return { externalOrderId: orderId, idempotencyKey: `marketplace-${orderId}`, itemName, buyerLabel: context.buyerEmail, returnUrl: "/marketplace", amount: amount.toFixed(2), orderContext: context };
 }

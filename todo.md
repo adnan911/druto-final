@@ -56,7 +56,7 @@
 
 # Amazon-like marketplace expansion
 
-- [ ] Add a multi-category demo catalog with product cards, prices, availability, seller labels, and product detail views.
+- [x] Add a multi-category demo catalog with product cards, prices, availability, seller labels, and product detail views.
 - [x] Add marketplace search, category filtering, and sorting controls.
 - [x] Add a persistent client-side cart with add, remove, quantity, subtotal, shipping, and total calculations.
 - [x] Add a standard checkout page with contact, shipping, delivery, payment-method, and order-summary sections.
@@ -70,5 +70,10 @@
 
 - [x] Persist marketplace cart state client-side and restore it on page load.
 - [x] Add a distinct shipping section with address fields and lightweight validation to marketplace checkout.
-- [ ] Store structured marketplace order context on Payment Intents and render it in the buyer receipt flow.
+- [x] Store structured marketplace order context on Payment Intents and render it in the buyer receipt flow.
 - [x] Add a marketplace checkout order-creation/handoff unit test asserting the generated createIntent payload.
+
+# Final marketplace polish
+
+- [x] Add explicit product availability labels/state to catalog cards and product details.
+- [x] Render full structured marketplace line items and shipping details on buyer receipts, with parsing coverage.
