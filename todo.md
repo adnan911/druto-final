@@ -10,7 +10,7 @@
 - [x] Connect buyer receipt and seller dashboard state to verified payment events.
 - [x] Preserve a clearly labelled demo fallback for hackathon reliability.
 - [x] Run typecheck, build, and browser verification.
-- [ ] Ask for explicit confirmation before any real testnet transaction approval or transfer.
+- [x] Ask for explicit confirmation before any real testnet transaction approval or transfer.
 - [x] Document setup, environment variables, wallet safety, and remaining limitations.
 - [x] Add idempotency key support to Payment Intent creation and verification, with schema/storage constraints and retry-safe duplicate handling.
 - [x] Create a buyer receipt view/state driven by verified payment data instead of only the generic final checkout state.
