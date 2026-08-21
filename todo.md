@@ -1,12 +1,37 @@
-# Transaction history enhancement
+# Real Arc Testnet integration
 
-- [ ] Add transaction-history mock records with date, timestamp, status, payment method, amount, customer, and transaction hash.
-- [ ] Add date-range filtering controls.
-- [ ] Add status filtering controls.
-- [ ] Add payment-method filtering controls.
-- [ ] Add sortable columns for date, amount, status, and payment method.
-- [ ] Add result count, reset filters, and empty-state behavior.
-- [ ] Preserve transaction detail drawer behavior and responsive mobile layout.
-- [ ] Run typecheck and production build.
-- [ ] Verify desktop and mobile screenshots.
-- [ ] Save an updated checkpoint and deliver it.
+- [x] Read ArcLLM.md and circleLLM.md completely and record verified implementation requirements.
+- [x] Inspect the existing druto-platform and standalone payment-infrastructure source boundaries.
+- [x] Decide whether the real flow needs a full-stack project upgrade and identify required secrets without requesting private keys.
+- [x] Define the direct merchant-wallet Payment Intent model and state machine.
+- [x] Define the Arc Testnet USDC transfer and verification boundary.
+- [x] Add EVM wallet connection with safe client-side transaction parameters.
+- [x] Add backend payment-intent, idempotency, and verification foundations.
+- [x] Connect buyer receipt and seller dashboard state to verified payment events.
+- [x] Preserve a clearly labelled demo fallback for hackathon reliability.
+- [x] Run typecheck, build, and browser verification.
+- [ ] Ask for explicit confirmation before any real testnet transaction approval or transfer.
+- [x] Document setup, environment variables, wallet safety, and remaining limitations.
+- [x] Add idempotency key support to Payment Intent creation and verification, with schema/storage constraints and retry-safe duplicate handling.
+- [x] Create a buyer receipt view/state driven by verified payment data instead of only the generic final checkout state.
+- [x] Replace seller dashboard mock balances and recent payments with data derived from verified Payment Intents and payment transactions.
+- [x] Add explicit idempotency-key handling for verifyTransfer and reject createIntent mismatches for reused keys.
+- [x] Reject transaction-hash conflicts when a hash belongs to a different Payment Intent and add retry/mismatch tests.
+- [x] Replace remaining dashboard balance, activity, and settlement figures with values derived from verified payment transactions and succeeded intents.
+- [x] Replace all remaining hardcoded overview/activity/settlement numbers and labels with values computed from verified paymentTransactions plus succeeded intents, including chart summaries and settlement-related figures.
+- [x] Add a server query that joins and aggregates paymentTransactions with paymentIntents so recent payments, balances, and settlement metrics come from verified onchain records rather than intent status alone.
+- [x] Add a verified-payments query joining paymentTransactions with paymentIntents and use it for recent payments, latest sale, and transaction history rows instead of listIntents.
+- [x] Replace remaining mock or hardcoded settlement and activity figures across overview, settlements, and balances surfaces with verified transaction-derived values.
+- [x] Add tests for the joined aggregation and verified-payment query.
+- [x] Replace Balances and Settlements page metrics, tables, and copy with data derived from verified paymentTransactions joined to paymentIntents.
+- [x] Remove or relabel remaining hardcoded activity and operations figures in Overview that are not backed by verified data.
+- [x] Add router/query tests for payments.verifiedPayments and payments.summary using joined verified-row fixtures, including empty-state and verified-row assertions.
+- [x] Replace or clearly label remaining Balances and Settlements placeholder metrics such as reserves and fees as demo-only, with verified joined-record context.
+- [x] Remove or relabel all remaining hardcoded overview operational/activity figures and example queue items that are not backed by verified data.
+- [x] Add router-level empty-state tests for payments.verifiedPayments and payments.summary alongside verified-row assertions.
+- [x] Replace remaining hardcoded Overview chart values and comparison copy with verified-data-driven metrics, or clearly label the chart as demo-only when unavailable.
+- [x] Relabel or remove unlabeled Overview fallback values such as available balance and success-rate placeholders so no operational figure appears live without backend data.
+- [x] Replace the Overview chart’s hardcoded SVG/path and fixed X-axis labels with data-driven output, or explicitly label the entire chart block as demo-only when no verified activity exists.
+- [x] Remove or relabel all remaining Overview fallback money figures shown without summary data, including gross payments, to settle, and chart summary totals.
+- [x] Add an analytics empty-state message when no verified Arc transfers exist instead of rendering demo chart visuals as live metrics.
+- [x] Gate the Overview demo chart behind verified Arc activity and render a dedicated empty state when no verified rows exist.

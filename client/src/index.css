@@ -71,3 +71,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .history-empty h3 { margin: 0 0 6px; font-size: 17px; letter-spacing: -.04em; }
 .history-empty p { margin: 0 0 14px; color: #8a948e; font-size: 11px; }
 @media (max-width: 760px) { .transaction-toolbar { display: grid; grid-template-columns: 1fr 1fr; align-items: end; } .filter-control { min-width: 0; } .reset-filter { margin-left: 0; width: 100%; } .history-summary { align-items: flex-start; flex-direction: column; gap: 5px; } .history-summary-note { font-size: 8px; } .transaction-table .table-wrap { overflow-x: auto; } .transaction-table table { min-width: 930px; } }
+
+/* Real Arc checkout QR presentation */
+.qr-panel { display:flex; align-items:center; gap:14px; margin-top:16px; padding:12px; border:1px solid rgba(36,54,62,.12); background:#fbfcf8; border-radius:12px; }
+.qr-panel > div { width:78px; height:78px; display:grid; place-items:center; background:#fff; border-radius:8px; overflow:hidden; }
+.qr-panel img { width:74px; height:74px; image-rendering:pixelated; }
+.qr-panel > span:last-child { display:flex; flex-direction:column; gap:4px; }
+.qr-panel strong { font-size:12px; color:#27343a; }
+.qr-panel small { color:#68757a; font-size:11px; line-height:1.4; }
+.qr-placeholder { color:#829096; font-size:11px; }
+
+.live-ledger-strip { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+.live-ledger-strip > div { display:flex; flex-direction:column; gap:5px; padding:15px 17px; background:#eef7f1; border:1px solid #d8ebe1; border-radius:9px; }
+.live-ledger-strip strong { font-size:15px; letter-spacing:-.03em; }
+.live-ledger-strip small { color:#6d7d75; font-size:10px; }
+.receipt-card { max-width:480px; }
+.receipt-card h2 { margin:10px 0 20px; font-size:35px; letter-spacing:-.06em; }
+.receipt-card h2 small { color:#8b9690; font:11px "IBM Plex Mono", monospace; }
+.receipt-lines { display:grid; gap:0; border-top:1px solid #e8ebe3; margin-bottom:18px; }
+.receipt-lines .detail-line { padding:11px 0; }
+@media (max-width: 760px) { .live-ledger-strip { grid-template-columns:1fr; } }
