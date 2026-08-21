@@ -25,6 +25,17 @@ const paymentRows = [
   { id: "pay_01J8MYA2", customer: "Tangent Works", amount: "$2,100.00", status: "Succeeded", time: "1 hr ago", hash: "0x3dd7…8a51", tone: "success" },
 ];
 
+const transactionHistory = [
+  { id: "pay_01J8N2F4", date: "2026-08-21", time: "09:42:18", customer: "Northstar AI", amount: 1240, status: "Succeeded", method: "Wallet transfer", hash: "0x7a2b…d91c", network: "Arc Testnet", tone: "success" },
+  { id: "pay_01J8N2E8", date: "2026-08-21", time: "09:36:04", customer: "Mosaic Labs", amount: 680, status: "Verifying", method: "Wallet transfer", hash: "0xe884…219a", network: "Arc Testnet", tone: "warning" },
+  { id: "pay_01J8N1V7", date: "2026-08-20", time: "18:12:51", customer: "Atlas Compute", amount: 4800, status: "Succeeded", method: "Payment link", hash: "0x1c99…7f0a", network: "Arc Testnet", tone: "success" },
+  { id: "pay_01J8MZQ3", date: "2026-08-20", time: "16:48:29", customer: "Dawn Studio", amount: 95, status: "Underpaid", method: "Hosted checkout", hash: "0x91fd…03ad", network: "Arc Testnet", tone: "danger" },
+  { id: "pay_01J8MYA2", date: "2026-08-19", time: "14:20:07", customer: "Tangent Works", amount: 2100, status: "Succeeded", method: "API", hash: "0x3dd7…8a51", network: "Arc Testnet", tone: "success" },
+  { id: "pay_01J8MWP6", date: "2026-08-18", time: "11:05:42", customer: "Hatch Systems", amount: 320, status: "Expired", method: "Payment link", hash: "—", network: "Arc Testnet", tone: "neutral" },
+  { id: "pay_01J8MVK1", date: "2026-08-17", time: "08:22:13", customer: "Meridian Ops", amount: 7500, status: "Risk review", method: "API", hash: "0x8f21…a0bd", network: "Arc Testnet", tone: "warning" },
+  { id: "pay_01J8MSB4", date: "2026-08-15", time: "17:31:06", customer: "Cloudline", amount: 149, status: "Succeeded", method: "Hosted checkout", hash: "0x44ab…c122", network: "Arc Testnet", tone: "success" },
+];
+
 const customers = [
   ["Northstar AI", "finance@northstar.ai", "$18,420.00", "Active"],
   ["Mosaic Labs", "ops@mosaic.dev", "$9,680.00", "Active"],
@@ -75,12 +86,55 @@ function QueueItem({ icon, title, detail, action, tone }: { icon: React.ReactNod
 
 function PaymentTable({ compact = false }: { compact?: boolean }) { return <div className="table-wrap"><table><thead><tr><th>Payment</th><th>Customer</th><th>Amount</th><th>Status</th><th>Received</th></tr></thead><tbody>{paymentRows.slice(0, compact ? 4 : paymentRows.length).map(row => <tr key={row.id}><td><span className="mono-id">{row.id}</span><small className="table-sub"><span className="mini-arc" />{row.hash}</small></td><td>{row.customer}</td><td className="amount-cell">{row.amount}<small>USDC</small></td><td><StatusPill status={row.status} tone={row.tone} /></td><td className="muted-cell">{row.time}</td></tr>)}</tbody></table></div>; }
 
+function TransactionHistory() {
+  const [dateRange, setDateRange] = useState("All dates");
+  const [status, setStatus] = useState("All statuses");
+  const [method, setMethod] = useState("All methods");
+  const [sortKey, setSortKey] = useState<"date" | "amount" | "status" | "method">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const filteredRows = useMemo(() => {
+    const filtered = transactionHistory.filter(row => {
+      const dateMatch = dateRange === "All dates" || (dateRange === "Today" ? row.date === "2026-08-21" : dateRange === "Last 7 days" ? row.date >= "2026-08-15" : row.date >= "2026-08-01");
+      return dateMatch && (status === "All statuses" || row.status === status) && (method === "All methods" || row.method === method);
+    });
+    return [...filtered].sort((a, b) => {
+      let comparison = 0;
+      if (sortKey === "amount") comparison = a.amount - b.amount;
+      else if (sortKey === "date") comparison = `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`);
+      else if (sortKey === "status") comparison = a.status.localeCompare(b.status);
+      else comparison = a.method.localeCompare(b.method);
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [dateRange, status, method, sortKey, sortDirection]);
+
+  const updateSort = (key: "date" | "amount" | "status" | "method") => {
+    if (sortKey === key) setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDirection(key === "date" ? "desc" : "asc"); }
+  };
+  const reset = () => { setDateRange("All dates"); setStatus("All statuses"); setMethod("All methods"); };
+  const sortIcon = (key: string) => sortKey === key ? (sortDirection === "asc" ? "↑" : "↓") : "↕";
+
+  return <>
+    <div className="transaction-toolbar">
+      <div className="filter-control"><label>Date range</label><select value={dateRange} onChange={e => setDateRange(e.target.value)}><option>All dates</option><option>Today</option><option>Last 7 days</option><option>This month</option></select></div>
+      <div className="filter-control"><label>Status</label><select value={status} onChange={e => setStatus(e.target.value)}><option>All statuses</option><option>Succeeded</option><option>Verifying</option><option>Underpaid</option><option>Risk review</option><option>Expired</option></select></div>
+      <div className="filter-control"><label>Payment method</label><select value={method} onChange={e => setMethod(e.target.value)}><option>All methods</option><option>Wallet transfer</option><option>Hosted checkout</option><option>Payment link</option><option>API</option></select></div>
+      <button className="button button-quiet reset-filter" onClick={reset}><RefreshCw size={14} /> Reset</button>
+    </div>
+    <div className="history-summary"><span><strong>{filteredRows.length}</strong> of {transactionHistory.length} transactions</span><span className="history-summary-note">Amounts shown in USDC · Test environment</span></div>
+    <div className="card table-card full-table transaction-table"><div className="table-wrap"><table><thead><tr><th><button className="sort-button" onClick={() => updateSort("date")}>Date / time <span>{sortIcon("date")}</span></button></th><th>Transaction</th><th>Customer</th><th><button className="sort-button" onClick={() => updateSort("amount")}>Amount <span>{sortIcon("amount")}</span></button></th><th><button className="sort-button" onClick={() => updateSort("status")}>Status <span>{sortIcon("status")}</span></button></th><th><button className="sort-button" onClick={() => updateSort("method")}>Payment method <span>{sortIcon("method")}</span></button></th><th /></tr></thead><tbody>{filteredRows.map(row => <tr key={row.id} onClick={() => setSelectedId(row.id)} className="clickable-row"><td><strong>{row.date}</strong><small className="table-sub">{row.time}</small></td><td><span className="mono-id">{row.id}</span><small className="table-sub"><span className="mini-arc" />{row.hash}</small></td><td>{row.customer}</td><td className="amount-cell">${row.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}<small>USDC</small></td><td><StatusPill status={row.status} tone={row.tone} /></td><td><span className="method-label"><span className="method-glyph">{row.method === "API" ? "{/}" : row.method === "Payment link" ? "↗" : row.method === "Hosted checkout" ? "□" : "⌁"}</span>{row.method}</span></td><td><button className="icon-button" aria-label={`Open ${row.id}`} onClick={e => { e.stopPropagation(); setSelectedId(row.id); }}><ArrowUpRight size={15} /></button></td></tr>)}</tbody></table>{filteredRows.length === 0 && <div className="history-empty"><div className="empty-icon"><Search size={19} /></div><h3>No matching transactions</h3><p>Try widening the date range or resetting one of the filters.</p><button className="button button-quiet" onClick={reset}>Reset filters</button></div>}</div></div>
+    {selectedId && <DetailDrawer id={selectedId} close={() => setSelectedId(null)} />}
+  </>;
+}
+
 function PagePanel({ active, onCreate }: { active: string; onCreate: () => void }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const headings: Record<string, string> = { Payments: "Payments", "Payment Links": "Payment Links", Invoices: "Invoices", Subscriptions: "Subscriptions", Customers: "Customers", Balances: "Balances", Settlements: "Settlements", Reports: "Reports", "Risk & compliance": "Risk & compliance", Developers: "Developers", Settings: "Settings" };
   const title = headings[active] || active;
-  if (active === "Payments") return <div className="page-content"><PageHeader eyebrow="Ledger activity" title="Payments" description="Every payment intent, observed transaction, and final ledger posting in one place." action="Create payment" onAction={onCreate} /><div className="filter-bar"><div className="search-field wide"><Search size={15} /><input placeholder="Search by payment, customer, or hash" value={query} onChange={e => setQuery(e.target.value)} /></div><button className="filter-button"><ListFilter size={15} /> Filters</button><button className="filter-button">All statuses <ChevronDown size={14} /></button></div><div className="card table-card full-table"><PaymentTable /></div>{selected && <DetailDrawer id={selected} close={() => setSelected(null)} />}</div>;
+  if (active === "Payments") return <div className="page-content"><PageHeader eyebrow="Ledger activity" title="Transaction history" description="Every payment intent, observed transaction, and final ledger posting in one place." action="Create payment" onAction={onCreate} /><TransactionHistory /></div>;
   if (active === "Balances") return <BalancesPage />;
   if (active === "Risk & compliance") return <RiskPage />;
   if (active === "Developers") return <DeveloperPage />;
@@ -101,6 +155,6 @@ function DetailLine({ label, value, mono, copy }: { label: string; value: string
 
 function CheckoutPage() { const [state, setState] = useState("ready"); const stateText: Record<string, string> = { ready: "Ready to pay", submitted: "Transaction submitted", final: "Payment final" }; return <div className="checkout-shell"><div className="checkout-brand"><Mark /><span>druto</span><span className="checkout-test"><span className="live-dot" /> Test checkout</span></div><main className="checkout-main"><div className="checkout-intro"><span className="eyebrow"><span className="eyebrow-line" /> Hosted Checkout</span><h1>Pay <em>Northstar AI.</em></h1><p>One secure transfer. Final on Arc, recorded in Druto.</p><div className="checkout-trust"><span><ShieldCheck size={15} /> Verified merchant</span><span><Zap size={15} /> Fast finality</span></div></div><div className="checkout-card"><div className="checkout-card-head"><span>Order #NS-1842</span><span className="checkout-expiry"><Timer size={14} /> Expires in 23:48</span></div><div className="checkout-amount"><span>Total due</span><strong>$1,240.00 <small>USDC</small></strong></div><div className="checkout-network"><span className="network-symbol">A</span><span><strong>USDC on Arc</strong><small>Arc Testnet · ERC-20</small></span><BadgeCheck size={17} /></div>{state === "ready" && <><div className="wallet-placeholder"><div className="wallet-ring"><WalletCards size={26} /></div><strong>Connect a wallet to continue</strong><span>Your wallet will only be asked to approve this exact amount.</span><button className="button button-primary full-width" onClick={() => setState("submitted")}><WalletCards size={16} /> Connect wallet</button></div><div className="checkout-note"><LockKeyhole size={13} /> You will review the recipient and amount before signing.</div></>}{state === "submitted" && <div className="wallet-placeholder state-submitted"><div className="submitted-orbit"><RefreshCw size={25} /></div><strong>Transaction submitted</strong><span>We’re waiting for the Arc transaction to reach finality.</span><div className="progress-line"><i /></div><button className="button button-primary full-width" onClick={() => setState("final")}>Simulate finality</button></div>}{state === "final" && <div className="wallet-placeholder state-final"><div className="success-mark"><Check size={26} /></div><strong>Payment final</strong><span>Your payment is recorded and Northstar AI can fulfill your order.</span><div className="final-ref"><span>Payment reference</span><strong className="mono-id">pay_01J8N2F4 <Copy size={13} /></strong></div><button className="button button-primary full-width" onClick={() => toast.success("Returning to merchant…")}>Return to merchant</button></div>}<div className="checkout-footer"><span>Powered by <strong>druto</strong></span><span><LockKeyhole size={12} /> Secure test environment</span></div></div></main></div>; }
 
-export default function Home() { const [location] = useLocation(); if (location.startsWith("/checkout")) return <CheckoutPage />; const [active, setActive] = useState("Overview"); const [collapsed, setCollapsed] = useState(false); const [showCreate, setShowCreate] = useState(false); const title = active === "Overview" ? "Overview" : active; const create = () => setShowCreate(true); return <div className="app-shell"><Sidebar active={active} setActive={setActive} collapsed={collapsed} setCollapsed={setCollapsed} /><main className="main-shell"><Topbar title={title} onCreate={create} />{active === "Overview" ? <Overview setActive={setActive} onCreate={create} /> : <PagePanel active={active} onCreate={create} />}</main>{showCreate && <CreatePayment close={() => setShowCreate(false)} />}</div>; }
+export default function Home() { const [location] = useLocation(); if (location.startsWith("/checkout")) return <CheckoutPage />; const [active, setActive] = useState(location.startsWith("/payments") ? "Payments" : "Overview"); const [collapsed, setCollapsed] = useState(false); const [showCreate, setShowCreate] = useState(false); const title = active === "Overview" ? "Overview" : active; const create = () => setShowCreate(true); return <div className="app-shell"><Sidebar active={active} setActive={setActive} collapsed={collapsed} setCollapsed={setCollapsed} /><main className="main-shell"><Topbar title={title} onCreate={create} />{active === "Overview" ? <Overview setActive={setActive} onCreate={create} /> : <PagePanel active={active} onCreate={create} />}</main>{showCreate && <CreatePayment close={() => setShowCreate(false)} />}</div>; }
 
 function CreatePayment({ close }: { close: () => void }) { const [created, setCreated] = useState(false); return <div className="modal-backdrop" onClick={close}><div className="modal-card" onClick={e => e.stopPropagation()}>{!created ? <><div className="modal-head"><div><span className="eyebrow">Test environment</span><h3>Create payment intent</h3></div><button className="icon-button" onClick={close}><X size={18} /></button></div><p className="modal-description">Create a backend-generated payment request. This frontend-only version stores the preview locally and does not move funds.</p><label>Amount<input className="form-input" defaultValue="1240.00" /></label><div className="form-two"><label>Asset<select className="form-input"><option>USDC</option></select></label><label>Network<select className="form-input"><option>Arc Testnet</option></select></label></div><label>Description<input className="form-input" defaultValue="Order #NS-1842" /></label><div className="modal-actions"><button className="button button-quiet" onClick={close}>Cancel</button><button className="button button-primary" onClick={() => setCreated(true)}><Plus size={15} /> Create intent</button></div></> : <div className="created-state"><div className="success-mark"><Check size={24} /></div><span className="eyebrow">Payment Intent created</span><h3>Ready for checkout.</h3><p className="mono-id">pi_01J8N4W2</p><button className="button button-primary full-width" onClick={close}>Done</button></div>}</div></div>; }
