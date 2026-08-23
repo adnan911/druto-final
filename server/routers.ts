@@ -2,7 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { merchantAccounts, paymentIntents, paymentTransactions } from "../drizzle/schema";
+import { merchantAccounts, paymentIntents, paymentTransactions, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
 import { getDb } from "./db";
 import { amountToAtomicUsdc, buildUsdcTransferRequest, verifyArcUsdcTransfer } from "./arc";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -11,6 +11,8 @@ import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_
 import { TRPCError } from "@trpc/server";
 import { assertIdempotentMatch, assertTransactionOwnership, normalizeMarketplaceReturnUrl } from "./payment-policy";
 import { summarizeVerifiedRows } from "./payment-summary";
+import { createWebhookSecret, encryptWebhookSecret, isValidWebhookUrl } from "./webhooks";
+import { dispatchPaymentVerified, retryWebhookDelivery } from "./webhook-delivery";
 
 export const sellerRoutingInput = z.object({
   marketplaceId: z.string().min(1).max(128),
@@ -83,6 +85,32 @@ export const appRouter = router({
       }
       const [account] = await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, id)).limit(1);
       return account;
+    }),
+    registerWebhook: protectedProcedure.input(z.object({ seller: sellerRoutingInput, url: z.string().min(1).max(2048) })).mutation(async ({ input, ctx }) => {
+      if (!isValidWebhookUrl(input.url)) throw new TRPCError({ code: "BAD_REQUEST", message: "Webhook URL must use HTTPS (or localhost HTTP for development)" });
+      const db = await getDb();
+      const account = await resolveMerchantAccountForOperator(db, input.seller, ctx.user);
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const secret = createWebhookSecret();
+      const id = `wh_${nanoid(12)}`;
+      await db.insert(webhookEndpoints).values({ id, marketplaceId: account.marketplaceId, merchantAccountId: account.id, ownerUserId: ctx.user.id, url: input.url, secretCiphertext: encryptWebhookSecret(secret), active: 1 });
+      return { id, url: input.url, sellerId: account.externalSellerId, secret };
+    }),
+    listWebhooks: protectedProcedure.input(sellerRoutingInput).query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const account = await resolveMerchantAccountForOperator(db, input, ctx.user);
+      return db!.select({ id: webhookEndpoints.id, url: webhookEndpoints.url, active: webhookEndpoints.active, createdAt: webhookEndpoints.createdAt, updatedAt: webhookEndpoints.updatedAt }).from(webhookEndpoints).where(eq(webhookEndpoints.merchantAccountId, account.id));
+    }),
+    retryWebhook: protectedProcedure.input(z.object({ deliveryId: z.string().min(1).max(32) })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const [delivery] = await db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, input.deliveryId)).limit(1);
+      if (!delivery) throw new TRPCError({ code: "NOT_FOUND", message: "Webhook delivery not found" });
+      const [endpoint] = await db.select().from(webhookEndpoints).where(eq(webhookEndpoints.id, delivery.endpointId)).limit(1);
+      if (!endpoint) throw new TRPCError({ code: "NOT_FOUND", message: "Webhook endpoint not found" });
+      const [account] = await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, endpoint.merchantAccountId!)).limit(1);
+      if (!account || (ctx.user.role !== "admin" && account.ownerUserId !== ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to retry this delivery" });
+      return retryWebhookDelivery(db, input.deliveryId);
     }),
     approve: adminProcedure.input(z.object({ merchantAccountId: z.string().min(1).max(32) })).mutation(async ({ input }) => {
       const db = await getDb();
@@ -206,17 +234,10 @@ export const appRouter = router({
       }
       try {
         const verified = await verifyArcUsdcTransfer(input.transactionHash as `0x${string}`, intent.amountAtomic, intent.merchantAddress);
-        await db.insert(paymentTransactions).values({
-          paymentIntentId: intent.id,
-          transactionHash: verified.transactionHash,
-          fromAddress: verified.fromAddress,
-          toAddress: verified.toAddress,
-          tokenAddress: buildUsdcTransferRequest(intent.amountAtomic, intent.merchantAddress).tokenAddress,
-          amountAtomic: verified.amountAtomic,
-          chainId: 5042002,
-          finalizedAt: new Date(),
-        });
+        const transactionRecord = { paymentIntentId: intent.id, transactionHash: verified.transactionHash, fromAddress: verified.fromAddress, toAddress: verified.toAddress, tokenAddress: buildUsdcTransferRequest(intent.amountAtomic, intent.merchantAddress).tokenAddress, amountAtomic: verified.amountAtomic, chainId: 5042002, finalizedAt: new Date() };
+        await db.insert(paymentTransactions).values(transactionRecord);
         await db.update(paymentIntents).set({ status: "succeeded", transactionHash: verified.transactionHash }).where(and(eq(paymentIntents.id, intent.id), eq(paymentIntents.status, "submitted")));
+        try { await dispatchPaymentVerified(db, intent, transactionRecord as never); } catch (deliveryError) { console.error("[Webhook] payment.verified dispatch failed", deliveryError); }
       } catch (error) {
         throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Unable to verify Arc transaction" });
       }

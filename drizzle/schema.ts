@@ -41,6 +41,40 @@ export const merchantAccounts = mysqlTable("merchantAccounts", {
 export type MerchantAccount = typeof merchantAccounts.$inferSelect;
 export type InsertMerchantAccount = typeof merchantAccounts.$inferInsert;
 
+export const webhookEndpoints = mysqlTable("webhookEndpoints", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  marketplaceId: varchar("marketplaceId", { length: 128 }).notNull(),
+  merchantAccountId: varchar("merchantAccountId", { length: 32 }),
+  ownerUserId: int("ownerUserId").notNull(),
+  url: varchar("url", { length: 2048 }).notNull(),
+  secretCiphertext: text("secretCiphertext").notNull(),
+  active: int("active").notNull().default(1),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({ endpointOwnerIndex: uniqueIndex("webhookEndpoints_marketplace_url_unique").on(table.marketplaceId, table.url) }));
+
+export const webhookDeliveries = mysqlTable("webhookDeliveries", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  endpointId: varchar("endpointId", { length: 32 }).notNull(),
+  eventId: varchar("eventId", { length: 64 }).notNull(),
+  eventType: varchar("eventType", { length: 64 }).notNull(),
+  paymentIntentId: varchar("paymentIntentId", { length: 32 }).notNull(),
+  payload: text("payload").notNull(),
+  signature: varchar("signature", { length: 255 }).notNull(),
+  status: mysqlEnum("status", ["pending", "succeeded", "failed"]).notNull().default("pending"),
+  attempts: int("attempts").notNull().default(0),
+  nextAttemptAt: timestamp("nextAttemptAt"),
+  lastError: text("lastError"),
+  deliveredAt: timestamp("deliveredAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({ eventEndpointUnique: uniqueIndex("webhookDeliveries_endpoint_event_unique").on(table.endpointId, table.eventId) }));
+
+export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
+export type InsertWebhookEndpoint = typeof webhookEndpoints.$inferInsert;
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+export type InsertWebhookDelivery = typeof webhookDeliveries.$inferInsert;
+
 export const paymentIntents = mysqlTable("paymentIntents", {
   id: varchar("id", { length: 32 }).primaryKey(),
   externalOrderId: varchar("externalOrderId", { length: 128 }).notNull(),

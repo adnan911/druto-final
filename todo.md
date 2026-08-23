@@ -135,3 +135,27 @@
 
 - [x] Add mixed-seller fixtures proving sellerIntents excludes another seller’s pending and succeeded intents.
 - [x] Add mixed-seller and empty-state fixtures proving sellerPayments returns only the requested seller’s verified rows.
+
+# Signed webhooks and fulfillment events
+
+- [x] Define versioned payment.verified and fulfillment-ready event payloads with seller, order, buyer, amount, Arc transaction, and idempotency fields.
+- [x] Add merchant webhook endpoint and signing-secret metadata with secure ownership controls.
+- [x] Implement HMAC signature generation, timestamp tolerance, replay protection, delivery persistence, and retry status tracking.
+- [x] Emit a payment.verified event after successful Arc transaction verification and make delivery idempotent.
+- [x] Add marketplace receiver example and SDK verification helpers for fulfillment automation.
+- [x] Add tests for signatures, tampered payloads, replay protection, retries, duplicate delivery, and verified-payment event emission.
+- [x] Update README and GUIDE with webhook setup, verification, event handling, and production boundaries.
+
+# Webhook hardening follow-ups
+
+- [x] Add persisted duplicate-delivery coverage for one endpoint and one event ID.
+- [x] Add verification-flow coverage proving a successful payment emits a payment.verified delivery record.
+- [x] Add durable receiver replay guidance/helper based on persisted event IDs rather than only an in-memory set.
+- [x] Add an explicit retry mutation/runner that processes failed deliveries when nextAttemptAt is due.
+
+# Final webhook integration coverage
+
+- [x] Add a router integration test with mocked Arc verification proving verifyTransfer persists and dispatches payment.verified.
+- [x] Add retry-operation tests for not-due, due-success, and due-failure delivery updates.
+
+- [x] Add due-failure retry coverage asserting failed status, incremented attempts, error, and nextAttemptAt.
