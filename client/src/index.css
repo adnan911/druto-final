@@ -163,3 +163,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .receipt-intro { padding-top: 12px; }
   .receipt-card-enhanced { box-shadow: none; }
 }
+
+/* Developer integration steps keep labels and explanatory copy visually separated. */
+.endpoint-card .flex > span:not(.queue-count) { display: flex; flex-direction: column; gap: 2px; }
+.endpoint-card .flex > span:not(.queue-count) strong { display: block; }

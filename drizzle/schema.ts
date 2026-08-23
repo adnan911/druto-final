@@ -41,6 +41,22 @@ export const merchantAccounts = mysqlTable("merchantAccounts", {
 export type MerchantAccount = typeof merchantAccounts.$inferSelect;
 export type InsertMerchantAccount = typeof merchantAccounts.$inferInsert;
 
+export const ownershipChallenges = mysqlTable("ownershipChallenges", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  merchantAccountId: varchar("merchantAccountId", { length: 32 }).notNull(),
+  marketplaceId: varchar("marketplaceId", { length: 128 }).notNull(),
+  sellerId: varchar("sellerId", { length: 128 }).notNull(),
+  walletAddress: varchar("walletAddress", { length: 42 }).notNull(),
+  message: text("message").notNull(),
+  nonceHash: varchar("nonceHash", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({ challengeAccountIndex: uniqueIndex("ownershipChallenges_account_created_unique").on(table.merchantAccountId, table.createdAt) }));
+
+export type OwnershipChallenge = typeof ownershipChallenges.$inferSelect;
+export type InsertOwnershipChallenge = typeof ownershipChallenges.$inferInsert;
+
 export const webhookEndpoints = mysqlTable("webhookEndpoints", {
   id: varchar("id", { length: 32 }).primaryKey(),
   marketplaceId: varchar("marketplaceId", { length: 128 }).notNull(),

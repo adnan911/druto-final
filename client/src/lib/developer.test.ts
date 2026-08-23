@@ -11,6 +11,6 @@ describe("developer integration kit content", () => {
 
   it("exposes the required Arc Testnet contract fields", () => {
     expect(getDeveloperContractSummary()).toMatchObject({ network: "Arc Testnet", asset: "USDC", requiredFields: expect.arrayContaining(["externalOrderId", "idempotencyKey", "amount", "returnUrl"]) });
-    expect(developerIntegrationSteps).toEqual(["Onboard the seller", "Create a seller-routed intent", "Open Druto wallet/QR checkout", "Verify and fulfill"]);
+    expect(developerIntegrationSteps).toEqual(["Register the seller", "Request the ownership challenge", "Sign the message with the seller wallet", "Create a seller-routed intent", "Open Druto wallet/QR checkout", "Verify and fulfill"]);
   });
 });

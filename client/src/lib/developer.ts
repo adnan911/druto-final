@@ -20,8 +20,8 @@ const session = await checkout.createPayment({
 
 checkout.openCheckout(session);`;
 
-export const developerIntegrationSteps = ["Onboard the seller", "Create a seller-routed intent", "Open Druto wallet/QR checkout", "Verify and fulfill"] as const;
+export const developerIntegrationSteps = ["Register the seller", "Request the ownership challenge", "Sign the message with the seller wallet", "Create a seller-routed intent", "Open Druto wallet/QR checkout", "Verify and fulfill"] as const;
 
 export function getDeveloperContractSummary() {
-  return { network: "Arc Testnet", asset: "USDC", buyerMethods: ["wallet", "QR"], requiredFields: ["externalOrderId", "idempotencyKey", "amount", "seller.marketplaceId", "seller.sellerId", "returnUrl"] };
+  return { network: "Arc Testnet", asset: "USDC", buyerMethods: ["wallet", "QR"], sellerOwnership: "offchain personal-signature challenge; no transaction required", requiredFields: ["externalOrderId", "idempotencyKey", "amount", "seller.marketplaceId", "seller.sellerId", "returnUrl"] };
 }

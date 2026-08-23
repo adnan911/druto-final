@@ -159,3 +159,17 @@
 - [x] Add retry-operation tests for not-due, due-success, and due-failure delivery updates.
 
 - [x] Add due-failure retry coverage asserting failed status, incremented attempts, error, and nextAttemptAt.
+
+# Seller wallet ownership verification
+
+- [x] Add short-lived, single-use wallet ownership challenges bound to seller, marketplace, domain, and chain.
+- [x] Add server-side EVM personal-signature recovery and exact approved-wallet matching.
+- [x] Require a valid ownership proof before wallet approval and preserve administrator approval controls.
+- [x] Add marketplace onboarding/UI and SDK guidance for connecting a wallet and signing the challenge without sending a transaction.
+- [x] Add tests for valid signatures, expiry, replay, wrong wallet, wrong message/domain, and approval transitions.
+
+- [x] Add SDK ownership-challenge types and a wallet-provider signing helper with no transaction capability.
+- [x] Update SDK README/GUIDE and the visible Developer kit with seller ownership verification steps.
+
+- [x] Wire wallet-signature verification into the real seller registration/challenge/verify/admin-approval UI flow.
+- [x] Add router/service tests for expired challenges, reused challenges, wrong nonce/message/domain, and approval failing before verification then succeeding after verification.

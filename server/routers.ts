@@ -1,8 +1,8 @@
 import { COOKIE_NAME } from "@shared/const";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { merchantAccounts, paymentIntents, paymentTransactions, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
+import { merchantAccounts, ownershipChallenges, paymentIntents, paymentTransactions, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
 import { getDb } from "./db";
 import { amountToAtomicUsdc, buildUsdcTransferRequest, verifyArcUsdcTransfer } from "./arc";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -13,6 +13,7 @@ import { assertIdempotentMatch, assertTransactionOwnership, normalizeMarketplace
 import { summarizeVerifiedRows } from "./payment-summary";
 import { createWebhookSecret, encryptWebhookSecret, isValidWebhookUrl } from "./webhooks";
 import { dispatchPaymentVerified, retryWebhookDelivery } from "./webhook-delivery";
+import { canApproveSeller, createOwnershipChallenge, hashOwnershipNonce, isOwnershipChallengeUsable, verifyOwnershipSignature } from "./ownership";
 
 export const sellerRoutingInput = z.object({
   marketplaceId: z.string().min(1).max(128),
@@ -39,20 +40,20 @@ function resolveLegacyDemoMerchantAccount(seller: z.infer<typeof sellerRoutingIn
   return { id: LEGACY_DEMO_MERCHANT_ACCOUNT_ID, marketplaceId: seller.marketplaceId, externalSellerId: seller.sellerId, displayName: "Northstar Labs", receivingAddress: process.env.ARC_MERCHANT_WALLET_ADDRESS!, ownerUserId: undefined, status: "active" as const };
 }
 
-async function resolveMerchantAccount(db: Awaited<ReturnType<typeof getDb>>, seller: z.infer<typeof sellerRoutingInput>) {
+async function resolveMerchantAccount(db: Awaited<ReturnType<typeof getDb>>, seller: z.infer<typeof sellerRoutingInput>, options: { allowPending?: boolean } = {}) {
   if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
   const legacyDemoAccount = resolveLegacyDemoMerchantAccount(seller);
   if (legacyDemoAccount) return legacyDemoAccount;
   const [account] = seller.merchantAccountId
     ? await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, seller.merchantAccountId)).limit(1)
     : await db.select().from(merchantAccounts).where(and(eq(merchantAccounts.marketplaceId, seller.marketplaceId), eq(merchantAccounts.externalSellerId, seller.sellerId))).limit(1);
-  if (!account || account.status !== "active") throw new TRPCError({ code: "NOT_FOUND", message: "Seller is not onboarded or active in Druto" });
+  if (!account || (!options.allowPending && account.status !== "active")) throw new TRPCError({ code: "NOT_FOUND", message: "Seller is not onboarded or active in Druto" });
   if (account.marketplaceId !== seller.marketplaceId || account.externalSellerId !== seller.sellerId) throw new TRPCError({ code: "CONFLICT", message: "Seller routing identifiers do not match the merchant account" });
   return account;
 }
 
-async function resolveMerchantAccountForOperator(db: Awaited<ReturnType<typeof getDb>>, seller: z.infer<typeof sellerRoutingInput>, user: { id: number; role: "admin" | "user" }) {
-  const account = await resolveMerchantAccount(db, seller);
+async function resolveMerchantAccountForOperator(db: Awaited<ReturnType<typeof getDb>>, seller: z.infer<typeof sellerRoutingInput>, user: { id: number; role: "admin" | "user" }, options: { allowPending?: boolean } = {}) {
+  const account = await resolveMerchantAccount(db, seller, options);
   if (account.id === LEGACY_DEMO_MERCHANT_ACCOUNT_ID) return account;
   if (user.role !== "admin" && account.ownerUserId !== user.id) throw new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to view this seller account" });
   return account;
@@ -112,10 +113,34 @@ export const appRouter = router({
       if (!account || (ctx.user.role !== "admin" && account.ownerUserId !== ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to retry this delivery" });
       return retryWebhookDelivery(db, input.deliveryId);
     }),
+    createOwnershipChallenge: protectedProcedure.input(z.object({ seller: sellerRoutingInput, origin: z.string().url().max(2048) })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const account = await resolveMerchantAccountForOperator(db, input.seller, ctx.user, { allowPending: true });
+      const challenge = createOwnershipChallenge({ marketplaceId: account.marketplaceId, sellerId: account.externalSellerId, walletAddress: account.receivingAddress, origin: input.origin });
+      const challengeId = `oc_${nanoid(12)}`;
+      await db.insert(ownershipChallenges).values({ id: challengeId, merchantAccountId: account.id, marketplaceId: account.marketplaceId, sellerId: account.externalSellerId, walletAddress: account.receivingAddress, message: challenge.message, nonceHash: challenge.nonceHash, expiresAt: challenge.expiresAt });
+      return { challengeId, nonce: challenge.nonce, message: challenge.message, expiresAt: challenge.expiresAt, walletAddress: account.receivingAddress };
+    }),
+    verifyOwnership: publicProcedure.input(z.object({ challengeId: z.string().min(1).max(32), nonce: z.string().min(1).max(128), signature: z.string().regex(/^0x[0-9a-fA-F]+$/) })).mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const [challenge] = await db.select().from(ownershipChallenges).where(eq(ownershipChallenges.id, input.challengeId)).limit(1);
+      if (!challenge) throw new TRPCError({ code: "NOT_FOUND", message: "Ownership challenge not found" });
+      if (!isOwnershipChallengeUsable({ usedAt: challenge.usedAt, expiresAt: challenge.expiresAt })) throw new TRPCError({ code: "BAD_REQUEST", message: "Ownership challenge is expired or already used" });
+      if (hashOwnershipNonce(input.nonce) !== challenge.nonceHash) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid ownership nonce" });
+      const valid = await verifyOwnershipSignature({ walletAddress: challenge.walletAddress, message: challenge.message, signature: input.signature as `0x${string}` });
+      if (!valid) throw new TRPCError({ code: "BAD_REQUEST", message: "Wallet signature does not match the approved receiving address" });
+      await db.update(ownershipChallenges).set({ usedAt: new Date() }).where(and(eq(ownershipChallenges.id, challenge.id), isNull(ownershipChallenges.usedAt)));
+      await db.update(merchantAccounts).set({ walletVerifiedAt: new Date() }).where(eq(merchantAccounts.id, challenge.merchantAccountId));
+      return { verified: true, merchantAccountId: challenge.merchantAccountId, walletAddress: challenge.walletAddress };
+    }),
     approve: adminProcedure.input(z.object({ merchantAccountId: z.string().min(1).max(32) })).mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      await db.update(merchantAccounts).set({ status: "active", walletVerifiedAt: new Date() }).where(eq(merchantAccounts.id, input.merchantAccountId));
+      const [accountBeforeApproval] = await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, input.merchantAccountId)).limit(1);
+      if (!accountBeforeApproval || !canApproveSeller({ walletVerifiedAt: accountBeforeApproval.walletVerifiedAt })) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Seller wallet ownership must be verified before approval" });
+      await db.update(merchantAccounts).set({ status: "active" }).where(eq(merchantAccounts.id, input.merchantAccountId));
       const [account] = await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, input.merchantAccountId)).limit(1);
       if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant account not found" });
       return account;
