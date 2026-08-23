@@ -24,8 +24,10 @@ export function parseMarketplaceOrderContext(serialized: string | null | undefin
   }
 }
 
-export function buildMarketplaceCheckoutPayload(orderId: string, itemName: string, amount: number, context: MarketplaceOrderContext) {
-  return { externalOrderId: orderId, idempotencyKey: `marketplace-${orderId}`, itemName, buyerLabel: context.buyerEmail, returnUrl: "/marketplace", amount: amount.toFixed(2), orderContext: context };
+export type SellerRouting = { marketplaceId: string; sellerId: string; merchantAccountId?: string };
+
+export function buildMarketplaceCheckoutPayload(orderId: string, itemName: string, amount: number, context: MarketplaceOrderContext, seller?: SellerRouting) {
+  return { externalOrderId: orderId, idempotencyKey: `marketplace-${orderId}`, itemName, buyerLabel: context.buyerEmail, returnUrl: "/marketplace", amount: amount.toFixed(2), orderContext: context, seller };
 }
 
 export function updateMarketplaceQuantity(lines: MarketplaceCartLine[], productId: string, quantity: number) {

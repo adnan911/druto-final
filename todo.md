@@ -106,3 +106,32 @@
 
 - [x] Make receipt identifier copy actions report success only after clipboard write succeeds, with a safe fallback message.
 - [x] Add automated receipt-focused coverage for the structured data hierarchy and copy-action behavior.
+
+# Multi-seller Arc Testnet and universal SDK
+
+- [x] Add seller/merchant account records with approved Arc Testnet receiving wallets and marketplace ownership.
+- [x] Add seller-aware Payment Intent fields and resolve the receiving wallet server-side from seller identity.
+- [x] Parameterize Arc transfer construction and verification for the resolved seller wallet while preserving the single-merchant demo fallback.
+- [x] Add seller-scoped dashboard queries for balances, payments, orders, and pending/verified states.
+- [x] Update the marketplace handoff to send seller identity rather than trusting a frontend wallet address.
+- [x] Update the SDK types, client, examples, README, and GUIDE for any-marketplace multi-seller integration.
+- [x] Add migrations, tests, and browser verification for seller onboarding, seller-scoped checkout, and Arc Testnet demo behavior.
+
+# Multi-seller security and validation follow-ups
+
+- [x] Restrict merchant-account registration and seller-scoped stats to authorized marketplace owners/admins, and add an explicit wallet-approval state transition.
+- [x] Add seller-scoped intent/order queries and tests for pending and succeeded seller views.
+- [x] Add sellerSummary and sellerPayments aggregation coverage plus seller registration tests.
+- [x] Onboard the demo seller safely and browser-verify seller-aware checkout without broadcasting an unapproved transaction.
+
+# Final multi-seller hardening
+
+- [x] Enforce marketplace ownership or admin authorization for seller registration and add unauthorized-registration coverage.
+- [x] Add sellerIntents tests proving pending and succeeded records are returned for the correct seller.
+- [x] Add sellerPayments tests proving verified rows and empty-state behavior are seller-scoped.
+- [x] Replace the hardcoded demo seller fallback with a documented approved demo-account onboarding path or explicitly isolate it as a legacy demo compatibility path.
+
+# Seller query scoping coverage
+
+- [x] Add mixed-seller fixtures proving sellerIntents excludes another seller’s pending and succeeded intents.
+- [x] Add mixed-seller and empty-state fixtures proving sellerPayments returns only the requested seller’s verified rows.

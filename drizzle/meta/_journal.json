@@ -29,6 +29,20 @@
       "when": 1787328737636,
       "tag": "0003_lonely_microbe",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1787482989077,
+      "tag": "0004_natural_nebula",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1787483564601,
+      "tag": "0005_sleepy_sleepwalker",
+      "breakpoints": true
     }
   ]
 }

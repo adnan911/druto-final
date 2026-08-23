@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -25,9 +25,28 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+export const merchantAccounts = mysqlTable("merchantAccounts", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  marketplaceId: varchar("marketplaceId", { length: 128 }).notNull(),
+  externalSellerId: varchar("externalSellerId", { length: 128 }).notNull(),
+  ownerUserId: int("ownerUserId"),
+  displayName: varchar("displayName", { length: 255 }).notNull(),
+  receivingAddress: varchar("receivingAddress", { length: 42 }).notNull(),
+  status: mysqlEnum("status", ["pending", "active", "disabled"]).notNull().default("pending"),
+  walletVerifiedAt: timestamp("walletVerifiedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({ marketplaceSellerUnique: uniqueIndex("merchantAccounts_marketplace_seller_unique").on(table.marketplaceId, table.externalSellerId) }));
+
+export type MerchantAccount = typeof merchantAccounts.$inferSelect;
+export type InsertMerchantAccount = typeof merchantAccounts.$inferInsert;
+
 export const paymentIntents = mysqlTable("paymentIntents", {
   id: varchar("id", { length: 32 }).primaryKey(),
   externalOrderId: varchar("externalOrderId", { length: 128 }).notNull(),
+  marketplaceId: varchar("marketplaceId", { length: 128 }),
+  sellerId: varchar("sellerId", { length: 128 }),
+  merchantAccountId: varchar("merchantAccountId", { length: 32 }),
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).unique(),
   itemName: varchar("itemName", { length: 255 }).notNull(),
   buyerLabel: varchar("buyerLabel", { length: 255 }),

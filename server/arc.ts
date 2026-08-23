@@ -47,15 +47,16 @@ export function amountToAtomicUsdc(amount: string) {
   return parseUnits(amount, 6).toString();
 }
 
-export function buildUsdcTransferRequest(amountAtomic: string) {
+export function buildUsdcTransferRequest(amountAtomic: string, recipient: string = ARC_MERCHANT_WALLET_ADDRESS) {
+  const resolvedRecipient = getAddress(recipient) as `0x${string}`;
   return {
     chainId: ARC_CHAIN_ID,
     tokenAddress: ARC_USDC_ADDRESS,
-    recipient: ARC_MERCHANT_WALLET_ADDRESS,
+    recipient: resolvedRecipient,
     amountAtomic,
     abi: erc20Abi,
     functionName: "transfer" as const,
-    args: [ARC_MERCHANT_WALLET_ADDRESS, BigInt(amountAtomic)] as const,
+    args: [resolvedRecipient, BigInt(amountAtomic)] as const,
   };
 }
 
@@ -66,10 +67,11 @@ export type VerifiedArcTransfer = {
   transactionHash: Hash;
 };
 
-export async function verifyArcUsdcTransfer(hash: Hash, expectedAmountAtomic: string): Promise<VerifiedArcTransfer> {
+export async function verifyArcUsdcTransfer(hash: Hash, expectedAmountAtomic: string, expectedRecipient: string = ARC_MERCHANT_WALLET_ADDRESS): Promise<VerifiedArcTransfer> {
   const receipt = await arcPublicClient.waitForTransactionReceipt({ hash, confirmations: 1, pollingInterval: 500 });
   if (receipt.status !== "success") throw new Error("Arc transaction reverted");
 
+  const resolvedRecipient = getAddress(expectedRecipient) as `0x${string}`;
   const matchingTransfer = receipt.logs
     .filter(log => log.address.toLowerCase() === ARC_USDC_ADDRESS.toLowerCase())
     .map(log => {
@@ -79,10 +81,10 @@ export async function verifyArcUsdcTransfer(hash: Hash, expectedAmountAtomic: st
         return null;
       }
     })
-    .find(decoded => decoded?.eventName === "Transfer" && decoded.args.to?.toLowerCase() === ARC_MERCHANT_WALLET_ADDRESS.toLowerCase() && decoded.args.value?.toString() === expectedAmountAtomic);
+    .find(decoded => decoded?.eventName === "Transfer" && decoded.args.to?.toLowerCase() === resolvedRecipient.toLowerCase() && decoded.args.value?.toString() === expectedAmountAtomic);
 
   if (!matchingTransfer || !matchingTransfer.args.from || !matchingTransfer.args.to || matchingTransfer.args.value === undefined) {
-    throw new Error("No matching USDC transfer to the configured merchant wallet was found");
+    throw new Error("No matching USDC transfer to the expected seller wallet was found");
   }
 
   return {
