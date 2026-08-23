@@ -87,3 +87,12 @@
 - [x] Add tests and responsive browser verification for the developer integration page.
 
 - [x] Add a direct /developers route for reproducible mobile verification of the Developer kit page.
+
+# SDK package deliverables
+
+- [x] Assemble a complete Druto SDK starter package with browser checkout helpers, server contract types, validation, and tests.
+- [x] Add a detailed SDK README and Arc Testnet integration guide in Markdown.
+- [x] Validate the SDK package tests and create the requested ZIP archive.
+
+- [x] Typecheck the distributed SDK example and include it in full-package validation.
+- [x] Rebuild and re-zip the SDK after validating all distributed TypeScript files.
