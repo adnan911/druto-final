@@ -77,3 +77,13 @@
 
 - [x] Add explicit product availability labels/state to catalog cards and product details.
 - [x] Render full structured marketplace line items and shipping details on buyer receipts, with parsing coverage.
+
+# Developer integration experience
+
+- [x] Add a dedicated developer integration page/section explaining the Druto SDK and payment kit.
+- [x] Document the minimal JavaScript embed flow, create-intent payload, hosted checkout handoff, and buyer return flow.
+- [x] Add Arc Testnet USDC setup notes, wallet/QR behavior, demo fallback, and production-readiness callouts.
+- [x] Add navigation from the merchant dashboard to the developer integration experience.
+- [x] Add tests and responsive browser verification for the developer integration page.
+
+- [x] Add a direct /developers route for reproducible mobile verification of the Developer kit page.
