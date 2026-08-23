@@ -7,6 +7,7 @@ import { Link, useLocation } from "wouter";
 import { buildMarketplaceCheckoutPayload, calculateMarketplaceTotals, getNextMarketplaceCheckout, parseMarketplaceOrderContext, prepareMarketplaceSellerPayments, MarketplacePaymentQueueError, splitMarketplaceCartBySeller, updateMarketplaceQuantity, type MarketplaceCartLine, type MarketplacePaymentQueue } from "@/lib/marketplace";
 import { developerSdkSnippet } from "@/lib/developer";
 import WalletLoginCard from "@/components/WalletLoginCard";
+import ApiKeyManager from "@/components/ApiKeyManager";
 import { buildReceiptSummary, copyReceiptValue } from "@/lib/receipt";
 import { dashboardAccessState } from "@/lib/access";
 import { toast } from "sonner";
@@ -22,7 +23,7 @@ const settleVisual = "/manus-storage/druto-settlement-abstract_ac9457d1.jpg";
 const navGroups = [
   { label: "Operate", items: ["Overview", "Payments", "Payment Links", "Invoices", "Subscriptions"] },
   { label: "Understand", items: ["Customers", "Balances", "Settlements", "Reports"] },
-  { label: "Control", items: ["Risk & compliance", "Developers", "Settings"] },
+  { label: "Control", items: ["Risk & compliance", "Developers", "API Keys", "Settings"] },
 ];
 
 const paymentRows = [
@@ -63,7 +64,7 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user }: { active:
 }
 
 function NavIcon({ item }: { item: string }) {
-  const icons: Record<string, any> = { Overview: HomeIcon, Payments: CreditCard, "Payment Links": Link2, Invoices: ReceiptText, Subscriptions: RefreshCw, Customers: UsersRound, Balances: WalletCards, Settlements: Send, Reports: Table2, "Risk & compliance": ShieldCheck, Developers: Code2, Settings: Settings2 };
+  const icons: Record<string, any> = { Overview: HomeIcon, Payments: CreditCard, "Payment Links": Link2, Invoices: ReceiptText, Subscriptions: RefreshCw, Customers: UsersRound, Balances: WalletCards, Settlements: Send, Reports: Table2, "Risk & compliance": ShieldCheck, Developers: Code2, "API Keys": KeyRound, Settings: Settings2 };
   const Icon = icons[item] || Box; return <Icon size={17} />;
 }
 
@@ -151,13 +152,14 @@ function TransactionHistory() {
 function PagePanel({ active, onCreate }: { active: string; onCreate: () => void }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const headings: Record<string, string> = { Payments: "Payments", "Payment Links": "Payment Links", Invoices: "Invoices", Subscriptions: "Subscriptions", Customers: "Customers", Balances: "Balances", Settlements: "Settlements", Reports: "Reports", "Risk & compliance": "Risk & compliance", Developers: "Developers", Settings: "Settings" };
+  const headings: Record<string, string> = { Payments: "Payments", "Payment Links": "Payment Links", Invoices: "Invoices", Subscriptions: "Subscriptions", Customers: "Customers", Balances: "Balances", Settlements: "Settlements", Reports: "Reports", "Risk & compliance": "Risk & compliance", Developers: "Developers", "API Keys": "API Keys", Settings: "Settings" };
   const title = headings[active] || active;
   if (active === "Payments") return <div className="page-content"><PageHeader eyebrow="Ledger activity" title="Transaction history" description="Every payment intent, observed transaction, and final ledger posting in one place." action="Create payment" onAction={onCreate} /><TransactionHistory /></div>;
   if (active === "Balances") return <BalancesPage />;
   if (active === "Settlements") return <SettlementsPage />;
   if (active === "Risk & compliance") return <RiskPage />;
   if (active === "Developers") return <DeveloperIntegrationPage />;
+  if (active === "API Keys") return <ApiKeyManager />;
   if (active === "Customers") return <CustomersPage />;
   return <div className="page-content"><PageHeader eyebrow="Operations" title={title} description={`Manage ${title.toLowerCase()} with the same clear, auditable controls as the payment ledger.`} action={active === "Settlements" ? "Request settlement" : "Create new"} onAction={onCreate} /><div className="empty-feature card"><div className="empty-icon"><Sparkles size={21} /></div><h3>{title} workspace</h3><p>This surface is wired for the Druto MVP experience. Connect the deferred API and ledger services later to replace the local test records with live data.</p><div className="empty-actions"><button className="button button-primary" onClick={onCreate}><Plus size={16} /> {active === "Settlements" ? "Request settlement" : "Create record"}</button><button className="button button-quiet" onClick={() => toast.info("This is a frontend-only test environment.")}><BookOpen size={16} /> Read implementation notes</button></div></div><div className="mini-card-row"><div className="card mini-card"><span className="eyebrow">Test environment</span><strong>Local state enabled</strong><small>Nothing here moves real funds.</small></div><div className="card mini-card"><span className="eyebrow">Integration boundary</span><strong>API deferred</strong><small>Ready for future adapter wiring.</small></div><div className="card mini-card"><span className="eyebrow">Audit posture</span><strong>Visible states</strong><small>Every mock action is labeled.</small></div></div></div>;
 }

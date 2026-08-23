@@ -191,7 +191,7 @@
 # Druto product repositioning
 
 - [x] Replace the current root dashboard with a public Stripe-style Druto landing page and clear Dashboard/Developer Hub entry points.
-- [x] Add wallet-based login for dashboard access using a nonce challenge, offchain signature, and secure Druto session cookie; leave email/Privy as future extension points.
+- [x] Add wallet-based login for dashboard access using a nonce challenge, offchain signature, and secure Druto session cookie, alongside Privy email/social login.
 - [x] Move operational dashboard access to `/dashboard` and keep payment checkout routes public.
 - [x] Remove Northstar branding, sample identities, marketplace navigation, and Northstar-specific public copy from the Druto product surface.
 - [x] Build a complete public Developer Hub covering API/SDK kits, marketplace onboarding, seller ownership verification, Payment Intents, hosted checkout, wallet/QR flow, multi-seller payments, webhooks, idempotency, security, errors, testing, and Arc Testnet setup.
@@ -201,3 +201,11 @@
 
 - [x] Add an explicit Developer Hub error reference for invalid return URLs, idempotency conflicts, unapproved sellers, expired/replayed ownership challenges, and webhook signature/replay failures.
 - [x] Add automated route/UI contract tests proving the landing route is public and dashboard access requires a wallet session rather than anonymous or email-only access.
+
+# API keys and Privy authentication
+
+- [x] Add hashed owner-scoped Druto API-key records with creation metadata, last-used metadata, and revocation state.
+- [x] Add protected API-key list/create/revoke procedures and a dashboard management surface that reveals each secret only once.
+- [x] Add a server Privy token-verification bridge that exchanges valid email/social sessions for the existing Druto session cookie.
+- [x] Add PrivyProvider configuration and email/social login controls alongside the existing wallet login.
+- [x] Add API-key and Privy tests, migration validation, and responsive browser verification.

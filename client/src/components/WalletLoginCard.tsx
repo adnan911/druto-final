@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
-import { ArrowRight, ExternalLink, ShieldCheck, WalletCards } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, ExternalLink, Mail, ShieldCheck, WalletCards } from "lucide-react";
+import { useEffect, useState } from "react";
+import { usePrivy } from "@privy-io/react-auth";
 import { toast } from "sonner";
 
 type EthereumProvider = {
@@ -18,7 +19,25 @@ export default function WalletLoginCard() {
   const [busy, setBusy] = useState(false);
   const walletChallenge = trpc.auth.walletChallenge.useMutation();
   const walletLogin = trpc.auth.walletLogin.useMutation();
+  const privyLogin = trpc.auth.privyLogin.useMutation();
   const utils = trpc.useUtils();
+  const { ready: privyReady, authenticated: privyAuthenticated, login, getAccessToken } = usePrivy();
+
+  useEffect(() => {
+    if (!privyReady || !privyAuthenticated) return;
+    let active = true;
+    void getAccessToken().then(async accessToken => {
+      if (!active || !accessToken) return;
+      try {
+        await privyLogin.mutateAsync({ accessToken });
+        await utils.auth.me.invalidate();
+        toast.success("Privy session connected");
+      } catch (error) {
+        if (active) toast.error(error instanceof Error ? error.message : "Privy session could not be established");
+      }
+    });
+    return () => { active = false; };
+  }, [getAccessToken, privyAuthenticated, privyReady]);
 
   const connectAndSign = async () => {
     const ethereum = (window as WalletWindow).ethereum;
@@ -59,7 +78,9 @@ export default function WalletLoginCard() {
         <p>Druto uses the Arc Testnet wallet signature to create a secure dashboard session. Your address stays yours.</p>
         {address && <div className="wallet-selected"><span className="live-dot" /><span><small>Selected wallet</small><strong>{shortAddress(address)}</strong></span></div>}
         <button className="button button-primary wallet-login-button" onClick={connectAndSign} disabled={busy}><WalletCards size={17} /> {busy ? "Waiting for signature…" : "Connect wallet"} <ArrowRight size={15} /></button>
-        <div className="wallet-login-note"><ShieldCheck size={14} /><span>Never sign a transaction here. Druto only asks you to sign the exact login message shown by your wallet.</span></div>
+        <div className="wallet-login-divider"><span>or</span></div>
+        <button className="button button-quiet wallet-login-button" onClick={() => login()} disabled={!privyReady || privyLogin.isPending}><Mail size={17} /> {privyLogin.isPending ? "Connecting account…" : "Continue with email or social"} <ArrowRight size={15} /></button>
+        <div className="wallet-login-note"><ShieldCheck size={14} /><span>Wallet login uses an offchain signature. Email and social login are verified by Privy, then exchanged for a Druto session.</span></div>
         <a className="wallet-help-link" href="https://docs.arc.network" target="_blank" rel="noreferrer">Need Arc Testnet setup help <ExternalLink size={13} /></a>
       </section>
     </div>

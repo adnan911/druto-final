@@ -2,7 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { merchantAccounts, ownershipChallenges, paymentIntents, paymentTransactions, users, walletLoginChallenges, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
+import { apiKeys, merchantAccounts, ownershipChallenges, paymentIntents, paymentTransactions, users, walletLoginChallenges, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
 import { getDb } from "./db";
 import { amountToAtomicUsdc, buildUsdcTransferRequest, verifyArcUsdcTransfer } from "./arc";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -15,6 +15,8 @@ import { createWebhookSecret, encryptWebhookSecret, isValidWebhookUrl } from "./
 import { dispatchPaymentVerified, retryWebhookDelivery } from "./webhook-delivery";
 import { canApproveSeller, createOwnershipChallenge, hashOwnershipNonce, isOwnershipChallengeUsable, verifyOwnershipSignature } from "./ownership";
 import { buildWalletLoginMessage, createWalletLoginChallenge, hashWalletLoginNonce, isWalletLoginChallengeUsable, walletOpenId } from "./wallet-auth";
+import { createApiKeyMaterial } from "./api-keys";
+import { privyOpenId, verifyPrivyToken } from "./privy-auth";
 import { sdk } from "./_core/sdk";
 
 export const sellerRoutingInput = z.object({
@@ -75,6 +77,28 @@ function filterMerchantRows<T extends { merchantAccountId?: string | null }>(row
 
 export const appRouter = router({
   system: systemRouter,
+  apiKeys: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      return db.select({ id: apiKeys.id, name: apiKeys.name, prefix: apiKeys.prefix, lastFour: apiKeys.lastFour, createdAt: apiKeys.createdAt, lastUsedAt: apiKeys.lastUsedAt, revokedAt: apiKeys.revokedAt }).from(apiKeys).where(eq(apiKeys.ownerUserId, ctx.user.id));
+    }),
+    create: protectedProcedure.input(z.object({ name: z.string().trim().min(1).max(120) })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const material = createApiKeyMaterial(input.name);
+      await db.insert(apiKeys).values({ id: material.id, ownerUserId: ctx.user.id, name: material.name, prefix: material.prefix, lastFour: material.lastFour, secretHash: material.secretHash });
+      return { id: material.id, name: material.name, prefix: material.prefix, lastFour: material.lastFour, secret: material.secret };
+    }),
+    revoke: protectedProcedure.input(z.object({ id: z.string().min(1).max(32) })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const result = await db.update(apiKeys).set({ revokedAt: new Date() }).where(and(eq(apiKeys.id, input.id), eq(apiKeys.ownerUserId, ctx.user.id), isNull(apiKeys.revokedAt)));
+      const affectedRows = Number((result as any)?.[0]?.affectedRows ?? (result as any)?.affectedRows ?? 0);
+      if (affectedRows !== 1) throw new TRPCError({ code: "NOT_FOUND", message: "Active API key not found" });
+      return { success: true as const };
+    }),
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     walletChallenge: publicProcedure.input(z.object({ walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/), origin: z.string().url().max(2048) })).mutation(async ({ input }) => {
@@ -85,6 +109,19 @@ export const appRouter = router({
       const challengeId = `wl_${nanoid(12)}`;
       await db.insert(walletLoginChallenges).values({ id: challengeId, walletAddress: input.walletAddress, message: challenge.message, nonceHash: challenge.nonceHash, expiresAt: challenge.expiresAt });
       return { challengeId, nonce: challenge.nonce, message: challenge.message, expiresAt: challenge.expiresAt, walletAddress: input.walletAddress };
+    }),
+    privyLogin: publicProcedure.input(z.object({ accessToken: z.string().min(20).max(4096) })).mutation(async ({ input, ctx }) => {
+      let verified;
+      try { verified = await verifyPrivyToken(input.accessToken); } catch { throw new TRPCError({ code: "UNAUTHORIZED", message: "Privy authentication could not be verified" }); }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const openId = privyOpenId(verified.user_id);
+      const name = "Privy workspace";
+      const signedInAt = new Date();
+      await db.insert(users).values({ openId, name, loginMethod: "privy", lastSignedIn: signedInAt }).onDuplicateKeyUpdate({ set: { name, loginMethod: "privy", lastSignedIn: signedInAt } });
+      const token = await sdk.createSessionToken(openId, { name });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 365 * 24 * 60 * 60 * 1000 });
+      return { authenticated: true, openId, name } as const;
     }),
     walletLogin: publicProcedure.input(z.object({ challengeId: z.string().min(1).max(32), nonce: z.string().min(1).max(128), signature: z.string().regex(/^0x[0-9a-fA-F]+$/) })).mutation(async ({ input, ctx }) => {
       const db = await getDb();

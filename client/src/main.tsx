@@ -5,6 +5,7 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
+import { PrivyProvider } from "@privy-io/react-auth";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -71,10 +72,13 @@ const trpcClient = trpc.createClient({
   ],
 });
 
+const privyAppId = import.meta.env.VITE_PRIVY_APP_ID as string | undefined;
+const app = <trpc.Provider client={trpcClient} queryClient={queryClient}>
+  <QueryClientProvider client={queryClient}>
+    <App />
+  </QueryClientProvider>
+</trpc.Provider>;
+
 createRoot(document.getElementById("root")!).render(
-  <trpc.Provider client={trpcClient} queryClient={queryClient}>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </trpc.Provider>
+  privyAppId ? <PrivyProvider appId={privyAppId} config={{ loginMethods: ["email", "google", "github", "wallet"], appearance: { theme: "light", accentColor: "#2458d6" } }}>{app}</PrivyProvider> : app
 );

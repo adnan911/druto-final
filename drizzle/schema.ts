@@ -25,6 +25,21 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+export const apiKeys = mysqlTable("apiKeys", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  ownerUserId: int("ownerUserId").notNull(),
+  name: varchar("name", { length: 120 }).notNull(),
+  prefix: varchar("prefix", { length: 32 }).notNull(),
+  lastFour: varchar("lastFour", { length: 4 }).notNull(),
+  secretHash: varchar("secretHash", { length: 64 }).notNull().unique(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  lastUsedAt: timestamp("lastUsedAt"),
+  revokedAt: timestamp("revokedAt"),
+}, table => ({ ownerCreatedIndex: uniqueIndex("apiKeys_owner_created_unique").on(table.ownerUserId, table.createdAt) }));
+
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type InsertApiKey = typeof apiKeys.$inferInsert;
+
 export const walletLoginChallenges = mysqlTable("walletLoginChallenges", {
   id: varchar("id", { length: 32 }).primaryKey(),
   walletAddress: varchar("walletAddress", { length: 42 }).notNull(),
