@@ -96,3 +96,13 @@
 
 - [x] Typecheck the distributed SDK example and include it in full-package validation.
 - [x] Rebuild and re-zip the SDK after validating all distributed TypeScript files.
+
+# Buyer receipt improvement
+
+- [x] Improve the receipt hierarchy with a stronger verified-payment hero, order summary, and transaction proof section.
+- [x] Make line items, delivery, shipping, buyer, and merchant details easier to scan without duplicating or crowding labels.
+- [x] Add responsive receipt layout and safe transaction-link/copy interactions for desktop and mobile.
+- [x] Add receipt-focused tests and complete desktop/mobile browser verification.
+
+- [x] Make receipt identifier copy actions report success only after clipboard write succeeds, with a safe fallback message.
+- [x] Add automated receipt-focused coverage for the structured data hierarchy and copy-action behavior.
