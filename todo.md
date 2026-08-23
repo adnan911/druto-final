@@ -209,3 +209,9 @@
 - [x] Add a server Privy token-verification bridge that exchanges valid email/social sessions for the existing Druto session cookie.
 - [x] Add PrivyProvider configuration and email/social login controls alongside the existing wallet login.
 - [x] Add API-key and Privy tests, migration validation, and responsive browser verification.
+
+# Privy login follow-up
+
+- [x] Allow verified Privy sessions through the dashboard access gate and ensure the login flow refreshes the Druto session state.
+- [x] Center the “or” separator between wallet and email/social login controls on desktop and mobile.
+- [x] Add regression coverage and verify the corrected login experience in the browser.

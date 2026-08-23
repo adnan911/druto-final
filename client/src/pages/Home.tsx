@@ -316,7 +316,7 @@ function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: s
 
 function DashboardAccess() {
   const session = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
-  if (session.isLoading) return <div className="dashboard-loading"><Mark /><strong>Loading Druto workspace…</strong><span>Checking your wallet session.</span></div>;
+  if (session.isLoading) return <div className="dashboard-loading"><Mark /><strong>Loading Druto workspace…</strong><span>Checking your sign-in session.</span></div>;
   if (!session.data || dashboardAccessState(session.data) !== "workspace") return <WalletLoginCard />;
   return <DashboardWorkspace user={session.data} />;
 }

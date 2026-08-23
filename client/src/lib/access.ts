@@ -4,9 +4,13 @@ export function isWalletSession(user: { openId?: string | null } | null | undefi
   return Boolean(user?.openId?.startsWith("wallet:"));
 }
 
+export function isPrivySession(user: { openId?: string | null } | null | undefined) {
+  return Boolean(user?.openId?.startsWith("privy:"));
+}
+
 export function dashboardAccessState(user: { openId?: string | null } | null | undefined) {
   if (!user) return "connect_wallet" as const;
-  return isWalletSession(user) ? "workspace" as const : "connect_wallet" as const;
+  return isWalletSession(user) || isPrivySession(user) ? "workspace" as const : "connect_wallet" as const;
 }
 
 export function isPublicProductRoute(pathname: string) {
