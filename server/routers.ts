@@ -1,8 +1,8 @@
 import { COOKIE_NAME } from "@shared/const";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { merchantAccounts, ownershipChallenges, paymentIntents, paymentTransactions, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
+import { merchantAccounts, ownershipChallenges, paymentIntents, paymentTransactions, users, walletLoginChallenges, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
 import { getDb } from "./db";
 import { amountToAtomicUsdc, buildUsdcTransferRequest, verifyArcUsdcTransfer } from "./arc";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -14,6 +14,8 @@ import { summarizeVerifiedRows } from "./payment-summary";
 import { createWebhookSecret, encryptWebhookSecret, isValidWebhookUrl } from "./webhooks";
 import { dispatchPaymentVerified, retryWebhookDelivery } from "./webhook-delivery";
 import { canApproveSeller, createOwnershipChallenge, hashOwnershipNonce, isOwnershipChallengeUsable, verifyOwnershipSignature } from "./ownership";
+import { buildWalletLoginMessage, createWalletLoginChallenge, hashWalletLoginNonce, isWalletLoginChallengeUsable, walletOpenId } from "./wallet-auth";
+import { sdk } from "./_core/sdk";
 
 export const sellerRoutingInput = z.object({
   marketplaceId: z.string().min(1).max(128),
@@ -32,10 +34,10 @@ export const paymentInput = z.object({
   seller: sellerRoutingInput.optional(),
 });
 
-const LEGACY_DEMO_SELLERS: Record<string, string> = { "northstar-labs": "Northstar Labs", "mosaic-works": "Mosaic Works", "druto-labs": "Druto Labs", "dawn-studio": "Dawn Studio", "atlas-compute": "Atlas Compute", "meridian-ops": "Meridian Ops" };
+const LEGACY_DEMO_SELLERS: Record<string, string> = { "druto-labs": "Druto Labs", "mosaic-works": "Mosaic Works", "dawn-studio": "Dawn Studio", "atlas-compute": "Atlas Compute", "meridian-ops": "Meridian Ops" };
 
 function resolveLegacyDemoMerchantAccount(seller: z.infer<typeof sellerRoutingInput>) {
-  if (seller.marketplaceId !== "northstar-marketplace" || !LEGACY_DEMO_SELLERS[seller.sellerId]) return null;
+  if (seller.marketplaceId !== "druto-demo-marketplace" || !LEGACY_DEMO_SELLERS[seller.sellerId]) return null;
   // Compatibility only: catalog sellers share the configured demo wallet until each seller completes real onboarding.
   return { id: `legacy-demo-${seller.sellerId}`, marketplaceId: seller.marketplaceId, externalSellerId: seller.sellerId, displayName: LEGACY_DEMO_SELLERS[seller.sellerId], receivingAddress: process.env.ARC_MERCHANT_WALLET_ADDRESS!, ownerUserId: undefined, status: "active" as const };
 }
@@ -59,6 +61,14 @@ async function resolveMerchantAccountForOperator(db: Awaited<ReturnType<typeof g
   return account;
 }
 
+async function getOperatorMerchantAccountIds(db: Awaited<ReturnType<typeof getDb>>, user: { id: number; role: "admin" | "user" }) {
+  if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+  const accounts = user.role === "admin"
+    ? await db.select({ id: merchantAccounts.id }).from(merchantAccounts)
+    : await db.select({ id: merchantAccounts.id }).from(merchantAccounts).where(eq(merchantAccounts.ownerUserId, user.id));
+  return accounts.map(account => account.id);
+}
+
 function filterMerchantRows<T extends { merchantAccountId?: string | null }>(rows: T[], merchantAccountId: string) {
   return rows.filter(row => row.merchantAccountId === merchantAccountId);
 }
@@ -67,6 +77,35 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    walletChallenge: publicProcedure.input(z.object({ walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/), origin: z.string().url().max(2048) })).mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      let challenge;
+      try { challenge = createWalletLoginChallenge(input); } catch { throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid wallet address" }); }
+      const challengeId = `wl_${nanoid(12)}`;
+      await db.insert(walletLoginChallenges).values({ id: challengeId, walletAddress: input.walletAddress, message: challenge.message, nonceHash: challenge.nonceHash, expiresAt: challenge.expiresAt });
+      return { challengeId, nonce: challenge.nonce, message: challenge.message, expiresAt: challenge.expiresAt, walletAddress: input.walletAddress };
+    }),
+    walletLogin: publicProcedure.input(z.object({ challengeId: z.string().min(1).max(32), nonce: z.string().min(1).max(128), signature: z.string().regex(/^0x[0-9a-fA-F]+$/) })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const [challenge] = await db.select().from(walletLoginChallenges).where(eq(walletLoginChallenges.id, input.challengeId)).limit(1);
+      if (!challenge) throw new TRPCError({ code: "NOT_FOUND", message: "Wallet login challenge not found" });
+      if (!isWalletLoginChallengeUsable(challenge)) throw new TRPCError({ code: "BAD_REQUEST", message: "Wallet login challenge is expired or already used" });
+      if (hashWalletLoginNonce(input.nonce) !== challenge.nonceHash) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid wallet login nonce" });
+      const valid = await verifyOwnershipSignature({ walletAddress: challenge.walletAddress, message: challenge.message, signature: input.signature as `0x${string}` });
+      if (!valid) throw new TRPCError({ code: "BAD_REQUEST", message: "Wallet signature does not match the login wallet" });
+      const usedAt = new Date();
+      const updateResult = await db.update(walletLoginChallenges).set({ usedAt }).where(and(eq(walletLoginChallenges.id, challenge.id), isNull(walletLoginChallenges.usedAt)));
+      const affectedRows = Number((updateResult as any)?.[0]?.affectedRows ?? (updateResult as any)?.affectedRows ?? 0);
+      if (affectedRows !== 1) throw new TRPCError({ code: "CONFLICT", message: "Wallet login challenge was already used" });
+      const openId = walletOpenId(challenge.walletAddress);
+      const name = `Wallet ${challenge.walletAddress.slice(0, 6)}…${challenge.walletAddress.slice(-4)}`;
+      await db.insert(users).values({ openId, name, loginMethod: "wallet", lastSignedIn: usedAt }).onDuplicateKeyUpdate({ set: { name, loginMethod: "wallet", lastSignedIn: usedAt } });
+      const token = await sdk.createSessionToken(openId, { name });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 365 * 24 * 60 * 60 * 1000 });
+      return { authenticated: true, walletAddress: challenge.walletAddress, name } as const;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -203,23 +242,26 @@ export const appRouter = router({
       };
     }),
 
-    listIntents: publicProcedure.query(async () => {
+    listIntents: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      return db.select().from(paymentIntents).where(eq(paymentIntents.merchantAddress, process.env.ARC_MERCHANT_WALLET_ADDRESS!));
+      const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
+      if (!accountIds.length) return [];
+      return db!.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
     }),
 
-    verifiedPayments: publicProcedure.query(async () => {
+    verifiedPayments: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      return db.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(eq(paymentIntents.merchantAddress, process.env.ARC_MERCHANT_WALLET_ADDRESS!));
+      const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
+      if (!accountIds.length) return [];
+      return db!.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
     }),
 
-    summary: publicProcedure.query(async () => {
+    summary: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      const intents = await db.select().from(paymentIntents).where(eq(paymentIntents.merchantAddress, process.env.ARC_MERCHANT_WALLET_ADDRESS!));
-      const verifiedRows = await db.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(eq(paymentIntents.merchantAddress, process.env.ARC_MERCHANT_WALLET_ADDRESS!));
+      const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
+      if (!accountIds.length) return { availableUsdc: "0.00", grossUsdc: "0.00", pendingUsdc: "0.00", successfulCount: 0, pendingCount: 0, totalCount: 0 };
+      const intents = await db!.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      const verifiedRows = await db!.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
       const pending = intents.filter(intent => intent.status === "requires_payment" || intent.status === "submitted" || intent.status === "verifying");
       const verifiedSummary = summarizeVerifiedRows(verifiedRows);
       const pendingAtomic = pending.reduce((sum, intent) => sum + BigInt(intent.amountAtomic), BigInt(0));

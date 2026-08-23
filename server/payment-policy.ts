@@ -11,7 +11,7 @@ export function assertIdempotentMatch(existing: ExistingIntentDetails, requested
 }
 
 export function normalizeMarketplaceReturnUrl(value?: string) {
-  if (!value) return "/marketplace";
+  if (!value) return "/";
   if (value.startsWith("/") && !value.startsWith("//")) return value;
   try {
     const parsed = new URL(value);

@@ -20,8 +20,8 @@ describe("payment safety policies", () => {
     expect(() => assertTransactionOwnership("pi_1", "pi_1")).not.toThrow();
   });
 
-  it("defaults and validates marketplace return URLs", () => {
-    expect(normalizeMarketplaceReturnUrl()).toBe("/marketplace");
+  it("defaults and validates product return URLs", () => {
+    expect(normalizeMarketplaceReturnUrl()).toBe("/");
     expect(normalizeMarketplaceReturnUrl("/marketplace?paid=1")).toBe("/marketplace?paid=1");
     expect(normalizeMarketplaceReturnUrl("https://market.example/return")).toBe("https://market.example/return");
     expect(() => normalizeMarketplaceReturnUrl("//evil.example")).toThrow("Return URL");

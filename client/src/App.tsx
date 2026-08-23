@@ -6,6 +6,8 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import Landing from "./pages/Landing";
+import DeveloperHub from "./pages/DeveloperHub";
 
 function App() {
   return (
@@ -14,9 +16,9 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Switch>
-            <Route path="/" component={Home} />
-            <Route path="/marketplace" component={Home} />
-            <Route path="/developers" component={Home} />
+            <Route path="/" component={Landing} />
+            <Route path="/developers" component={DeveloperHub} />
+            <Route path="/dashboard" component={Home} />
             <Route path="/checkout/:session" component={Home} />
             <Route path="/receipt/:session" component={Home} />
             <Route path="/payments" component={Home} />

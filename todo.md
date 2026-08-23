@@ -187,3 +187,17 @@
 - [x] Add a deterministic receipt continuation preview path and verify the Pay next seller action on desktop and mobile.
 
 - [x] Add orchestration coverage for seller-one success plus seller-two failure, asserting persisted queue state and recovery metadata.
+
+# Druto product repositioning
+
+- [x] Replace the current root dashboard with a public Stripe-style Druto landing page and clear Dashboard/Developer Hub entry points.
+- [x] Add wallet-based login for dashboard access using a nonce challenge, offchain signature, and secure Druto session cookie; leave email/Privy as future extension points.
+- [x] Move operational dashboard access to `/dashboard` and keep payment checkout routes public.
+- [x] Remove Northstar branding, sample identities, marketplace navigation, and Northstar-specific public copy from the Druto product surface.
+- [x] Build a complete public Developer Hub covering API/SDK kits, marketplace onboarding, seller ownership verification, Payment Intents, hosted checkout, wallet/QR flow, multi-seller payments, webhooks, idempotency, security, errors, testing, and Arc Testnet setup.
+- [x] Add tests and responsive browser verification for landing, wallet login, dashboard entry, and Developer Hub flows.
+
+# Final repositioning review gaps
+
+- [x] Add an explicit Developer Hub error reference for invalid return URLs, idempotency conflicts, unapproved sellers, expired/replayed ownership challenges, and webhook signature/replay failures.
+- [x] Add automated route/UI contract tests proving the landing route is public and dashboard access requires a wallet session rather than anonymous or email-only access.

@@ -37,20 +37,20 @@ describe("marketplace Payment Intent router contract", () => {
     const caller = appRouter.createCaller({ user: null, req: {}, res: {} } as never);
 
     const created = await caller.payments.createIntent({
-      externalOrderId: "NS-1842",
-      idempotencyKey: "marketplace-ns-1842-test",
-      itemName: "Northstar API Pro",
+      externalOrderId: "DR-1842",
+      idempotencyKey: "marketplace-druto-1842-test",
+      itemName: "Arc API Pro",
       buyerLabel: "Hackathon buyer",
-      returnUrl: "/marketplace",
+      returnUrl: "/orders/paid",
       amount: "1.00",
-      orderContext: { items: [{ productId: "api-pro", name: "Northstar API Pro", seller: "Northstar Labs", unitPrice: 1, quantity: 2 }], delivery: "Digital delivery", shippingAddress: { name: "Alex", line1: "1 Main St", city: "Arc City", postalCode: "10001", country: "United States" }, buyerEmail: "buyer@example.com" },
+      orderContext: { items: [{ productId: "api-pro", name: "Arc API Pro", seller: "Druto Labs", unitPrice: 1, quantity: 2 }], delivery: "Digital delivery", shippingAddress: { name: "Alex", line1: "1 Main St", city: "Arc City", postalCode: "10001", country: "United States" }, buyerEmail: "buyer@example.com" },
     });
 
-    expect(rows[0]).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/marketplace", externalOrderId: "NS-1842", orderContext: expect.stringContaining('"quantity":2') });
-    expect(created).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/marketplace" });
+    expect(rows[0]).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/orders/paid", externalOrderId: "DR-1842", orderContext: expect.stringContaining('"quantity":2') });
+    expect(created).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/orders/paid" });
 
     const intent = await caller.payments.getIntent({ id: created.id });
-    expect(intent).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/marketplace", itemName: "Northstar API Pro", orderContext: expect.stringContaining('"productId":"api-pro"') });
+    expect(intent).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/orders/paid", itemName: "Arc API Pro", orderContext: expect.stringContaining('"productId":"api-pro"') });
   });
 
   it("routes a seller-aware intent to the approved merchant wallet", async () => {
@@ -77,7 +77,7 @@ describe("marketplace Payment Intent router contract", () => {
     const { db, rows } = createDbMock();
     getDbMock.mockResolvedValue(db);
     const caller = appRouter.createCaller({ user: null, req: {}, res: {} } as never);
-    const created = await caller.payments.createIntent({ externalOrderId: "MIXED-MOSAIC", itemName: "Ledger Operations Kit", amount: "2.50", seller: { marketplaceId: "northstar-marketplace", sellerId: "mosaic-works" } });
+    const created = await caller.payments.createIntent({ externalOrderId: "MIXED-MOSAIC", itemName: "Ledger Operations Kit", amount: "2.50", seller: { marketplaceId: "druto-demo-marketplace", sellerId: "mosaic-works" } });
     expect(rows[0]).toMatchObject({ sellerId: "mosaic-works", merchantAccountId: "legacy-demo-mosaic-works" });
     expect(created).toMatchObject({ sellerId: "mosaic-works", merchantAccountId: "legacy-demo-mosaic-works" });
   });
@@ -141,15 +141,15 @@ describe("marketplace Payment Intent router contract", () => {
     const { db, rows } = createDbMock();
     getDbMock.mockResolvedValue(db);
     const caller = appRouter.createCaller({ user: null, req: {}, res: {} } as never);
-    const created = await caller.payments.createIntent({ externalOrderId: "NS-default", itemName: "Demo item", amount: "1.00" });
-    expect(rows[0]?.returnUrl).toBe("/marketplace");
-    expect(created.returnUrl).toBe("/marketplace");
+    const created = await caller.payments.createIntent({ externalOrderId: "DR-default", itemName: "Demo item", amount: "1.00" });
+    expect(rows[0]?.returnUrl).toBe("/");
+    expect(created.returnUrl).toBe("/");
   });
 
   it("rejects an invalid returnUrl at the router boundary", async () => {
     const { db } = createDbMock();
     getDbMock.mockResolvedValue(db);
     const caller = appRouter.createCaller({ user: null, req: {}, res: {} } as never);
-    await expect(caller.payments.createIntent({ externalOrderId: "NS-invalid", itemName: "Demo item", amount: "1.00", returnUrl: "javascript:alert(1)" })).rejects.toThrow("Return URL");
+    await expect(caller.payments.createIntent({ externalOrderId: "DR-invalid", itemName: "Demo item", amount: "1.00", returnUrl: "javascript:alert(1)" })).rejects.toThrow("Return URL");
   });
 });

@@ -9,7 +9,7 @@ describe("buyer receipt utilities", () => {
       itemName: "Fallback item",
       buyerLabel: "fallback@example.com",
       orderContext: JSON.stringify({
-        items: [{ productId: "p1", name: "API Pro", seller: "Northstar Labs", unitPrice: 1, quantity: 2 }],
+        items: [{ productId: "p1", name: "API Pro", seller: "Druto Labs", unitPrice: 1, quantity: 2 }],
         delivery: "Priority delivery",
         shippingAddress: { name: "Alex Rivera", line1: "1 Market St", city: "Dhaka", postalCode: "1214", country: "BD" },
         buyerEmail: "buyer@example.com",

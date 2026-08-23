@@ -25,6 +25,19 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+export const walletLoginChallenges = mysqlTable("walletLoginChallenges", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  walletAddress: varchar("walletAddress", { length: 42 }).notNull(),
+  message: text("message").notNull(),
+  nonceHash: varchar("nonceHash", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type WalletLoginChallenge = typeof walletLoginChallenges.$inferSelect;
+export type InsertWalletLoginChallenge = typeof walletLoginChallenges.$inferInsert;
+
 export const merchantAccounts = mysqlTable("merchantAccounts", {
   id: varchar("id", { length: 32 }).primaryKey(),
   marketplaceId: varchar("marketplaceId", { length: 128 }).notNull(),
