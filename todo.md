@@ -215,3 +215,10 @@
 - [x] Allow verified Privy sessions through the dashboard access gate and ensure the login flow refreshes the Druto session state.
 - [x] Center the “or” separator between wallet and email/social login controls on desktop and mobile.
 - [x] Add regression coverage and verify the corrected login experience in the browser.
+
+# Privy dashboard session UX
+
+- [x] Add a profile-menu Logout action that clears both the Druto session and Privy session before redirecting to login.
+- [x] Add a smooth loading skeleton while Privy authentication status and the Druto session are being verified.
+- [x] Show a visible signed-in-with-Privy label and the user’s email or social handle in the dashboard profile menu.
+- [x] Add regression tests and responsive browser verification for the new session UX.

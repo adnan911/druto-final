@@ -11,8 +11,9 @@ import ApiKeyManager from "@/components/ApiKeyManager";
 import { buildReceiptSummary, copyReceiptValue } from "@/lib/receipt";
 import { dashboardAccessState } from "@/lib/access";
 import { toast } from "sonner";
+import { usePrivy } from "@privy-io/react-auth";
 import {
-  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, WalletCards, X, Zap
+  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, LogOut, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, WalletCards, X, Zap
 } from "lucide-react";
 
 const logo = "/manus-storage/druto-arc-mark_c8c084dd.png";
@@ -54,12 +55,36 @@ function StatusPill({ status, tone = "neutral" }: { status: string; tone?: strin
 
 function Mark() { return <img src={logo} alt="" className="brand-mark" />; }
 
+function privyIdentityLabel(privyUser: ReturnType<typeof usePrivy>["user"]) {
+  if (!privyUser) return null;
+  if (privyUser.email?.address) return privyUser.email.address;
+  if (privyUser.google?.email || privyUser.google?.name) return privyUser.google.email ?? privyUser.google.name;
+  if (privyUser.github?.username || privyUser.github?.email) return privyUser.github.username ?? privyUser.github.email;
+  return null;
+}
+
 function Sidebar({ active, setActive, collapsed, setCollapsed, user }: { active: string; setActive: (value: string) => void; collapsed: boolean; setCollapsed: (value: boolean) => void; user: { name?: string | null; openId?: string | null } }) {
+  const { user: privyUser, authenticated: privyAuthenticated, logout: privyLogout } = usePrivy();
+  const drutoLogout = trpc.auth.logout.useMutation();
+  const utils = trpc.useUtils();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const isPrivy = user.openId?.startsWith("privy:") === true;
+  const identity = isPrivy ? privyIdentityLabel(privyUser) : null;
+  const logout = async () => {
+    try {
+      if (privyAuthenticated) await privyLogout();
+      await drutoLogout.mutateAsync();
+      utils.auth.me.setData(undefined, null);
+      window.location.href = "/dashboard";
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not log out");
+    }
+  };
   return <aside className={classNames("sidebar", collapsed && "sidebar-collapsed")}>
     <div className="brand-row"><div className="brand-lockup"><Mark /><span>druto</span></div><button className="icon-button sidebar-toggle" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle navigation"><Menu size={17} /></button></div>
     <div className="environment-switch"><span className="live-dot" /> <span>Test environment</span><ChevronDown size={13} /></div>
     <nav className="side-nav">{navGroups.map(group => <div key={group.label} className="nav-group"><div className="nav-label">{group.label}</div>{group.items.map(item => <button key={item} onClick={() => item === "Developers" ? window.location.href = "/developers" : setActive(item)} className={classNames("nav-item", active === item && "nav-active")}><NavIcon item={item} /><span>{item}</span>{item === "Risk & compliance" && <span className="nav-count">3</span>}</button>)}</div>)}</nav>
-    <div className="sidebar-bottom"><button className="nav-item"><LifeBuoy size={17} /><span>Support</span></button><div className="user-card"><div className="avatar">{user.name?.slice(0, 2).toUpperCase() || "DR"}</div><div className="user-meta"><strong>{user.name || "Wallet workspace"}</strong><span>{user.openId?.startsWith("wallet:") ? "Wallet owner" : "Owner"}</span></div><MoreHorizontal size={16} /></div></div>
+    <div className="sidebar-bottom"><button className="nav-item"><LifeBuoy size={17} /><span>Support</span></button><div className={classNames("profile-wrap", profileOpen && "profile-open")}><button className="user-card" onClick={() => setProfileOpen(!profileOpen)} aria-expanded={profileOpen} aria-label="Open profile menu"><div className="avatar">{user.name?.slice(0, 2).toUpperCase() || "DR"}</div><div className="user-meta"><strong>{user.name || "Workspace"}</strong><span>{isPrivy ? "Signed in with Privy" : user.openId?.startsWith("wallet:") ? "Wallet owner" : "Owner"}</span></div><MoreHorizontal size={16} /></button>{profileOpen && <div className="profile-menu"><div className="profile-menu-heading"><strong>{isPrivy ? "Signed in with Privy" : "Signed in with wallet"}</strong><span>{identity || user.openId?.replace(/^wallet:/, "") || "Authenticated workspace"}</span></div><button className="profile-logout" onClick={() => void logout()} disabled={drutoLogout.isPending}><LogOut size={15} />{drutoLogout.isPending ? "Logging out…" : "Logout"}</button></div>}</div></div>
   </aside>;
 }
 
@@ -316,7 +341,8 @@ function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: s
 
 function DashboardAccess() {
   const session = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
-  if (session.isLoading) return <div className="dashboard-loading"><Mark /><strong>Loading Druto workspace…</strong><span>Checking your sign-in session.</span></div>;
+  const { ready: privyReady, authenticated: privyAuthenticated } = usePrivy();
+  if (!privyReady || session.isLoading || (privyAuthenticated && !session.data)) return <div className="dashboard-loading"><Mark /><div className="auth-spinner" aria-hidden="true" /><strong>Loading Druto workspace…</strong><span>{privyAuthenticated ? "Finishing secure sign-in with Privy." : "Verifying your sign-in session."}</span></div>;
   if (!session.data || dashboardAccessState(session.data) !== "workspace") return <WalletLoginCard />;
   return <DashboardWorkspace user={session.data} />;
 }
