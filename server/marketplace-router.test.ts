@@ -73,6 +73,15 @@ describe("marketplace Payment Intent router contract", () => {
     await expect(userCaller.merchantAccounts.register({ marketplaceId: "market_2", sellerId: "seller_other", displayName: "Other Seller", receivingAddress: "0x5555555555555555555555555555555555555555" })).rejects.toThrow();
   });
 
+  it("routes additional catalog sellers through the isolated demo fallback", async () => {
+    const { db, rows } = createDbMock();
+    getDbMock.mockResolvedValue(db);
+    const caller = appRouter.createCaller({ user: null, req: {}, res: {} } as never);
+    const created = await caller.payments.createIntent({ externalOrderId: "MIXED-MOSAIC", itemName: "Ledger Operations Kit", amount: "2.50", seller: { marketplaceId: "northstar-marketplace", sellerId: "mosaic-works" } });
+    expect(rows[0]).toMatchObject({ sellerId: "mosaic-works", merchantAccountId: "legacy-demo-mosaic-works" });
+    expect(created).toMatchObject({ sellerId: "mosaic-works", merchantAccountId: "legacy-demo-mosaic-works" });
+  });
+
   it("returns only the seller-scoped pending and succeeded intents", async () => {
     const account = { id: "ma_orders", marketplaceId: "market_1", externalSellerId: "seller_orders", ownerUserId: 7, displayName: "Orders Seller", receivingAddress: "0x6666666666666666666666666666666666666666", status: "active", createdAt: new Date(), updatedAt: new Date() };
     const intents = [{ id: "pi_pending", status: "requires_payment", amountAtomic: "1000000", merchantAccountId: "ma_orders" }, { id: "pi_succeeded", status: "succeeded", amountAtomic: "2000000", merchantAccountId: "ma_orders" }, { id: "pi_other", status: "succeeded", amountAtomic: "9000000", merchantAccountId: "ma_other" }];

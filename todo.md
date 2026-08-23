@@ -173,3 +173,17 @@
 
 - [x] Wire wallet-signature verification into the real seller registration/challenge/verify/admin-approval UI flow.
 - [x] Add router/service tests for expired challenges, reused challenges, wrong nonce/message/domain, and approval failing before verification then succeeding after verification.
+
+# Mixed-seller checkout
+
+- [x] Split mixed-seller carts into seller-specific payment intents instead of blocking checkout.
+- [x] Preserve per-seller order context, payment handoff, and buyer receipt navigation.
+- [x] Add mixed-seller checkout tests and responsive browser verification.
+
+- [x] Persist partially created seller-payment intents after each successful creation so a later failure leaves a recoverable queue.
+- [x] Add partial intent-creation failure coverage and a mixed-seller checkout/receipt walkthrough path for desktop and mobile verification.
+
+- [x] Add a deterministic multi-seller intent-creation flow test that fails on seller two and verifies the saved first-seller queue and recovery message.
+- [x] Add a deterministic receipt continuation preview path and verify the Pay next seller action on desktop and mobile.
+
+- [x] Add orchestration coverage for seller-one success plus seller-two failure, asserting persisted queue state and recovery metadata.

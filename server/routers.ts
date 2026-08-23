@@ -32,21 +32,21 @@ export const paymentInput = z.object({
   seller: sellerRoutingInput.optional(),
 });
 
-const LEGACY_DEMO_MERCHANT_ACCOUNT_ID = "legacy-demo-northstar";
+const LEGACY_DEMO_SELLERS: Record<string, string> = { "northstar-labs": "Northstar Labs", "mosaic-works": "Mosaic Works", "druto-labs": "Druto Labs", "dawn-studio": "Dawn Studio", "atlas-compute": "Atlas Compute", "meridian-ops": "Meridian Ops" };
 
 function resolveLegacyDemoMerchantAccount(seller: z.infer<typeof sellerRoutingInput>) {
-  if (seller.marketplaceId !== "northstar-marketplace" || seller.sellerId !== "northstar-labs") return null;
-  // Compatibility only: this preserves the original hackathon demo until an admin registers the seller in merchantAccounts.
-  return { id: LEGACY_DEMO_MERCHANT_ACCOUNT_ID, marketplaceId: seller.marketplaceId, externalSellerId: seller.sellerId, displayName: "Northstar Labs", receivingAddress: process.env.ARC_MERCHANT_WALLET_ADDRESS!, ownerUserId: undefined, status: "active" as const };
+  if (seller.marketplaceId !== "northstar-marketplace" || !LEGACY_DEMO_SELLERS[seller.sellerId]) return null;
+  // Compatibility only: catalog sellers share the configured demo wallet until each seller completes real onboarding.
+  return { id: `legacy-demo-${seller.sellerId}`, marketplaceId: seller.marketplaceId, externalSellerId: seller.sellerId, displayName: LEGACY_DEMO_SELLERS[seller.sellerId], receivingAddress: process.env.ARC_MERCHANT_WALLET_ADDRESS!, ownerUserId: undefined, status: "active" as const };
 }
 
 async function resolveMerchantAccount(db: Awaited<ReturnType<typeof getDb>>, seller: z.infer<typeof sellerRoutingInput>, options: { allowPending?: boolean } = {}) {
   if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-  const legacyDemoAccount = resolveLegacyDemoMerchantAccount(seller);
-  if (legacyDemoAccount) return legacyDemoAccount;
   const [account] = seller.merchantAccountId
     ? await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, seller.merchantAccountId)).limit(1)
     : await db.select().from(merchantAccounts).where(and(eq(merchantAccounts.marketplaceId, seller.marketplaceId), eq(merchantAccounts.externalSellerId, seller.sellerId))).limit(1);
+  const legacyDemoAccount = resolveLegacyDemoMerchantAccount(seller);
+  if (!account && legacyDemoAccount) return legacyDemoAccount;
   if (!account || (!options.allowPending && account.status !== "active")) throw new TRPCError({ code: "NOT_FOUND", message: "Seller is not onboarded or active in Druto" });
   if (account.marketplaceId !== seller.marketplaceId || account.externalSellerId !== seller.sellerId) throw new TRPCError({ code: "CONFLICT", message: "Seller routing identifiers do not match the merchant account" });
   return account;
@@ -54,7 +54,7 @@ async function resolveMerchantAccount(db: Awaited<ReturnType<typeof getDb>>, sel
 
 async function resolveMerchantAccountForOperator(db: Awaited<ReturnType<typeof getDb>>, seller: z.infer<typeof sellerRoutingInput>, user: { id: number; role: "admin" | "user" }, options: { allowPending?: boolean } = {}) {
   const account = await resolveMerchantAccount(db, seller, options);
-  if (account.id === LEGACY_DEMO_MERCHANT_ACCOUNT_ID) return account;
+  if (account.id.startsWith("legacy-demo-")) return account;
   if (user.role !== "admin" && account.ownerUserId !== user.id) throw new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to view this seller account" });
   return account;
 }
