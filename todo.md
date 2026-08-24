@@ -222,3 +222,9 @@
 - [x] Add a smooth loading skeleton while Privy authentication status and the Druto session are being verified.
 - [x] Show a visible signed-in-with-Privy label and the user’s email or social handle in the dashboard profile menu.
 - [x] Add regression tests and responsive browser verification for the new session UX.
+
+# New seller integration guide
+
+- [x] Write a beginner-friendly seller onboarding guide for starting Druto on a website.
+- [x] Document API keys, seller wallet verification, Payment Intents, hosted checkout, signed webhooks, dashboard synchronization, testing, and production hardening.
+- [x] Validate the guide against the current Druto SDK and Arc Testnet USDC implementation.
