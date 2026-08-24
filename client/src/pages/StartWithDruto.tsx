@@ -1,6 +1,7 @@
 import { ArrowRight, Check, Clipboard, Code2, KeyRound, LockKeyhole, ShieldCheck, WalletCards, Webhook } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+import { copyTextToClipboard, type CopyFeedback } from "@/lib/clipboard";
 
 const logo = "/manus-storage/druto-arc-mark_c8c084dd.png";
 const starterZipUrl = "/manus-storage/druto-nextjs-starter-0.1.0_b97da8c9.zip";
@@ -9,9 +10,15 @@ const serverSnippet = `import { DrutoCheckout } from "@druto/sdk";\n\nconst drut
 const webhookSnippet = `const rawBody = await request.text();\nconst signature = request.headers.get("druto-signature") ?? "";\n\nconst valid = await verifyWebhookSignature(\n  process.env.DRUTO_WEBHOOK_SECRET!,\n  rawBody,\n  signature,\n);\n\nif (!valid) return new Response("invalid signature", { status: 401 });\nawait fulfillOrderOnce(event.data.externalOrderId);`;
 
 function CopyBlock({ code, language = "typescript" }: { code: string; language?: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => { try { await navigator.clipboard.writeText(code); setCopied(true); window.setTimeout(() => setCopied(false), 1400); } catch { setCopied(false); } };
-  return <div className="dev-code-block"><div className="dev-code-head"><span><span className="dev-code-dot" /> {language}</span><button onClick={copy}><Clipboard size={13} /> {copied ? "Copied" : "Copy"}</button></div><pre><code>{code}</code></pre></div>;
+  const [feedback, setFeedback] = useState<CopyFeedback>("idle");
+  const copy = async () => {
+    const succeeded = await copyTextToClipboard(code);
+    setFeedback(succeeded ? "copied" : "error");
+    window.setTimeout(() => setFeedback("idle"), 1800);
+  };
+  const label = feedback === "copied" ? "Copied" : feedback === "error" ? "Select manually" : "Copy";
+  const Icon = feedback === "copied" ? Check : Clipboard;
+  return <div className="dev-code-block"><div className="dev-code-head"><span><span className="dev-code-dot" /> {language}</span><button type="button" onClick={copy} aria-label={`Copy ${language} code`}><Icon size={13} /> {label}</button></div><pre><code>{code}</code></pre><span className="sr-only" role="status" aria-live="polite">{feedback === "copied" ? "Code copied to clipboard." : feedback === "error" ? "Copy failed. Select the code manually." : ""}</span></div>;
 }
 
 export default function StartWithDruto() {

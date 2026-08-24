@@ -235,3 +235,9 @@
 - [x] Create a copy-paste Next.js integration starter template with server routes and webhook handling.
 - [x] Add seller self-service dashboard onboarding for API key and webhook secret generation with secure one-time reveal.
 - [x] Add tests, responsive verification, and package validation for the seller onboarding expansion.
+
+# Start page copy controls
+
+- [x] Add copy-to-clipboard buttons to every Start with Druto code snippet.
+- [x] Provide accessible copied-state feedback and a safe clipboard fallback.
+- [x] Add regression coverage and responsive browser verification for snippet copying.
