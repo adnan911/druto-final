@@ -228,3 +228,10 @@
 - [x] Write a beginner-friendly seller onboarding guide for starting Druto on a website.
 - [x] Document API keys, seller wallet verification, Payment Intents, hosted checkout, signed webhooks, dashboard synchronization, testing, and production hardening.
 - [x] Validate the guide against the current Druto SDK and Arc Testnet USDC implementation.
+
+# Seller onboarding expansion
+
+- [x] Build a dedicated public Start with Druto page in the Developer Hub from the new-seller guide.
+- [x] Create a copy-paste Next.js integration starter template with server routes and webhook handling.
+- [x] Add seller self-service dashboard onboarding for API key and webhook secret generation with secure one-time reveal.
+- [x] Add tests, responsive verification, and package validation for the seller onboarding expansion.

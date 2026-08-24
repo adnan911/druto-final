@@ -8,6 +8,7 @@ import { buildMarketplaceCheckoutPayload, calculateMarketplaceTotals, getNextMar
 import { developerSdkSnippet } from "@/lib/developer";
 import WalletLoginCard from "@/components/WalletLoginCard";
 import ApiKeyManager from "@/components/ApiKeyManager";
+import SellerOnboarding from "@/components/SellerOnboarding";
 import { buildReceiptSummary, copyReceiptValue } from "@/lib/receipt";
 import { dashboardAccessState } from "@/lib/access";
 import { toast } from "sonner";
@@ -184,7 +185,7 @@ function PagePanel({ active, onCreate }: { active: string; onCreate: () => void 
   if (active === "Settlements") return <SettlementsPage />;
   if (active === "Risk & compliance") return <RiskPage />;
   if (active === "Developers") return <DeveloperIntegrationPage />;
-  if (active === "API Keys") return <ApiKeyManager />;
+  if (active === "API Keys") return <SellerOnboarding />;
   if (active === "Customers") return <CustomersPage />;
   return <div className="page-content"><PageHeader eyebrow="Operations" title={title} description={`Manage ${title.toLowerCase()} with the same clear, auditable controls as the payment ledger.`} action={active === "Settlements" ? "Request settlement" : "Create new"} onAction={onCreate} /><div className="empty-feature card"><div className="empty-icon"><Sparkles size={21} /></div><h3>{title} workspace</h3><p>This surface is wired for the Druto MVP experience. Connect the deferred API and ledger services later to replace the local test records with live data.</p><div className="empty-actions"><button className="button button-primary" onClick={onCreate}><Plus size={16} /> {active === "Settlements" ? "Request settlement" : "Create record"}</button><button className="button button-quiet" onClick={() => toast.info("This is a frontend-only test environment.")}><BookOpen size={16} /> Read implementation notes</button></div></div><div className="mini-card-row"><div className="card mini-card"><span className="eyebrow">Test environment</span><strong>Local state enabled</strong><small>Nothing here moves real funds.</small></div><div className="card mini-card"><span className="eyebrow">Integration boundary</span><strong>API deferred</strong><small>Ready for future adapter wiring.</small></div><div className="card mini-card"><span className="eyebrow">Audit posture</span><strong>Visible states</strong><small>Every mock action is labeled.</small></div></div></div>;
 }

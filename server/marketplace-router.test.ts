@@ -63,14 +63,27 @@ describe("marketplace Payment Intent router contract", () => {
     expect(created).toMatchObject({ sellerId: "seller_1", merchantAccountId: "ma_seller_1", merchantAddress: sellerAccount.receivingAddress });
   });
 
-  it("requires admin approval to register a seller account", async () => {
+  it("allows self-service pending seller registration before admin approval", async () => {
     const { db, rows } = createDbMock();
     getDbMock.mockResolvedValue(db);
     const adminCaller = appRouter.createCaller({ user: { id: 7, openId: "admin-owner", role: "admin" }, req: {}, res: {} } as never);
     await adminCaller.merchantAccounts.register({ marketplaceId: "market_1", sellerId: "seller_new", displayName: "New Seller", receivingAddress: "0x2222222222222222222222222222222222222222" });
     expect(rows[0]).toMatchObject({ ownerUserId: 7, status: "pending", receivingAddress: "0x2222222222222222222222222222222222222222" });
     const userCaller = appRouter.createCaller({ user: { id: 8, openId: "regular-user", role: "user" }, req: {}, res: {} } as never);
-    await expect(userCaller.merchantAccounts.register({ marketplaceId: "market_2", sellerId: "seller_other", displayName: "Other Seller", receivingAddress: "0x5555555555555555555555555555555555555555" })).rejects.toThrow();
+    const selfRegistered = await userCaller.merchantAccounts.register({ marketplaceId: "market_2", sellerId: "seller_other", displayName: "Other Seller", receivingAddress: "0x5555555555555555555555555555555555555555" });
+    expect(selfRegistered).toMatchObject({ ownerUserId: 8, status: "pending", marketplaceId: "market_2", externalSellerId: "seller_other" });
+  });
+
+  it("provisions a webhook secret for an owner’s pending seller account", async () => {
+    const sellerAccount = { id: "ma_pending", marketplaceId: "dashda", externalSellerId: "seller_main", displayName: "Dashda", receivingAddress: "0x3333333333333333333333333333333333333333", status: "pending", ownerUserId: 8, createdAt: new Date(), updatedAt: new Date() };
+    const { db, rows } = createDbMock([sellerAccount]);
+    getDbMock.mockResolvedValue(db);
+    const caller = appRouter.createCaller({ user: { id: 8, openId: "seller-owner", role: "user" }, req: {}, res: {} } as never);
+    const endpoint = await caller.merchantAccounts.registerWebhook({ seller: { marketplaceId: "dashda", sellerId: "seller_main" }, url: "https://dashda.example/api/webhooks/druto" });
+    expect(endpoint).toMatchObject({ sellerId: "seller_main", url: "https://dashda.example/api/webhooks/druto" });
+    expect(endpoint.secret).toMatch(/^[A-Za-z0-9_-]{32,}$/);
+    expect(rows[0]).toMatchObject({ merchantAccountId: "ma_pending", ownerUserId: 8, active: 1 });
+    expect(rows[0].secretCiphertext).not.toBe(endpoint.secret);
   });
 
   it("routes additional catalog sellers through the isolated demo fallback", async () => {

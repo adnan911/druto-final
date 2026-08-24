@@ -83,7 +83,7 @@ status: pending
 
 ### Step 2: Register the seller in Druto
 
-An authorized marketplace operator registers the seller in Druto with the marketplace ID, seller ID, display name, and public Arc Testnet receiving address.
+A seller can self-register from Dashboard → Seller setup, or an authorized marketplace operator can register on the seller’s behalf. The registration includes the marketplace ID, seller ID, display name, and public Arc Testnet receiving address. The account starts pending and the dashboard can provision the API key and webhook secret during this setup.
 
 ```ts
 await druto.merchantAccounts.register({
@@ -128,7 +128,7 @@ Druto recovers the signer address and compares it with the registered receiving 
 
 ### Step 4: Administrator approval
 
-After ownership is verified, an authorized Druto administrator or marketplace operator activates the merchant account. Only an active seller should be used for customer checkout.
+After ownership is verified, an authorized Druto administrator or marketplace operator activates the merchant account. Self-service registration does not bypass this approval gate. Only an active seller should be used for customer checkout.
 
 The website should store the returned `merchantAccountId`, but the browser should continue sending the stable `{ marketplaceId, sellerId }` pair. The browser should never be allowed to choose an arbitrary receiving wallet.
 

@@ -151,7 +151,7 @@ export const appRouter = router({
   }),
 
   merchantAccounts: router({
-    register: adminProcedure.input(z.object({ marketplaceId: z.string().min(1).max(128), sellerId: z.string().min(1).max(128), displayName: z.string().min(1).max(255), receivingAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/) })).mutation(async ({ input, ctx }) => {
+    register: protectedProcedure.input(z.object({ marketplaceId: z.string().min(1).max(128), sellerId: z.string().min(1).max(128), displayName: z.string().min(1).max(255), receivingAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/) })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
       const id = `ma_${nanoid(12)}`;
@@ -166,7 +166,7 @@ export const appRouter = router({
     registerWebhook: protectedProcedure.input(z.object({ seller: sellerRoutingInput, url: z.string().min(1).max(2048) })).mutation(async ({ input, ctx }) => {
       if (!isValidWebhookUrl(input.url)) throw new TRPCError({ code: "BAD_REQUEST", message: "Webhook URL must use HTTPS (or localhost HTTP for development)" });
       const db = await getDb();
-      const account = await resolveMerchantAccountForOperator(db, input.seller, ctx.user);
+      const account = await resolveMerchantAccountForOperator(db, input.seller, ctx.user, { allowPending: true });
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
       const secret = createWebhookSecret();
       const id = `wh_${nanoid(12)}`;
