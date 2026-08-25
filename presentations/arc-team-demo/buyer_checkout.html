@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Buyer Checkout</title>
+  <style>
+    * { box-sizing: border-box; }
+    .slide-container { width: 1280px; min-height: 720px; background: #f8f7f3; color: #1c2528; font-family: 'DM Sans', Arial, sans-serif; padding: 54px 72px 12px; }
+    .topline { display: flex; justify-content: space-between; border-bottom: 1px solid #d9ddd5; padding-bottom: 16px; font: 12px 'IBM Plex Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: #6d7777; }
+    .brand { font-weight: 700; letter-spacing: 0; text-transform: none; color: #1c2528; }
+    .eyebrow { margin-top: 42px; color: #1e9b83; font: 700 12px 'IBM Plex Mono', monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .eyebrow:before { content: '●'; margin-right: 8px; }
+    h1 { margin: 14px 0 32px; font: 700 54px/1.02 'IBM Plex Mono', monospace; letter-spacing: -.06em; color: #17201e; }
+    .content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 20px; }
+    .commerce-list { border-top: 1px solid #d9ddd5; }
+    .list-item { display: flex; align-items: center; gap: 20px; padding-top: 20px; margin-top: 0; border-bottom: 1px solid #d9ddd5; min-height: 82px; }
+    .dot { width: 12px; height: 12px; background: #1e9b83; border-radius: 50%; }
+    .item-text h3 { font: 700 20px 'IBM Plex Mono', monospace; margin: 0 0 4px; letter-spacing: -0.02em; }
+    .item-text p { margin: 0; color: #6d7777; font-size: 16px; }
+    .handoff-panel { background: #17201e; color: #f8f7f3; padding: 28px; border: 1px solid #2a3533; }
+    .handoff-panel h2 { font: 700 24px 'IBM Plex Mono', monospace; margin: 0 0 24px; color: #b7e8d2; border-bottom: 1px solid #2a3533; padding-bottom: 16px; }
+    .code-block { font-family: 'IBM Plex Mono', monospace; font-size: 15px; line-height: 1.6; color: #a5b4b1; }
+    .code-key { color: #1e9b83; }
+    .code-val { color: #fffefa; }
+    /* Reduced footer top margin to remove overflow while keeping min-height intact */
+    .footer { margin-top: 24px; display: flex; justify-content: space-between; color: #89918c; font: 12px 'IBM Plex Mono', monospace; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="topline"><span class="brand">druto / buyer journey</span><span>04 — commerce boundary</span></div>
+    <div class="eyebrow">Step 01: The familiar checkout</div>
+    <h1>Browse, cart, and standard checkout.</h1>
+    
+    <div class="content-grid">
+      <div class="commerce-list">
+        <div class="list-item">
+          <div class="dot"></div>
+          <div class="item-text">
+            <h3>Catalog &amp; Cart</h3>
+            <p>Buyer browses products and adds items to a persistent cart.</p>
+          </div>
+        </div>
+        <div class="list-item">
+          <div class="dot"></div>
+          <div class="item-text">
+            <h3>Order Context</h3>
+            <p>Marketplace captures shipping, contact, and seller details.</p>
+          </div>
+        </div>
+        <div class="list-item">
+          <div class="dot"></div>
+          <div class="item-text">
+            <h3>Pay with Druto</h3>
+            <p>The primary crypto payment option triggers the backend handoff.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="handoff-panel">
+        <h2>Handoff Contract</h2>
+        <div class="code-block">
+          {<br />
+          &nbsp;&nbsp;<span class="code-key">"externalOrderId"</span>: <span class="code-val">"ORD-7721"</span>,<br />
+          &nbsp;&nbsp;<span class="code-key">"amount"</span>: <span class="code-val">"125.00"</span>,<br />
+          &nbsp;&nbsp;<span class="code-key">"currency"</span>: <span class="code-val">"USDC"</span>,<br />
+          &nbsp;&nbsp;<span class="code-key">"network"</span>: <span class="code-val">"Arc Testnet"</span>,<br />
+          &nbsp;&nbsp;<span class="code-key">"sellerId"</span>: <span class="code-val">"merchant_01"</span><br />
+          }
+        </div>
+        <p style="margin-top: 18px; font-size: 14px; color: #6d7777; line-height: 1.5;">
+          The marketplace backend creates a Druto Payment Intent. The browser never sees the merchant's API key or the raw wallet destination.
+        </p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>familiar commerce experience</span>
+      <span><strong>ARC TESTNET</strong> / USDC</span>
+    </div>
+  </div>
+</body>
+</html>

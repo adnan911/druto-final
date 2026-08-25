@@ -271,3 +271,9 @@
 - [x] Inventory the current Druto logo and brand assets used by the platform.
 - [x] Assemble logo files, colors, typography, and usage guidance into a downloadable brand-kit ZIP.
 - [x] Validate the brand-kit contents and upload the final package.
+
+# Arc team pitch and demo deck
+
+- [x] Write a detailed pitch script for each step of the live Arc Testnet demonstration.
+- [x] Prepare slide content for the Arc team demo flow, including buyer checkout, onchain proof, and seller dashboard reconciliation.
+- [x] Generate and validate the presentation deck and supporting documentation files.

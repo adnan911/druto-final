@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Buyer-controlled Arc Testnet payment</title>
+  <style>
+    * { box-sizing: border-box; }
+    .slide-container { width: 1280px; min-height: 680px; background: #f8f7f3; color: #1c2528; font-family: 'DM Sans', Arial, sans-serif; padding: 54px 72px 12px; }
+    .topline { display: flex; justify-content: space-between; border-bottom: 1px solid #d9ddd5; padding-bottom: 16px; font: 12px 'IBM Plex Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: #6d7777; }
+    .content { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 32px; }
+    .eyebrow { color: #1e9b83; font: 700 12px 'IBM Plex Mono', monospace; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 12px; }
+    .eyebrow:before { content: '●'; margin-right: 8px; }
+    h1 { margin: 0 0 20px; font: 700 48px/1.1 'IBM Plex Mono', monospace; letter-spacing: -0.04em; color: #17201e; }
+    .check-list { margin-top: 16px; border-top: 1px solid #d9ddd5; }
+    .check-item { display: flex; align-items: flex-start; gap: 12px; padding-top: 12px; border-bottom: 1px solid #d9ddd5; min-height: 72px; }
+    .check-icon { color: #1e9b83; font-size: 18px; margin-top: 2px; }
+    .check-text h3 { font: 700 18px 'IBM Plex Mono', monospace; margin: 0 0 4px; }
+    .check-text p { margin: 0; color: #63706d; font-size: 15px; line-height: 1.4; }
+    .visual-side { display: flex; flex-direction: column; gap: 16px; }
+    .visual-frame { width: 540px; height: 340px; background: #fffefa; border: 1px solid #d9ddd5; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .visual-frame img { width: 480px; height: 300px; object-fit: contain; }
+    .caption { font: 13px 'IBM Plex Mono', monospace; color: #6d7777; border-left: 3px solid #1e9b83; padding-left: 12px; }
+    .footer { margin-top: 24px; display: flex; justify-content: space-between; color: #89918c; font: 12px 'IBM Plex Mono', monospace; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="topline"><span>druto / live demo</span><span>03 — buyer approval</span></div>
+    <div class="content">
+      <div class="text-side">
+        <div class="eyebrow">Step 03 / Wallet approval</div>
+        <h1>Buyer-controlled Arc transaction.</h1>
+        <div class="check-list">
+          <div class="check-item">
+            <div class="check-icon"><i class="fas fa-shield-halved"></i></div>
+            <div class="check-text">
+              <h3>Non-custodial boundary</h3>
+              <p>The seller never receives the buyer's private key. Approval happens in the buyer's own wallet.</p>
+            </div>
+          </div>
+          <div class="check-item">
+            <div class="check-icon"><i class="fas fa-magnifying-glass"></i></div>
+            <div class="check-text">
+              <h3>Safety check protocol</h3>
+              <p>Approve only when the wallet's displayed amount and recipient match the Druto checkout screen.</p>
+            </div>
+          </div>
+          <div class="check-item">
+            <div class="check-icon"><i class="fas fa-link"></i></div>
+            <div class="check-text">
+              <h3>Arc Testnet USDC</h3>
+              <p>Real testnet transfer using the USDC token contract on the Arc L1 network.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="visual-side">
+        <div class="visual-frame">
+          <img src="/home/ubuntu/upload/search_images/pZ5Hw5Ct7OrG.png" alt="Arc Wallet Interface" />
+        </div>
+        <div class="caption">
+          <strong>Dual Path:</strong> Injected EVM wallet for desktop browser flows or QR scan for mobile wallet approval.
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <span>submitted ≠ succeeded</span>
+      <span><strong>ARC TESTNET</strong> / USDC</span>
+    </div>
+  </div>
+</body>
+</html>

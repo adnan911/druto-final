@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Review</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    .slide-container { width: 1280px; min-height: 720px; background: #f8f7f3; color: #1c2528; font-family: 'DM Sans', Arial, sans-serif; padding: 54px 72px 0; }
+    .topline { display: flex; justify-content: space-between; border-bottom: 1px solid #d9ddd5; padding-bottom: 16px; font: 12px 'IBM Plex Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: #6d7777; }
+    .eyebrow { margin-top: 28px; color: #1e9b83; font: 700 12px 'IBM Plex Mono', monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .eyebrow:before { content: '●'; margin-right: 8px; }
+    h1 { margin: 14px 0 8px; font: 700 54px/1.02 'IBM Plex Mono', monospace; letter-spacing: -.06em; color: #17201e; }
+    .content { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 0; }
+    .table-container { border-top: 1px solid #d9ddd5; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th { text-align: left; font: 700 13px 'IBM Plex Mono', monospace; color: #1e9b83; text-transform: uppercase; padding: 6px 0; border-bottom: 1px solid #d9ddd5; }
+    td { padding: 10px 0; border-bottom: 1px solid #d9ddd5; vertical-align: top; }
+    .field-name { font: 700 16px 'IBM Plex Mono', monospace; color: #1c2528; }
+    .field-desc { font-size: 15px; color: #6d7777; margin-top: 4px; line-height: 1.4; }
+    .preview-frame { background: #fffefa; border: 1px solid #e2e4dc; padding: 16px; position: relative; }
+    .preview-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0eb; padding-bottom: 12px; margin-bottom: 16px; }
+    .preview-logo { font: 700 14px 'IBM Plex Mono', monospace; color: #1c2528; }
+    .preview-tag { background: #e9f0e5; color: #1e9b83; font: 700 10px 'IBM Plex Mono', monospace; padding: 4px 8px; }
+    .preview-amount { font-size: 42px; font-weight: 700; letter-spacing: -0.04em; margin-bottom: 5px; }
+    .preview-amount span { font-size: 18px; color: #6d7777; font-weight: 400; }
+    .preview-order { font-size: 14px; color: #6d7777; margin-bottom: 12px; }
+    .preview-item { display: flex; align-items: center; gap: 12px; padding: 8px; border: 1px solid #e2e4dc; margin-bottom: 8px; }
+    .preview-item-icon { width: 20px; height: 20px; background: #1e9b83; border-radius: 50%; }
+    .preview-item-text { font: 700 13px 'IBM Plex Mono', monospace; }
+    .preview-button { width: 100%; background: #2758d9; color: white; text-align: center; padding: 12px; font-weight: 700; margin-top: 10px; }
+    .footer { margin-top: 8px; display: flex; justify-content: space-between; color: #89918c; font: 12px 'IBM Plex Mono', monospace; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="topline"><span>druto / hosted checkout</span><span>05 — legibility</span></div>
+    <div class="eyebrow">02 / Review the payment before signing</div>
+    <h1>Druto makes the payment request legible.</h1>
+    <div class="content">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40%;">Buyer sees</th>
+              <th>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="field-name">Exact USDC amount</div><div class="field-desc">No ambiguous totals or hidden fees.</div></td>
+              <td>Trust in the final settlement value.</td>
+            </tr>
+            <tr>
+              <td><div class="field-name">Arc Testnet</div><div class="field-desc">Correct network boundary displayed.</div></td>
+              <td>Prevents cross-chain confusion.</td>
+            </tr>
+            <tr>
+              <td><div class="field-name">Resolved recipient</div><div class="field-desc">Verified seller destination wallet.</div></td>
+              <td>Eliminates address spoofing risks.</td>
+            </tr>
+            <tr>
+              <td><div class="field-name">Order reference</div><div class="field-desc">Marketplace context attached.</div></td>
+              <td>Ensures payment reconciles to order.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="preview-frame">
+        <div class="preview-header">
+          <div class="preview-logo">druto</div>
+          <div class="preview-tag">ARC TESTNET</div>
+        </div>
+        <div class="preview-amount">25.00 <span>USDC</span></div>
+        <div class="preview-order">Order #10045 · Dashda Clothing</div>
+        <div class="preview-item">
+          <div class="preview-item-icon"></div>
+          <div class="preview-item-text">Connect wallet</div>
+        </div>
+        <div class="preview-item" style="opacity: 0.6;">
+          <div class="preview-item-icon" style="background: #6d7777;"></div>
+          <div class="preview-item-text">Pay with QR</div>
+        </div>
+        <div class="preview-button">Review payment</div>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Arc Testnet / USDC</span>
+      <span>hosted checkout / buyer review</span>
+    </div>
+  </div>
+</body>
+</html>

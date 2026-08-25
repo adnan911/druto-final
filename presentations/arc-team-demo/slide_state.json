@@ -1,0 +1,124 @@
+{
+  "project_info": {
+    "title": "Druto × Arc",
+    "created": 1787652531.171,
+    "last_updated": 1787653206.104,
+    "total_slides": 11
+  },
+  "slides": [
+    {
+      "id": "title",
+      "state": "edited",
+      "pageNum": 1
+    },
+    {
+      "id": "thesis",
+      "state": "edited",
+      "pageNum": 2
+    },
+    {
+      "id": "flow",
+      "state": "edited",
+      "pageNum": 3
+    },
+    {
+      "id": "buyer_checkout",
+      "state": "edited",
+      "pageNum": 4
+    },
+    {
+      "id": "payment_review",
+      "state": "edited",
+      "pageNum": 5
+    },
+    {
+      "id": "wallet_payment",
+      "state": "edited",
+      "pageNum": 6
+    },
+    {
+      "id": "verification",
+      "state": "edited",
+      "pageNum": 7
+    },
+    {
+      "id": "proof",
+      "state": "edited",
+      "pageNum": 8
+    },
+    {
+      "id": "seller_dashboard",
+      "state": "edited",
+      "pageNum": 9
+    },
+    {
+      "id": "arc_value",
+      "state": "edited",
+      "pageNum": 10
+    },
+    {
+      "id": "closing",
+      "state": "edited",
+      "pageNum": 11
+    }
+  ],
+  "outline": [
+    {
+      "id": "title",
+      "title": "Druto × Arc",
+      "summary": "From marketplace cart to verified USDC payment on Arc Testnet.",
+      "image_plan": "/home/ubuntu/upload/search_images/BYNsY4rQuyIW.jpg - Introduction slide featuring the Arc brand logo and announcement"
+    },
+    {
+      "id": "thesis",
+      "title": "The product thesis",
+      "summary": "Marketplace owns commerce, Druto owns the payment boundary, and Arc provides the settlement rail and onchain proof."
+    },
+    {
+      "id": "flow",
+      "title": "The live demo in one picture",
+      "summary": "A single visual sequence from marketplace cart through checkout, Arc Testnet payment, verification, receipt, and seller dashboard."
+    },
+    {
+      "id": "buyer_checkout",
+      "title": "Buyer starts with a familiar checkout",
+      "summary": "Show browse, cart, standard checkout, Pay with Druto, and the marketplace order ID."
+    },
+    {
+      "id": "payment_review",
+      "title": "Druto makes the payment request legible",
+      "summary": "Show exact USDC amount, Arc Testnet, resolved receiving wallet, order context, and wallet or QR options."
+    },
+    {
+      "id": "wallet_payment",
+      "title": "Buyer-controlled Arc Testnet payment",
+      "summary": "Demonstrate injected EVM wallet or QR approval and the safety check before signing."
+    },
+    {
+      "id": "verification",
+      "title": "Submitted is not succeeded",
+      "summary": "Explain Payment Intent state progression and Druto verification of token, chain, amount, recipient, and finality."
+    },
+    {
+      "id": "proof",
+      "title": "Make the payment auditable",
+      "summary": "Show buyer receipt fields and independent Arcscan proof for the real testnet transfer."
+    },
+    {
+      "id": "seller_dashboard",
+      "title": "One verified payment, two useful views",
+      "summary": "Show the seller dashboard payment record and signed payment.verified fulfillment boundary."
+    },
+    {
+      "id": "arc_value",
+      "title": "Druto turns Arc settlement into a usable commerce primitive",
+      "summary": "Summarize the value for buyers, sellers, marketplaces, and Arc.",
+      "image_plan": "/home/ubuntu/upload/search_images/9iuOe0Mb1UmM.png - Visual representation of Arc integration with crypto/wallet tools for the ecosystem value slide"
+    },
+    {
+      "id": "closing",
+      "title": "From testnet demonstration to marketplace integration",
+      "summary": "Close with the seller onboarding and integration sequence, with Arc Testnet today and production hardening next."
+    }
+  ]
+}

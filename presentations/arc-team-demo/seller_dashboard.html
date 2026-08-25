@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seller Dashboard & Webhooks</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    .slide-container { width: 1280px; min-height: 720px; background: #f8f7f3; color: #1c2528; font-family: 'DM Sans', Arial, sans-serif; padding: 54px 72px 6px; }
+    .topline { display: flex; justify-content: space-between; border-bottom: 1px solid #d9ddd5; padding-bottom: 16px; font: 12px 'IBM Plex Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: #6d7777; }
+    .brand { font-weight: 700; letter-spacing: 0; text-transform: none; color: #1c2528; }
+    .eyebrow { margin-top: 42px; color: #1e9b83; font: 700 12px 'IBM Plex Mono', monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .eyebrow:before { content: '●'; margin-right: 8px; }
+    h1 { margin: 14px 0 12px; font: 700 54px/1.02 'IBM Plex Mono', monospace; letter-spacing: -.06em; color: #17201e; }
+    .content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 12px; }
+    .ops-list { border-top: 1px solid #d9ddd5; }
+    .list-item { display: flex; align-items: center; gap: 16px; padding-top: 12px; border-bottom: 1px solid #d9ddd5; min-height: 64px; }
+    .dot { width: 12px; height: 12px; background: #1e9b83; border-radius: 50%; }
+    .item-text h3 { font: 700 20px 'IBM Plex Mono', monospace; margin: 0 0 4px; letter-spacing: -0.02em; }
+    .item-text p { margin: 0; color: #6d7777; font-size: 16px; }
+    .webhook-panel { background: #17201e; color: #f8f7f3; padding: 16px; border: 1px solid #2a3533; }
+    .webhook-panel h2 { font: 700 24px 'IBM Plex Mono', monospace; margin: 0 0 12px; color: #b7e8d2; border-bottom: 1px solid #2a3533; padding-bottom: 10px; }
+    .code-block { font-family: 'IBM Plex Mono', monospace; font-size: 14px; line-height: 1.5; color: #a5b4b1; white-space: pre; }
+    .code-key { color: #1e9b83; }
+    .code-val { color: #fffefa; }
+    .footer { margin-top: 12px; display: flex; justify-content: space-between; color: #89918c; font: 12px 'IBM Plex Mono', monospace; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="topline"><span class="brand">druto / seller operations</span><span>09 — fulfillment proof</span></div>
+    <div class="eyebrow">Step 06 / Operational Visibility</div>
+    <h1>One verified payment, two useful views.</h1>
+    
+    <div class="content-grid">
+      <div class="ops-list">
+        <div class="list-item">
+          <div class="dot"></div>
+          <div class="item-text">
+            <h3>Seller Dashboard</h3>
+            <p>Human-readable view of verified payments, balances, and onchain proofs.</p>
+          </div>
+        </div>
+        <div class="list-item">
+          <div class="dot"></div>
+          <div class="item-text">
+            <h3>Reconciliation</h3>
+            <p>Direct links to Arcscan for every succeeded Payment Intent.</p>
+          </div>
+        </div>
+        <div class="list-item">
+          <div class="dot"></div>
+          <div class="item-text">
+            <h3>Operational Trust</h3>
+            <p>Fulfill with confidence knowing Druto verified the transfer server-side.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="webhook-panel">
+        <h2>Signed Event</h2>
+        <div class="code-block">{
+  <span class="code-key">"type"</span>: <span class="code-val">"payment.verified"</span>,
+  <span class="code-key">"data"</span>: { <span class="code-key">"orderId"</span>: <span class="code-val">"ORD-7721"</span>, <span class="code-key">"status"</span>: <span class="code-val">"succeeded"</span> },
+  <span class="code-key">"signature"</span>: <span class="code-val">"t=...,v1=..."</span>
+}</div>
+        <p style="margin-top: 12px; font-size: 14px; color: #6d7777; line-height: 1.5;">
+          The marketplace fulfills from the signed webhook. The HMAC signature ensures the event is authentic and untampered.
+        </p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>verified payment loop</span>
+      <span><strong>ARC TESTNET</strong> / USDC</span>
+    </div>
+  </div>
+</body>
+</html>

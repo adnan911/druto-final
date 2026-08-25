@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The product thesis</title>
+<style>
+*{box-sizing:border-box}.slide-container{width:1280px;min-height:720px;background:#f8f7f3;color:#1c2528;font-family:'DM Sans',Arial,sans-serif;padding:54px 72px 12px}.topline{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d9ddd5;padding-bottom:16px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6d7777}.brand{font-weight:700;letter-spacing:0;text-transform:none;color:#1c2528}.eyebrow{margin-top:42px;color:#1e9b83;font:700 12px 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase}.eyebrow:before{content:'●';margin-right:8px}h1{margin:16px 0 20px;font:700 54px/1.02 'IBM Plex Mono',monospace;letter-spacing:-.06em;color:#17201e;max-width:800px}.intro{max-width:650px;color:#65706d;font-size:18px;line-height:1.5;margin-bottom:8px}.bands{border-top:1px solid #d9ddd5}.band{display:grid;grid-template-columns:80px 240px 1fr;align-items:center;min-height:60px;border-bottom:1px solid #d9ddd5}.circle{width:34px;height:34px;border:1px solid #1e9b83;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#1e9b83;font:700 12px 'IBM Plex Mono',monospace}.role{font:700 17px 'IBM Plex Mono',monospace;letter-spacing:-.03em}.desc{font-size:19px;line-height:1.35;color:#53625f;max-width:670px}.desc strong{color:#1c2528}.footer{margin-top:16px;display:flex;justify-content:space-between;color:#89918c;font:12px 'IBM Plex Mono',monospace}.footer strong{color:#1e9b83}
+</style>
+</head>
+<body>
+<div class="slide-container">
+<div class="topline"><span class="brand">druto / product thesis</span><span>02 — system boundaries</span></div>
+<div class="eyebrow">One payment loop, three responsibilities</div>
+<h1>Crypto payment infrastructure that follows the order.</h1>
+<p class="intro">The marketplace remains familiar. Druto creates the verification boundary. Arc provides the settlement rail and the independent onchain record.</p>
+<div class="bands">
+<div class="band"><div class="circle">01</div><div class="role">Marketplace</div><div class="desc"><strong>Owns commerce:</strong> catalog, cart, buyer, shipping, order context, inventory, and fulfillment.</div></div>
+<div class="band"><div class="circle">02</div><div class="role">Druto</div><div class="desc"><strong>Owns payment operations:</strong> Payment Intent, hosted wallet/QR checkout, transaction verification, signed events, and seller dashboard.</div></div>
+<div class="band"><div class="circle">03</div><div class="role">Arc</div><div class="desc"><strong>Provides the testnet rail:</strong> the USDC transfer and the onchain proof that the payment actually happened.</div></div>
+</div>
+<div class="footer"><span>non-custodial / buyer-controlled</span><span><strong>ARC TESTNET</strong> / USDC</span></div>
+</div>
+</body>
+</html>
