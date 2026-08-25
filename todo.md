@@ -247,3 +247,9 @@
 - [x] Diagnose why the dashboard remains on “Loading Druto workspace…” and identify the slow or unresolved auth/query path.
 - [x] Fix the workspace loading gate so authenticated and unauthenticated states settle promptly without bypassing security.
 - [x] Add regression coverage and verify the dashboard loading experience in the browser.
+
+# Final seller integration bundle
+
+- [x] Inventory the current Druto SDK, Next.js starter, seller guide, and related integration files.
+- [x] Assemble final downloadable SDK and seller-integration ZIP bundles.
+- [x] Validate SDK compilation, starter typecheck, package contents, and documentation consistency.
