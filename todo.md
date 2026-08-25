@@ -265,3 +265,9 @@
 - [x] Add the complete new-developer workflow to the public Developer Hub, from seller setup through verified payment and dashboard reconciliation.
 - [x] Add a real Arc Testnet USDC presentation checklist using the configured merchant wallet, including wallet/QR checkout and Arcscan proof.
 - [x] Validate the updated Developer Hub content and responsive presentation flow.
+
+# Druto brand kit
+
+- [x] Inventory the current Druto logo and brand assets used by the platform.
+- [x] Assemble logo files, colors, typography, and usage guidance into a downloadable brand-kit ZIP.
+- [x] Validate the brand-kit contents and upload the final package.
