@@ -277,3 +277,9 @@
 - [x] Write a detailed pitch script for each step of the live Arc Testnet demonstration.
 - [x] Prepare slide content for the Arc team demo flow, including buyer checkout, onchain proof, and seller dashboard reconciliation.
 - [x] Generate and validate the presentation deck and supporting documentation files.
+
+# Arc pitch expansion
+
+- [x] Add a technical Q&A section anticipating common Arc team integration questions.
+- [x] Add the complete slide-by-slide presentation narration script aligned to all 11 slides.
+- [x] Validate the expanded scripts against the current Arc Testnet demo flow and save the updated documentation checkpoint.

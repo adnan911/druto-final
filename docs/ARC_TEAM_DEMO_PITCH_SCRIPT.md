@@ -229,3 +229,79 @@ Before the audience arrives, confirm the marketplace is reset, the buyer wallet 
 [1]: https://docs.arc.network/ "Arc Network documentation"
 [2]: https://testnet.arcscan.app/ "Arcscan Testnet explorer"
 [3]: https://docs.arc.network/quickstart/ "Arc quickstart documentation"
+
+## Technical Q&A for the Arc team
+
+Use these answers after the live flow. Keep answers short first, then offer to open the Developer Hub or source code if the audience wants implementation detail.
+
+### Q1. What exactly happens when a marketplace clicks Pay with Druto?
+
+The marketplace backend creates a Druto Payment Intent with its own external order ID, seller identity, amount, USDC asset, Arc Testnet network, and return URL. Druto returns a safe hosted-checkout handoff. The browser never supplies the authoritative receiving wallet and never receives the seller’s API secret.
+
+### Q2. Is Druto custodial?
+
+The current demo is non-custodial. The buyer approves the USDC transfer in the buyer’s own EVM wallet or through a QR wallet flow. Druto verifies the resulting Arc transaction and provides the operational layer; it does not require the buyer’s private key.
+
+### Q3. How does Druto know which seller receives the funds?
+
+The marketplace sends a stable seller ID, not an arbitrary browser-provided wallet address. Druto resolves that seller to an approved merchant account and receiving wallet on the server. Seller wallet ownership is proven through a short-lived offchain signature challenge, and activation remains a separate control.
+
+### Q4. What does Druto verify onchain?
+
+Druto verifies the expected USDC token, Arc Testnet chain, exact amount, resolved recipient, transaction association, and receipt finality. A transaction hash received from the wallet is treated as submitted evidence, not as payment completion.
+
+### Q5. Why not mark the order paid immediately after the wallet returns a hash?
+
+A browser redirect or transaction hash can arrive before the transaction is final, can refer to the wrong token or recipient, or can be replayed against a different order. The trusted boundary is server-side verification followed by a signed `payment.verified` event.
+
+### Q6. How does the marketplace receive confirmation?
+
+Druto sends a versioned, signed webhook to the marketplace backend. The marketplace verifies the HMAC signature and timestamp tolerance, rejects replayed event IDs, matches the external order ID and Payment Intent ID, and marks the order paid exactly once.
+
+### Q7. What prevents duplicate orders or duplicate fulfillment?
+
+The marketplace uses a deterministic idempotency key when creating the Payment Intent. The webhook receiver persists event IDs before treating an event as processed. The order update should also be conditional, so a repeated delivery cannot create a second fulfillment.
+
+### Q8. What data is synchronized to the Druto dashboard?
+
+Druto stores the payment record and the context needed for reconciliation: seller, marketplace, external order reference, buyer label when supplied, amount, USDC asset, status, transaction hash, timestamps, and verification details. The marketplace remains the source of truth for catalog, inventory, shipping, customer addresses, and fulfillment.
+
+### Q9. Can one marketplace support multiple sellers?
+
+Yes. The marketplace sends a seller identity for each order. Druto resolves each seller’s approved wallet server-side. For a mixed cart, the integration can create separate seller-specific Payment Intents and continue the buyer through the seller payment queue. The first Arc team demo intentionally uses one seller so the live proof stays simple.
+
+### Q10. How does QR payment differ from wallet connection?
+
+The approval surface changes, but the trust model does not. The buyer scans a payment request using a mobile wallet instead of approving from an injected desktop wallet. Both paths resolve to the same Payment Intent and are verified against the same Arc transaction rules.
+
+### Q11. What happens if the payment fails or remains pending?
+
+The Payment Intent stays out of the succeeded state. The marketplace should keep the order pending, show a retry or support path, and avoid fulfillment. If a webhook delivery fails after verification, Druto persists the delivery state and retries it; the marketplace should remain idempotent.
+
+### Q12. What credentials does a seller need?
+
+A seller needs an API key for server-to-Druto requests and a separate webhook signing secret for Druto-to-server events. Both stay in server environment variables. The receiving wallet address is public, but its private key must never be sent to Druto or embedded in frontend code.
+
+### Q13. How is seller wallet ownership verified?
+
+Druto creates a short-lived, domain-bound challenge containing the seller identity, wallet, origin, and chain. The seller signs the exact message with an EVM personal-signature method. Druto recovers the signer address and compares it with the proposed wallet. This is an offchain signature and does not move USDC.
+
+### Q14. What is the current network and asset scope?
+
+This demonstration uses Arc Testnet and USDC only. The configured chain ID and token configuration are treated as environment settings, and the checkout displays the network and asset before approval. Mainnet deployment, operational monitoring, and production credential policies are follow-up hardening work.
+
+### Q15. How would you monitor this in production?
+
+A production integration should monitor Payment Intent state changes, webhook delivery latency and retry counts, verification failures, reconciliation mismatches, duplicate event attempts, and Arc explorer links. It should also retain the external order ID, Payment Intent ID, transaction hash, and event ID for support and audit workflows.
+
+### Q16. What happens if the seller’s wallet changes?
+
+The seller should register a new wallet through the ownership-verification flow rather than changing a frontend constant. A controlled account transition can require fresh signature proof and administrator or policy approval before new Payment Intents resolve to the new destination.
+
+### Q17. What is the most important production limitation in this demo?
+
+This is a real testnet foundation, not a claim that the system is ready for mainnet customer funds. Before mainnet, the team should complete mainnet configuration review, credential rotation and scopes, webhook monitoring, reconciliation tooling, dispute/refund policy, rate limiting, and operational incident procedures.
+
+### Q18. What should the Arc team inspect during the demo?
+
+The most useful checkpoints are the displayed Arc Testnet recipient and amount before approval, the succeeded Druto receipt, the Arcscan transaction showing the USDC transfer, and the seller dashboard row containing the same order reference and transaction hash. Those four views connect the buyer action, Arc settlement, Druto verification, and seller operations.
