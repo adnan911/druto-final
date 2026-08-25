@@ -241,3 +241,9 @@
 - [x] Add copy-to-clipboard buttons to every Start with Druto code snippet.
 - [x] Provide accessible copied-state feedback and a safe clipboard fallback.
 - [x] Add regression coverage and responsive browser verification for snippet copying.
+
+# Workspace loading responsiveness
+
+- [x] Diagnose why the dashboard remains on “Loading Druto workspace…” and identify the slow or unresolved auth/query path.
+- [x] Fix the workspace loading gate so authenticated and unauthenticated states settle promptly without bypassing security.
+- [x] Add regression coverage and verify the dashboard loading experience in the browser.

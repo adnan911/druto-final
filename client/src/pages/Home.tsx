@@ -342,8 +342,36 @@ function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: s
 
 function DashboardAccess() {
   const session = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
-  const { ready: privyReady, authenticated: privyAuthenticated } = usePrivy();
-  if (!privyReady || session.isLoading || (privyAuthenticated && !session.data)) return <div className="dashboard-loading"><Mark /><div className="auth-spinner" aria-hidden="true" /><strong>Loading Druto workspace…</strong><span>{privyAuthenticated ? "Finishing secure sign-in with Privy." : "Verifying your sign-in session."}</span></div>;
+  const { ready: privyReady, authenticated: privyAuthenticated, getAccessToken } = usePrivy();
+  const privyLogin = trpc.auth.privyLogin.useMutation();
+  const utils = trpc.useUtils();
+  const [privyExchangeState, setPrivyExchangeState] = useState<"idle" | "loading" | "error">("idle");
+
+  useEffect(() => {
+    if (!privyReady || !privyAuthenticated || session.data || privyExchangeState !== "idle") return;
+    let active = true;
+    setPrivyExchangeState("loading");
+    void getAccessToken().then(async accessToken => {
+      if (!active) return;
+      if (!accessToken) {
+        setPrivyExchangeState("error");
+        return;
+      }
+      try {
+        await privyLogin.mutateAsync({ accessToken });
+        await utils.auth.me.invalidate();
+      } catch (error) {
+        if (active) {
+          setPrivyExchangeState("error");
+          toast.error(error instanceof Error ? error.message : "Privy session could not be established");
+        }
+      }
+    });
+    return () => { active = false; };
+  }, [getAccessToken, privyAuthenticated, privyReady, privyExchangeState, session.data, utils.auth.me, privyLogin]);
+
+  const waitingForPrivy = privyAuthenticated && !session.data && privyExchangeState !== "error";
+  if (session.isLoading || privyExchangeState === "loading" || waitingForPrivy) return <div className="dashboard-loading"><Mark /><div className="auth-spinner" aria-hidden="true" /><strong>Loading Druto workspace…</strong><span>{privyAuthenticated ? "Finishing secure sign-in with Privy." : "Verifying your sign-in session."}</span></div>;
   if (!session.data || dashboardAccessState(session.data) !== "workspace") return <WalletLoginCard />;
   return <DashboardWorkspace user={session.data} />;
 }
