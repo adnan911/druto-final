@@ -81,3 +81,7 @@ The current implementation is for Arc Testnet and USDC only. Do not use producti
 ## 8. Production hardening
 
 Before accepting customer funds, add database-backed idempotency, API-key scopes and rotation, authenticated order lookup, webhook retry and dead-letter handling, rate limits, audit logging, monitoring, reconciliation, refund records, seller suspension, and a separate mainnet security and compliance review.
+
+## 9. Dashda order database synchronization
+
+For a concrete Prisma-style order update, see `docs/DASHDA_DATABASE_SYNC.md` in the Druto seller kit. The webhook route must preserve the raw body, verify `druto-signature`, require `x-druto-event-id`, deduplicate that event ID in your database, match `event.data.externalOrderId` to the Dashda order, store `paymentIntentId` and `transactionHash`, and mark the order paid exactly once. Never fulfill from the browser return page alone.

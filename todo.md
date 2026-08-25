@@ -253,3 +253,9 @@
 - [x] Inventory the current Druto SDK, Next.js starter, seller guide, and related integration files.
 - [x] Assemble final downloadable SDK and seller-integration ZIP bundles.
 - [x] Validate SDK compilation, starter typecheck, package contents, and documentation consistency.
+
+# Dashda sync and starter checkout feedback
+
+- [x] Add a concrete Dashda order-database synchronization example to the seller integration guide and starter materials.
+- [x] Add loading animation and clear success confirmation state to the Next.js starter checkout component.
+- [x] Add regression coverage, validate the starter, refresh downloadable bundles, and verify the checkout UI.
