@@ -283,3 +283,9 @@
 - [x] Add a technical Q&A section anticipating common Arc team integration questions.
 - [x] Add the complete slide-by-slide presentation narration script aligned to all 11 slides.
 - [x] Validate the expanded scripts against the current Arc Testnet demo flow and save the updated documentation checkpoint.
+
+# Arc pitch document format
+
+- [x] Convert the complete Arc team presentation script and technical Q&A into a structured Word DOCX file.
+- [x] Remove the corresponding Arc pitch Markdown files from the project as requested.
+- [x] Validate the DOCX contents and deliver the document.
