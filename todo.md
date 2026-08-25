@@ -259,3 +259,9 @@
 - [x] Add a concrete Dashda order-database synchronization example to the seller integration guide and starter materials.
 - [x] Add loading animation and clear success confirmation state to the Next.js starter checkout component.
 - [x] Add regression coverage, validate the starter, refresh downloadable bundles, and verify the checkout UI.
+
+# Arc Testnet presentation workflow
+
+- [x] Add the complete new-developer workflow to the public Developer Hub, from seller setup through verified payment and dashboard reconciliation.
+- [x] Add a real Arc Testnet USDC presentation checklist using the configured merchant wallet, including wallet/QR checkout and Arcscan proof.
+- [x] Validate the updated Developer Hub content and responsive presentation flow.
