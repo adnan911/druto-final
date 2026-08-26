@@ -338,3 +338,10 @@
 - [x] Verify provider availability and wallet-login entry behavior; the sandbox has no injected EVM provider, so real signature/session verification remains environment-dependent.
 - [x] Apply and test the smallest safe fix without requesting or approving a payment transaction.
 - [ ] Re-run dashboard persistence and seller-scoped payment visibility checks after wallet login succeeds.
+
+# Authenticated payment visibility blocker
+
+- [x] Trace why the connected workspace shows API-key records but no payment or overview records for the supplied Arcscan transaction.
+- [x] Compare the authenticated wallet owner, API-key seller metadata, merchant account, payment intent, and verified transaction scope.
+- [ ] Repair only the exact missing seller/account linkage or dashboard query filter without fabricating payment data.
+- [ ] Verify the repaired payment appears in Payments and Overview after refresh, and re-check signed webhook/account scoping.

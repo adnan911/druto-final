@@ -1,5 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { apiKeys, merchantAccounts, ownershipChallenges, paymentIntents, paymentTransactions, users, walletLoginChallenges, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
@@ -73,6 +73,19 @@ async function getOperatorMerchantAccountIds(db: Awaited<ReturnType<typeof getDb
 
 function filterMerchantRows<T extends { merchantAccountId?: string | null }>(rows: T[], merchantAccountId: string) {
   return rows.filter(row => row.merchantAccountId === merchantAccountId);
+}
+
+function authenticatedWalletAddress(user: { openId?: string | null }) {
+  const value = user.openId?.startsWith("wallet:") ? user.openId.slice("wallet:".length) : "";
+  return /^0x[a-fA-F0-9]{40}$/.test(value) ? value : null;
+}
+
+function operatorPaymentScope(accountIds: string[], user: { openId?: string | null }) {
+  const wallet = authenticatedWalletAddress(user);
+  const legacyScope = wallet ? and(isNull(paymentIntents.merchantAccountId), eq(paymentIntents.merchantAddress, wallet)) : undefined;
+  if (accountIds.length && legacyScope) return or(inArray(paymentIntents.merchantAccountId, accountIds), legacyScope);
+  if (accountIds.length) return inArray(paymentIntents.merchantAccountId, accountIds);
+  return legacyScope;
 }
 
 async function requireSellerApiKey(db: Awaited<ReturnType<typeof getDb>>, request: { headers: { authorization?: string | string[] } }, seller: z.infer<typeof sellerRoutingInput>) {
@@ -335,23 +348,26 @@ export const appRouter = router({
     listIntents: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
-      if (!accountIds.length) return [];
-      return db!.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      const scope = operatorPaymentScope(accountIds, ctx.user);
+      if (!scope) return [];
+      return db!.select().from(paymentIntents).where(scope);
     }),
 
     verifiedPayments: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
-      if (!accountIds.length) return [];
-      return db!.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      const scope = operatorPaymentScope(accountIds, ctx.user);
+      if (!scope) return [];
+      return db!.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(scope);
     }),
 
     summary: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
-      if (!accountIds.length) return { availableUsdc: "0.00", grossUsdc: "0.00", pendingUsdc: "0.00", successfulCount: 0, pendingCount: 0, totalCount: 0 };
-      const intents = await db!.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
-      const verifiedRows = await db!.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      const scope = operatorPaymentScope(accountIds, ctx.user);
+      if (!scope) return { availableUsdc: "0.00", grossUsdc: "0.00", pendingUsdc: "0.00", successfulCount: 0, pendingCount: 0, totalCount: 0 };
+      const intents = await db!.select().from(paymentIntents).where(scope);
+      const verifiedRows = await db!.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(scope);
       const pending = intents.filter(intent => intent.status === "requires_payment" || intent.status === "submitted" || intent.status === "verifying");
       const verifiedSummary = summarizeVerifiedRows(verifiedRows);
       const pendingAtomic = pending.reduce((sum, intent) => sum + BigInt(intent.amountAtomic), BigInt(0));
