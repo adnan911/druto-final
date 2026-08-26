@@ -76,7 +76,7 @@ export async function verifyArcUsdcTransfer(hash: Hash, expectedAmountAtomic: st
     .filter(log => log.address.toLowerCase() === ARC_USDC_ADDRESS.toLowerCase())
     .map(log => {
       try {
-        return decodeEventLog({ abi: erc20Abi, data: log.data, topics: log.topics });
+        return decodeEventLog({ abi: erc20Abi, data: log.data, topics: log.topics }) as any;
       } catch {
         return null;
       }
