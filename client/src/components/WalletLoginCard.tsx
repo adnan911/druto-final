@@ -18,11 +18,17 @@ function shortAddress(address: string) {
 export default function WalletLoginCard() {
   const [address, setAddress] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [walletMode, setWalletMode] = useState<ReturnType<typeof getWalletLoginMode>>("unavailable");
   const walletChallenge = trpc.auth.walletChallenge.useMutation();
   const walletLogin = trpc.auth.walletLogin.useMutation();
   const privyLogin = trpc.auth.privyLogin.useMutation();
   const utils = trpc.useUtils();
   const { ready: privyReady, authenticated: privyAuthenticated, login, getAccessToken } = usePrivy();
+
+  useEffect(() => {
+    const ethereum = (window as WalletWindow).ethereum;
+    setWalletMode(getWalletLoginMode(ethereum, privyReady));
+  }, [privyReady]);
 
   useEffect(() => {
     if (!privyReady || !privyAuthenticated) return;
@@ -84,7 +90,7 @@ export default function WalletLoginCard() {
         <h2>Connect your wallet</h2>
         <p>Druto uses the Arc Testnet wallet signature to create a secure dashboard session. Your address stays yours.</p>
         {address && <div className="wallet-selected"><span className="live-dot" /><span><small>Selected wallet</small><strong>{shortAddress(address)}</strong></span></div>}
-        <button className="button button-primary wallet-login-button" onClick={connectAndSign} disabled={busy || !privyReady}><WalletCards size={17} /> {busy ? "Waiting for signature…" : "Connect wallet"} <ArrowRight size={15} /></button>
+        <button className="button button-primary wallet-login-button" onClick={connectAndSign} disabled={busy || walletMode === "unavailable"}><WalletCards size={17} /> {busy ? "Waiting for signature…" : "Connect wallet"} <ArrowRight size={15} /></button>
         <p className="wallet-login-provider-hint">No browser extension? Hosted wallet login opens automatically.</p>
         <div className="wallet-login-divider"><span>or</span></div>
         <button className="button button-quiet wallet-login-button" onClick={() => login()} disabled={!privyReady || privyLogin.isPending}><Mail size={17} /> {privyLogin.isPending ? "Connecting account…" : "Continue with email or social"} <ArrowRight size={15} /></button>
