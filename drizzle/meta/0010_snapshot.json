@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "c174c601-63b0-4cd7-8c86-056202929708",
+  "id": "7bc14b00-0b62-446f-b643-df538c36df9c",
   "prevId": "573f1ac4-fe45-47ad-8498-687f6dc031c5",
   "tables": {
     "apiKeys": {
@@ -40,6 +40,34 @@
           "type": "varchar(4)",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "merchantAccountId": {
+          "name": "merchantAccountId",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "marketplaceId": {
+          "name": "marketplaceId",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sellerId": {
+          "name": "sellerId",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sellerDisplayName": {
+          "name": "sellerDisplayName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "secretHash": {
@@ -898,7 +926,7 @@
         },
         "url": {
           "name": "url",
-          "type": "varchar(512)",
+          "type": "varchar(2048)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false

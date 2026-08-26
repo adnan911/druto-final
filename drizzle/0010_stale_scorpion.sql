@@ -1,1 +1,0 @@
-ALTER TABLE `webhookEndpoints` MODIFY COLUMN `url` varchar(512) NOT NULL;

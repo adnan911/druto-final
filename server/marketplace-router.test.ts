@@ -4,6 +4,7 @@ const getDbMock = vi.hoisted(() => vi.fn());
 vi.mock("./db", () => ({ getDb: getDbMock }));
 
 import { appRouter } from "./routers";
+import { hashApiKey } from "./api-keys";
 
 function createDbMock(initialRows: any[] = [], queryRows: any[][] = []) {
   const rows: any[] = [];
@@ -24,6 +25,7 @@ function createDbMock(initialRows: any[] = [], queryRows: any[][] = []) {
     insert: vi.fn(() => ({
       values: vi.fn(async (value: any) => { rows.push({ ...value, createdAt: new Date(), updatedAt: new Date() }); }),
     })),
+    update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(async () => [{ affectedRows: 1 }]) })) })),
   };
   return { db, rows };
 }
@@ -55,12 +57,22 @@ describe("marketplace Payment Intent router contract", () => {
 
   it("routes a seller-aware intent to the approved merchant wallet", async () => {
     const sellerAccount = { id: "ma_seller_1", marketplaceId: "market_1", externalSellerId: "seller_1", displayName: "Seller One", receivingAddress: "0x1111111111111111111111111111111111111111", status: "active", createdAt: new Date(), updatedAt: new Date() };
-    const { db, rows } = createDbMock([sellerAccount]);
+    const apiSecret = "druto_test_seller_fixture";
+    const apiKey = { id: "key_seller_1", ownerUserId: 1, name: "Seller integration", prefix: "druto_test_", lastFour: apiSecret.slice(-4), secretHash: hashApiKey(apiSecret), merchantAccountId: sellerAccount.id, marketplaceId: sellerAccount.marketplaceId, sellerId: sellerAccount.externalSellerId, sellerDisplayName: sellerAccount.displayName, revokedAt: null };
+    const { db, rows } = createDbMock([apiKey], [[sellerAccount], []]);
     getDbMock.mockResolvedValue(db);
-    const caller = appRouter.createCaller({ user: { id: 1, openId: "owner", role: "user" }, req: {}, res: {} } as never);
+    const caller = appRouter.createCaller({ user: { id: 1, openId: "owner", role: "user" }, req: { headers: { authorization: `Bearer ${apiSecret}` } }, res: {} } as never);
     const created = await caller.payments.createIntent({ externalOrderId: "SELLER-1", itemName: "Seller item", amount: "2.50", seller: { marketplaceId: "market_1", sellerId: "seller_1" } });
     expect(rows[rows.length - 1]).toMatchObject({ marketplaceId: "market_1", sellerId: "seller_1", merchantAccountId: "ma_seller_1", merchantAddress: sellerAccount.receivingAddress });
     expect(created).toMatchObject({ sellerId: "seller_1", merchantAccountId: "ma_seller_1", merchantAddress: sellerAccount.receivingAddress });
+  });
+
+  it("rejects a seller-scoped intent without a linked API key", async () => {
+    const sellerAccount = { id: "ma_auth_1", marketplaceId: "market_auth", externalSellerId: "seller_auth", displayName: "Auth Seller", receivingAddress: "0x1212121212121212121212121212121212121212", status: "active", createdAt: new Date(), updatedAt: new Date() };
+    const { db } = createDbMock([sellerAccount]);
+    getDbMock.mockResolvedValue(db);
+    const caller = appRouter.createCaller({ user: null, req: { headers: {} }, res: {} } as never);
+    await expect(caller.payments.createIntent({ externalOrderId: "SELLER-AUTH", itemName: "Seller item", amount: "1.00", seller: { marketplaceId: "market_auth", sellerId: "seller_auth" } })).rejects.toThrow("seller API key is required");
   });
 
   it("allows self-service pending seller registration before admin approval", async () => {
