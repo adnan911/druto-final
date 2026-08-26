@@ -300,3 +300,34 @@
 - [x] Inventory the current Druto platform, SDK, seller starter, documentation, and brand assets.
 - [x] Assemble deployment-safe ZIP files with `finalX` in every filename and clear package READMEs.
 - [x] Validate archive integrity, package contents, and GitHub/Vercel readiness before delivery.
+
+# Local deployment recovery
+
+- [ ] Diagnose the downloaded local Druto platform `Database is not available` error after wallet login.
+- [ ] Restore local database configuration and schema migration instructions for Cursor/Vercel setup.
+- [ ] Verify dashboard data loads after wallet authentication with the database connected.
+
+# Local wallet-login recovery
+
+- [ ] Diagnose why the wallet connects but the downloaded local Druto dashboard does not open afterward.
+- [ ] Verify the post-signature redirect, session cookie, database response, and required local environment variables.
+- [ ] Confirm the dashboard opens successfully after the smallest safe auth/session fix.
+
+# Druto platform deployment handoff
+
+- [x] Create a full Cursor-to-GitHub-to-Vercel deployment guide for the Druto full-stack platform covering database, authentication, seller onboarding, payment API, webhooks, security, testing, and troubleshooting.
+
+# Cross-deployment payment and credential persistence
+
+- [ ] Diagnose why a completed Luvre Franc Arc payment is not appearing in the deployed Druto dashboard.
+- [ ] Make generated API/webhook credential metadata persist across page refresh while keeping secret values one-time and server-only.
+- [ ] Verify signed webhook delivery, seller/account scoping, shared database usage, and dashboard refresh behavior after the fix.
+
+# Production synchronization troubleshooting
+
+- [x] Add persistent API-key and webhook metadata views that survive refresh while never re-displaying plaintext secrets.
+- [x] Add merchant-account listing and durable seller identity display so generated credentials remain tied to marketplace ID, seller ID, display name, and account status.
+- [x] Enforce and test seller-aware Payment Intent routing in the live Druto deployment, rejecting unlinked seller requests instead of silently creating NULL-scoped intents.
+- [x] Add a safe reconciliation path for legacy unscoped payment intents that only links records after an authorized seller account and receiving wallet match.
+- [ ] Verify the Luvre Franc environment identifiers, merchant onboarding/approval state, dashboard visibility, and signed webhook delivery after deployment.
+- [x] Run typecheck, Vitest, production build, database migration verification, and browser checks before checkpointing the synchronization fix.

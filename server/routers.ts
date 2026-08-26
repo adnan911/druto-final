@@ -15,7 +15,7 @@ import { createWebhookSecret, encryptWebhookSecret, isValidWebhookUrl } from "./
 import { dispatchPaymentVerified, retryWebhookDelivery } from "./webhook-delivery";
 import { canApproveSeller, createOwnershipChallenge, hashOwnershipNonce, isOwnershipChallengeUsable, verifyOwnershipSignature } from "./ownership";
 import { buildWalletLoginMessage, createWalletLoginChallenge, hashWalletLoginNonce, isWalletLoginChallengeUsable, walletOpenId } from "./wallet-auth";
-import { createApiKeyMaterial } from "./api-keys";
+import { createApiKeyMaterial, hashApiKey } from "./api-keys";
 import { privyOpenId, verifyPrivyToken } from "./privy-auth";
 import { sdk } from "./_core/sdk";
 
@@ -75,20 +75,39 @@ function filterMerchantRows<T extends { merchantAccountId?: string | null }>(row
   return rows.filter(row => row.merchantAccountId === merchantAccountId);
 }
 
+async function requireSellerApiKey(db: Awaited<ReturnType<typeof getDb>>, request: { headers: { authorization?: string | string[] } }, seller: z.infer<typeof sellerRoutingInput>) {
+  if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+  const authorization = request.headers.authorization;
+  if (typeof authorization !== "string" || !authorization.startsWith("Bearer ")) throw new TRPCError({ code: "UNAUTHORIZED", message: "A Druto seller API key is required" });
+  const secret = authorization.slice("Bearer ".length).trim();
+  if (!secret) throw new TRPCError({ code: "UNAUTHORIZED", message: "A Druto seller API key is required" });
+  const [key] = await db.select().from(apiKeys).where(eq(apiKeys.secretHash, hashApiKey(secret))).limit(1);
+  if (!key || key.revokedAt) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid or revoked Druto API key" });
+  if (key.marketplaceId !== seller.marketplaceId || key.sellerId !== seller.sellerId || !key.merchantAccountId) throw new TRPCError({ code: "FORBIDDEN", message: "This API key is not linked to the requested seller" });
+  await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, key.id));
+  return key;
+}
+
 export const appRouter = router({
   system: systemRouter,
   apiKeys: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      return db.select({ id: apiKeys.id, name: apiKeys.name, prefix: apiKeys.prefix, lastFour: apiKeys.lastFour, createdAt: apiKeys.createdAt, lastUsedAt: apiKeys.lastUsedAt, revokedAt: apiKeys.revokedAt }).from(apiKeys).where(eq(apiKeys.ownerUserId, ctx.user.id));
+      return db.select({ id: apiKeys.id, name: apiKeys.name, prefix: apiKeys.prefix, lastFour: apiKeys.lastFour, merchantAccountId: apiKeys.merchantAccountId, marketplaceId: apiKeys.marketplaceId, sellerId: apiKeys.sellerId, sellerDisplayName: apiKeys.sellerDisplayName, createdAt: apiKeys.createdAt, lastUsedAt: apiKeys.lastUsedAt, revokedAt: apiKeys.revokedAt }).from(apiKeys).where(eq(apiKeys.ownerUserId, ctx.user.id));
     }),
-    create: protectedProcedure.input(z.object({ name: z.string().trim().min(1).max(120) })).mutation(async ({ input, ctx }) => {
+    create: protectedProcedure.input(z.object({ name: z.string().trim().min(1).max(120), merchantAccountId: z.string().min(1).max(32).optional() })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      let account: typeof merchantAccounts.$inferSelect | undefined;
+      if (input.merchantAccountId) {
+        const [candidate] = await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, input.merchantAccountId)).limit(1);
+        if (!candidate || (ctx.user.role !== "admin" && candidate.ownerUserId !== ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to link this API key to the seller account" });
+        account = candidate;
+      }
       const material = createApiKeyMaterial(input.name);
-      await db.insert(apiKeys).values({ id: material.id, ownerUserId: ctx.user.id, name: material.name, prefix: material.prefix, lastFour: material.lastFour, secretHash: material.secretHash });
-      return { id: material.id, name: material.name, prefix: material.prefix, lastFour: material.lastFour, secret: material.secret };
+      await db.insert(apiKeys).values({ id: material.id, ownerUserId: ctx.user.id, name: material.name, prefix: material.prefix, lastFour: material.lastFour, merchantAccountId: account?.id, marketplaceId: account?.marketplaceId, sellerId: account?.externalSellerId, sellerDisplayName: account?.displayName, secretHash: material.secretHash });
+      return { id: material.id, name: material.name, prefix: material.prefix, lastFour: material.lastFour, merchantAccountId: account?.id ?? null, marketplaceId: account?.marketplaceId ?? null, sellerId: account?.externalSellerId ?? null, sellerDisplayName: account?.displayName ?? null, secret: material.secret };
     }),
     revoke: protectedProcedure.input(z.object({ id: z.string().min(1).max(32) })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -151,6 +170,18 @@ export const appRouter = router({
   }),
 
   merchantAccounts: router({
+    listMine: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const accounts = ctx.user.role === "admin"
+        ? await db.select().from(merchantAccounts)
+        : await db.select().from(merchantAccounts).where(eq(merchantAccounts.ownerUserId, ctx.user.id));
+      const accountIds = accounts.map(account => account.id);
+      const webhooks = accountIds.length
+        ? await db.select({ id: webhookEndpoints.id, merchantAccountId: webhookEndpoints.merchantAccountId, url: webhookEndpoints.url, active: webhookEndpoints.active, createdAt: webhookEndpoints.createdAt, updatedAt: webhookEndpoints.updatedAt }).from(webhookEndpoints).where(inArray(webhookEndpoints.merchantAccountId, accountIds))
+        : [];
+      return { accounts, webhooks };
+    }),
     register: protectedProcedure.input(z.object({ marketplaceId: z.string().min(1).max(128), sellerId: z.string().min(1).max(128), displayName: z.string().min(1).max(255), receivingAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/) })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
@@ -224,13 +255,14 @@ export const appRouter = router({
   }),
 
   payments: router({
-    createIntent: publicProcedure.input(paymentInput).mutation(async ({ input }) => {
+    createIntent: publicProcedure.input(paymentInput).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
       const idempotencyKey = input.idempotencyKey ?? input.externalOrderId;
       const amountAtomic = amountToAtomicUsdc(input.amount);
       const orderContext = input.orderContext ? JSON.stringify(input.orderContext) : null;
       const returnUrl = normalizeMarketplaceReturnUrl(input.returnUrl);
+      if (input.seller && !resolveLegacyDemoMerchantAccount(input.seller)) await requireSellerApiKey(db, ctx.req, input.seller);
       const merchantAccount = input.seller ? await resolveMerchantAccount(db, input.seller) : null;
       const merchantAddress = merchantAccount?.receivingAddress ?? process.env.ARC_MERCHANT_WALLET_ADDRESS!;
       const [existing] = await db.select().from(paymentIntents).where(eq(paymentIntents.idempotencyKey, idempotencyKey)).limit(1);
@@ -277,6 +309,21 @@ export const appRouter = router({
         expiresAt,
         checkoutUrl: `/checkout/${id}`,
       };
+    }),
+
+    reconcileLegacyIntent: protectedProcedure.input(z.object({ intentId: z.string().min(1).max(32), seller: sellerRoutingInput })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const account = await resolveMerchantAccountForOperator(db, input.seller, ctx.user);
+      const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, input.intentId)).limit(1);
+      if (!intent) throw new TRPCError({ code: "NOT_FOUND", message: "Payment Intent not found" });
+      if (intent.marketplaceId || intent.sellerId || intent.merchantAccountId) throw new TRPCError({ code: "CONFLICT", message: "Payment Intent is already seller-scoped" });
+      if (intent.merchantAddress.toLowerCase() !== account.receivingAddress.toLowerCase()) throw new TRPCError({ code: "CONFLICT", message: "Legacy payment destination does not match the active seller wallet" });
+      const [transaction] = await db.select().from(paymentTransactions).where(eq(paymentTransactions.paymentIntentId, intent.id)).limit(1);
+      if (transaction && transaction.toAddress.toLowerCase() !== account.receivingAddress.toLowerCase()) throw new TRPCError({ code: "CONFLICT", message: "Observed transaction destination does not match the active seller wallet" });
+      await db.update(paymentIntents).set({ marketplaceId: account.marketplaceId, sellerId: account.externalSellerId, merchantAccountId: account.id }).where(and(eq(paymentIntents.id, intent.id), isNull(paymentIntents.merchantAccountId)));
+      const [updated] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, intent.id)).limit(1);
+      return updated;
     }),
 
     listIntents: protectedProcedure.query(async ({ ctx }) => {
