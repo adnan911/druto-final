@@ -42,7 +42,12 @@ export default function WalletLoginCard() {
   const connectAndSign = async () => {
     const ethereum = (window as WalletWindow).ethereum;
     if (!ethereum) {
-      toast.error("Install an EVM wallet such as MetaMask or Rabby to continue");
+      if (privyReady) {
+        toast.info("No injected wallet was detected. Opening Druto’s hosted wallet login…");
+        login();
+      } else {
+        toast.error("Install MetaMask or Rabby, or enable the hosted wallet login");
+      }
       return;
     }
     setBusy(true);
@@ -77,10 +82,10 @@ export default function WalletLoginCard() {
         <h2>Connect your wallet</h2>
         <p>Druto uses the Arc Testnet wallet signature to create a secure dashboard session. Your address stays yours.</p>
         {address && <div className="wallet-selected"><span className="live-dot" /><span><small>Selected wallet</small><strong>{shortAddress(address)}</strong></span></div>}
-        <button className="button button-primary wallet-login-button" onClick={connectAndSign} disabled={busy}><WalletCards size={17} /> {busy ? "Waiting for signature…" : "Connect wallet"} <ArrowRight size={15} /></button>
+        <button className="button button-primary wallet-login-button" onClick={connectAndSign} disabled={busy || !privyReady}><WalletCards size={17} /> {busy ? "Waiting for signature…" : "Connect wallet"} <ArrowRight size={15} /></button>
         <div className="wallet-login-divider"><span>or</span></div>
         <button className="button button-quiet wallet-login-button" onClick={() => login()} disabled={!privyReady || privyLogin.isPending}><Mail size={17} /> {privyLogin.isPending ? "Connecting account…" : "Continue with email or social"} <ArrowRight size={15} /></button>
-        <div className="wallet-login-note"><ShieldCheck size={14} /><span>Wallet login uses an offchain signature. Email and social login are verified by Privy, then exchanged for a Druto session.</span></div>
+        <div className="wallet-login-note"><ShieldCheck size={14} /><span>Wallet login uses an offchain signature when an injected wallet is available. If not, Druto opens the configured hosted wallet login; no USDC transfer or private key is requested.</span></div>
         <a className="wallet-help-link" href="https://docs.arc.network" target="_blank" rel="noreferrer">Need Arc Testnet setup help <ExternalLink size={13} /></a>
       </section>
     </div>

@@ -311,11 +311,17 @@ export const appRouter = router({
       };
     }),
 
-    reconcileLegacyIntent: protectedProcedure.input(z.object({ intentId: z.string().min(1).max(32), seller: sellerRoutingInput })).mutation(async ({ input, ctx }) => {
+    reconcileLegacyIntent: protectedProcedure.input(z.object({ intentId: z.string().min(1).max(32).optional(), transactionHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(), seller: sellerRoutingInput }).refine(value => Boolean(value.intentId || value.transactionHash), { message: "Provide a Payment Intent ID or transaction hash" })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
       const account = await resolveMerchantAccountForOperator(db, input.seller, ctx.user);
-      const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, input.intentId)).limit(1);
+      let targetIntentId = input.intentId;
+      if (!targetIntentId && input.transactionHash) {
+        const [transaction] = await db.select({ paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).where(eq(paymentTransactions.transactionHash, input.transactionHash)).limit(1);
+        targetIntentId = transaction?.paymentIntentId;
+      }
+      if (!targetIntentId) throw new TRPCError({ code: "NOT_FOUND", message: "No Payment Intent was found for that transaction" });
+      const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, targetIntentId)).limit(1);
       if (!intent) throw new TRPCError({ code: "NOT_FOUND", message: "Payment Intent not found" });
       if (intent.marketplaceId || intent.sellerId || intent.merchantAccountId) throw new TRPCError({ code: "CONFLICT", message: "Payment Intent is already seller-scoped" });
       if (intent.merchantAddress.toLowerCase() !== account.receivingAddress.toLowerCase()) throw new TRPCError({ code: "CONFLICT", message: "Legacy payment destination does not match the active seller wallet" });

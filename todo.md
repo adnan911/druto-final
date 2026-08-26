@@ -303,13 +303,13 @@
 
 # Local deployment recovery
 
-- [ ] Diagnose the downloaded local Druto platform `Database is not available` error after wallet login.
-- [ ] Restore local database configuration and schema migration instructions for Cursor/Vercel setup.
+- [x] Diagnose the downloaded local Druto platform `Database is not available` error after wallet login.
+- [x] Restore local database configuration and schema migration instructions for Cursor/Vercel setup.
 - [ ] Verify dashboard data loads after wallet authentication with the database connected.
 
 # Local wallet-login recovery
 
-- [ ] Diagnose why the wallet connects but the downloaded local Druto dashboard does not open afterward.
+- [x] Diagnose why the wallet connects but the downloaded local Druto dashboard does not open afterward.
 - [ ] Verify the post-signature redirect, session cookie, database response, and required local environment variables.
 - [ ] Confirm the dashboard opens successfully after the smallest safe auth/session fix.
 
@@ -319,8 +319,8 @@
 
 # Cross-deployment payment and credential persistence
 
-- [ ] Diagnose why a completed Luvre Franc Arc payment is not appearing in the deployed Druto dashboard.
-- [ ] Make generated API/webhook credential metadata persist across page refresh while keeping secret values one-time and server-only.
+- [x] Diagnose why a completed Luvre Franc Arc payment is not appearing in the deployed Druto dashboard.
+- [x] Make generated API/webhook credential metadata persist across page refresh while keeping secret values one-time and server-only.
 - [ ] Verify signed webhook delivery, seller/account scoping, shared database usage, and dashboard refresh behavior after the fix.
 
 # Production synchronization troubleshooting
@@ -331,3 +331,10 @@
 - [x] Add a safe reconciliation path for legacy unscoped payment intents that only links records after an authorized seller account and receiving wallet match.
 - [ ] Verify the Luvre Franc environment identifiers, merchant onboarding/approval state, dashboard visibility, and signed webhook delivery after deployment.
 - [x] Run typecheck, Vitest, production build, database migration verification, and browser checks before checkpointing the synchronization fix.
+
+# Wallet connection blocker
+
+- [x] Diagnose the reported Connect wallet failure on the current Druto dashboard environment.
+- [x] Verify provider availability and wallet-login entry behavior; the sandbox has no injected EVM provider, so real signature/session verification remains environment-dependent.
+- [x] Apply and test the smallest safe fix without requesting or approving a payment transaction.
+- [ ] Re-run dashboard persistence and seller-scoped payment visibility checks after wallet login succeeds.
