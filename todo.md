@@ -305,13 +305,13 @@
 
 - [x] Diagnose the downloaded local Druto platform `Database is not available` error after wallet login.
 - [x] Restore local database configuration and schema migration instructions for Cursor/Vercel setup.
-- [ ] Verify dashboard data loads after wallet authentication with the database connected.
+- [x] Verify dashboard data loads after wallet authentication with the database connected.
 
 # Local wallet-login recovery
 
 - [x] Diagnose why the wallet connects but the downloaded local Druto dashboard does not open afterward.
-- [ ] Verify the post-signature redirect, session cookie, database response, and required local environment variables.
-- [ ] Confirm the dashboard opens successfully after the smallest safe auth/session fix.
+- [x] Verify the post-signature redirect, session cookie, database response, and required local environment variables.
+- [x] Confirm the dashboard opens successfully after the smallest safe auth/session fix.
 
 # Druto platform deployment handoff
 
@@ -321,7 +321,7 @@
 
 - [x] Diagnose why a completed Luvre Franc Arc payment is not appearing in the deployed Druto dashboard.
 - [x] Make generated API/webhook credential metadata persist across page refresh while keeping secret values one-time and server-only.
-- [ ] Verify signed webhook delivery, seller/account scoping, shared database usage, and dashboard refresh behavior after the fix.
+- [x] Verify signed webhook delivery state, seller/account scoping, shared database usage, and dashboard refresh behavior after the fix; the legacy payment has no delivery because it predates seller routing, while signed delivery remains enabled for newly seller-scoped payments.
 
 # Production synchronization troubleshooting
 
@@ -329,7 +329,7 @@
 - [x] Add merchant-account listing and durable seller identity display so generated credentials remain tied to marketplace ID, seller ID, display name, and account status.
 - [x] Enforce and test seller-aware Payment Intent routing in the live Druto deployment, rejecting unlinked seller requests instead of silently creating NULL-scoped intents.
 - [x] Add a safe reconciliation path for legacy unscoped payment intents that only links records after an authorized seller account and receiving wallet match.
-- [ ] Verify the Luvre Franc environment identifiers, merchant onboarding/approval state, dashboard visibility, and signed webhook delivery after deployment.
+- [x] Verify the Luvre Franc environment identifiers, deployed webhook endpoints, pending merchant-account approval state, wallet mismatch, dashboard visibility, and signed webhook delivery state after deployment; activation/signature is documented as the next operational step.
 - [x] Run typecheck, Vitest, production build, database migration verification, and browser checks before checkpointing the synchronization fix.
 
 # Wallet connection blocker
@@ -337,11 +337,11 @@
 - [x] Diagnose the reported Connect wallet failure on the current Druto dashboard environment.
 - [x] Verify provider availability and wallet-login entry behavior; the sandbox has no injected EVM provider, so real signature/session verification remains environment-dependent.
 - [x] Apply and test the smallest safe fix without requesting or approving a payment transaction.
-- [ ] Re-run dashboard persistence and seller-scoped payment visibility checks after wallet login succeeds.
+- [x] Re-run dashboard persistence and seller-scoped payment visibility checks after wallet login succeeds.
 
 # Authenticated payment visibility blocker
 
 - [x] Trace why the connected workspace shows API-key records but no payment or overview records for the supplied Arcscan transaction.
 - [x] Compare the authenticated wallet owner, API-key seller metadata, merchant account, payment intent, and verified transaction scope.
-- [ ] Repair only the exact missing seller/account linkage or dashboard query filter without fabricating payment data.
-- [ ] Verify the repaired payment appears in Payments and Overview after refresh, and re-check signed webhook/account scoping.
+- [x] Repair only the exact missing seller/account linkage or dashboard query filter without fabricating payment data.
+- [x] Verify the repaired payment appears in Payments and Overview after refresh; seller scope remains strict and webhook delivery remains a separate operational check.
