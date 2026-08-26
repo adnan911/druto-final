@@ -16,7 +16,11 @@ type CookieResponse = {
 };
 
 type NodeRequest = IncomingMessage & { body?: unknown };
-type NodeResponse = ServerResponse & CookieResponse;
+type ExpressLikeRequest = NodeRequest & {
+  protocol?: string;
+  hostname?: string;
+};
+type NodeResponse = ServerResponse;
 
 let handlerPromise: Promise<(req: IncomingMessage, res: ServerResponse) => void> | undefined;
 
@@ -44,6 +48,18 @@ function createCookieResponse(res: ServerResponse): CookieResponse {
   };
 }
 
+function normalizeRequest(req: NodeRequest): ExpressLikeRequest {
+  const normalized = Object.create(req) as ExpressLikeRequest;
+  const originalUrl = req.url ?? "/";
+  const strippedUrl = originalUrl
+    .replace(/^\/api\/trpc(?=\/|$)/, "")
+    .replace(/^\/trpc(?=\/|$)/, "");
+  normalized.url = strippedUrl || "/";
+  normalized.protocol = String(req.headers["x-forwarded-proto"] ?? "https").split(",")[0].trim();
+  normalized.hostname = (req.headers.host ?? "").split(":")[0] || undefined;
+  return normalized;
+}
+
 async function getHandler() {
   handlerPromise ??= (async () => {
     const [{ appRouter }, { createContext }] = await Promise.all([
@@ -53,7 +69,7 @@ async function getHandler() {
 
     return createHTTPHandler({
       router: appRouter,
-      basePath: "/api/trpc/",
+      basePath: "/",
       createContext: ({ req, res }) => createContext({
         req: req as never,
         res: createCookieResponse(res) as never,
@@ -80,7 +96,7 @@ export default async function handler(req: NodeRequest, res: NodeResponse) {
 
   try {
     const trpcHandler = await getHandler();
-    return trpcHandler(req, res);
+    return trpcHandler(normalizeRequest(req), res);
   } catch (error) {
     console.error("[Vercel tRPC bootstrap] failed", error);
     if (!res.headersSent) {
