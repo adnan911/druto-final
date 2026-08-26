@@ -24,6 +24,9 @@ const trpcMiddleware = createExpressMiddleware({
 // project-root and serverless routing configurations.
 app.use("/api/trpc", trpcMiddleware);
 app.use("/trpc", trpcMiddleware);
+// The catch-all Vercel function can strip the /api prefix before Express sees
+// the request. Mounting the middleware at root handles that deployment shape.
+app.use(trpcMiddleware);
 
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ ok: true, service: "druto" });
