@@ -1,0 +1,14 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; color: #17201e; background: #f5f7f4; }
+.druto-pay-shell { display: grid; gap: 8px; max-width: 360px; }
+.druto-pay-shell button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 46px; border: 0; border-radius: 10px; padding: 0 18px; color: white; background: #2458d6; font-weight: 700; cursor: pointer; transition: opacity 160ms ease, transform 160ms ease; }
+.druto-pay-shell button:hover:not(:disabled) { opacity: .92; }
+.druto-pay-shell button:active:not(:disabled) { transform: scale(.98); }
+.druto-pay-shell button:disabled { cursor: wait; opacity: .72; }
+.druto-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.4); border-top-color: white; border-radius: 50%; animation: druto-spin .7s linear infinite; }
+.druto-pay-status { min-height: 20px; margin: 0; font-size: 13px; line-height: 1.4; }
+.druto-pay-loading { color: #596864; }
+.druto-pay-ready { color: #16866e; font-weight: 700; }
+.druto-pay-error { color: #b42318; }
+@keyframes druto-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .druto-spinner { animation-duration: 1.4s; } }

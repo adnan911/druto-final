@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Druto × Arc</title>
+  <style>
+    * { box-sizing: border-box; }
+    body{ margin:0; }
+    .slide-container { width: 1280px; min-height: 720px; background: #f8f7f3; color: #1c2528; font-family: 'DM Sans', Arial, sans-serif; padding: 58px 72px 20px; }
+    .topline { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #d9ddd5; padding-bottom: 18px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #6d7777; }
+    .brand { display: flex; align-items: center; gap: 10px; color: #1c2528; font-family: 'IBM Plex Mono', monospace; font-weight: 700; letter-spacing: 0; text-transform: none; font-size: 16px; }
+    .mark { width: 26px; height: 26px; border-radius: 50%; object-fit: contain; }
+    .content { display: grid; grid-template-columns: 1.02fr .98fr; gap: 40px; align-items: center; min-height: 520px; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 9px; color: #1e9b83; font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 16px; }
+    .eyebrow::before { content: ''; width: 8px; height: 8px; background: #1e9b83; border-radius: 50%; }
+    h1 { margin: 0; max-width: 600px; font-family: 'IBM Plex Mono', monospace; font-size: 66px; line-height: .98; letter-spacing: -.06em; color: #17201e; }
+    h1 span { color: #1e9b83; }
+    .subtitle { max-width: 510px; margin: 20px 0 0; font-size: 21px; line-height: 1.45; color: #51615e; }
+    .meta { margin-top: 28px; display: flex; gap: 26px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #6d7777; }
+    .meta strong { color: #1c2528; }
+    .visual { position: relative; }
+    .visual-frame { width: 510px; height: 360px; background: #e9f0e5; border: 1px solid #d2dcd0; padding: 12px; }
+    .visual-frame img { width: 486px; height: 336px; object-fit: contain; display: block; }
+    .proof { position: absolute; right: -18px; bottom: -12px; width: 285px; background: #fffefa; border: 1px solid #dfe3da; padding: 16px 18px; }
+    .proof-label { font-family: 'IBM Plex Mono', monospace; color: #1e9b83; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .proof h2 { margin: 14px 0 12px; font-size: 24px; letter-spacing: -.04em; }
+    .proof-row { display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #e4e7e0; padding-top: 8px; margin-top: 8px; font-size: 12px; color: #7a8580; }
+    .proof-row strong { color: #1c2528; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="topline"><div class="brand"><img class="mark" src="/home/ubuntu/webdev-static-assets/druto-arc-mark.png" alt="" /> <span>druto</span></div><span>Arc Testnet / USDC demonstration</span></div>
+    <div class="content">
+      <div>
+        <div class="eyebrow">Live product demonstration</div>
+        <h1>Druto × Arc<br />from cart to <span>proof.</span></h1>
+        <p class="subtitle">A real marketplace purchase using buyer-controlled USDC payment, Arc Testnet verification, and seller-side operational visibility.</p>
+        <div class="meta"><span><strong>01</strong> marketplace</span><span><strong>02</strong> hosted checkout</span><span><strong>03</strong> verified receipt</span></div>
+      </div>
+      <div class="visual">
+        <div class="visual-frame"><img src="/home/ubuntu/upload/search_images/BYNsY4rQuyIW.jpg" alt="Arc introduction visual" /></div>
+        <div class="proof"><div class="proof-label">Arc-native payment layer</div><h2>Payment verified.</h2><div class="proof-row"><span>Asset</span><strong>USDC</strong></div><div class="proof-row"><span>Environment</span><strong>TESTNET</strong></div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
