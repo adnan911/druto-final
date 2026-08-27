@@ -102,7 +102,18 @@ export default async function handler(req: NodeRequest, res: NodeResponse) {
     if (!res.headersSent) {
       res.statusCode = 500;
       res.setHeader("content-type", "application/json; charset=utf-8");
-      res.end(JSON.stringify({ error: "Druto tRPC bootstrap failed", detail: safeErrorMessage(error) }));
+      res.end(JSON.stringify({
+        error: {
+          message: "Druto tRPC bootstrap failed",
+          code: -32603,
+          data: {
+            code: "INTERNAL_SERVER_ERROR",
+            httpStatus: 500,
+            path: typeof req.url === "string" ? req.url.split("?")[0] : undefined,
+            detail: safeErrorMessage(error),
+          },
+        },
+      }));
     }
   }
 }
