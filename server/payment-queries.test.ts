@@ -5,11 +5,11 @@ vi.mock("./db", () => ({ getDb: getDbMock }));
 
 import { appRouter } from "./routers";
 
-function createDbMock(empty = false, legacyOnly = false) {
-  const intents = empty ? [] : [{ id: legacyOnly ? "pi_legacy" : "pi_verified", externalOrderId: "order-1", itemName: "Demo item", amountAtomic: "2500000", merchantAccountId: legacyOnly ? null : "ma_wallet_owner", merchantAddress: "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217", status: "succeeded", createdAt: new Date(), expiresAt: new Date() }];
-  const verified = empty ? [] : [{ id: legacyOnly ? "0xlegacy" : "0xhash", paymentIntentId: legacyOnly ? "pi_legacy" : "pi_verified", externalOrderId: "order-1", itemName: "Demo item", amountAtomic: "2500000", merchantAccountId: legacyOnly ? null : "ma_wallet_owner", transactionHash: legacyOnly ? "0xlegacy" : "0xhash", fromAddress: "0xbuyer", toAddress: "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217", finalizedAt: new Date(), createdAt: new Date() }];
+function createDbMock(empty = false) {
+  const intents = empty ? [] : [{ id: "pi_verified", externalOrderId: "order-1", itemName: "Demo item", amountAtomic: "2500000", merchantAccountId: "ma_wallet_owner", merchantAddress: "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217", status: "succeeded", createdAt: new Date(), expiresAt: new Date() }];
+  const verified = empty ? [] : [{ id: "0xhash", paymentIntentId: "pi_verified", externalOrderId: "order-1", itemName: "Demo item", amountAtomic: "2500000", merchantAccountId: "ma_wallet_owner", transactionHash: "0xhash", fromAddress: "0xbuyer", toAddress: "0xmerchant", finalizedAt: new Date(), createdAt: new Date() }];
   let selectCalls = 0;
-  return { select: vi.fn((shape?: unknown) => { selectCalls += 1; const selected = selectCalls === 1 ? (legacyOnly ? [] : [{ id: "ma_wallet_owner" }]) : shape ? verified : intents; return { from: vi.fn(() => ({ innerJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue(selected) })), where: vi.fn().mockResolvedValue(selected) })) }; }) };
+  return { select: vi.fn((shape?: unknown) => { selectCalls += 1; const selected = selectCalls === 1 ? [{ id: "ma_wallet_owner" }] : shape ? verified : intents; return { from: vi.fn(() => ({ innerJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue(selected) })), where: vi.fn().mockResolvedValue(selected) })) }; }) };
 }
 
 describe("verified payment queries", () => {
@@ -25,13 +25,6 @@ describe("verified payment queries", () => {
     const caller = appRouter.createCaller({ user: { id: 7, openId: "wallet:0xa32c7bbb2fb634bed4dfc812c15af87a0c727217", role: "user" }, req: {}, res: {} } as never);
     const summary = await caller.payments.summary();
     expect(summary).toMatchObject({ availableUsdc: "2.50", grossUsdc: "2.50", successfulCount: 1, pendingCount: 0 });
-  });
-
-  it("includes an exact-wallet legacy payment for repair when no seller account is active", async () => {
-    getDbMock.mockResolvedValue(createDbMock(false, true));
-    const caller = appRouter.createCaller({ user: { id: 7, openId: "wallet:0xa32c7bbb2fb634bed4dfc812c15af87a0c727217", role: "user" }, req: {}, res: {} } as never);
-    expect(await caller.payments.verifiedPayments()).toMatchObject([{ paymentIntentId: "pi_legacy", transactionHash: "0xlegacy" }]);
-    expect(await caller.payments.summary()).toMatchObject({ availableUsdc: "2.50", successfulCount: 1 });
   });
 
   it("returns an empty verified activity state when no transfers exist", async () => {

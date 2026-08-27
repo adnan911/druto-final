@@ -1,10 +1,10 @@
 import { COOKIE_NAME } from "@shared/const";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { apiKeys, merchantAccounts, ownershipChallenges, paymentIntents, paymentTransactions, users, walletLoginChallenges, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
+import { apiKeys, merchantAccounts, paymentIntents, paymentTransactions, users, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
 import { getDb } from "./db";
-import { amountToAtomicUsdc, buildUsdcTransferRequest, verifyArcUsdcTransfer } from "./arc";
+import { amountToAtomicUsdc } from "./arc";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -13,8 +13,6 @@ import { assertIdempotentMatch, assertTransactionOwnership, normalizeMarketplace
 import { summarizeVerifiedRows } from "./payment-summary";
 import { createWebhookSecret, encryptWebhookSecret, isValidWebhookUrl } from "./webhooks";
 import { dispatchPaymentVerified, retryWebhookDelivery } from "./webhook-delivery";
-import { canApproveSeller, createOwnershipChallenge, hashOwnershipNonce, isOwnershipChallengeUsable, verifyOwnershipSignature } from "./ownership";
-import { buildWalletLoginMessage, createWalletLoginChallenge, hashWalletLoginNonce, isWalletLoginChallengeUsable, walletOpenId } from "./wallet-auth";
 import { createApiKeyMaterial, hashApiKey } from "./api-keys";
 import { privyOpenId, verifyPrivyToken } from "./privy-auth";
 import { sdk } from "./_core/sdk";
@@ -75,19 +73,6 @@ function filterMerchantRows<T extends { merchantAccountId?: string | null }>(row
   return rows.filter(row => row.merchantAccountId === merchantAccountId);
 }
 
-function authenticatedWalletAddress(user: { openId?: string | null }) {
-  const value = user.openId?.startsWith("wallet:") ? user.openId.slice("wallet:".length) : "";
-  return /^0x[a-fA-F0-9]{40}$/.test(value) ? value : null;
-}
-
-function operatorPaymentScope(accountIds: string[], user: { openId?: string | null }) {
-  const wallet = authenticatedWalletAddress(user);
-  const legacyScope = wallet ? and(isNull(paymentIntents.merchantAccountId), eq(paymentIntents.merchantAddress, wallet)) : undefined;
-  if (accountIds.length && legacyScope) return or(inArray(paymentIntents.merchantAccountId, accountIds), legacyScope);
-  if (accountIds.length) return inArray(paymentIntents.merchantAccountId, accountIds);
-  return legacyScope;
-}
-
 async function requireSellerApiKey(db: Awaited<ReturnType<typeof getDb>>, request: { headers: { authorization?: string | string[] } }, seller: z.infer<typeof sellerRoutingInput>) {
   if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
   const authorization = request.headers.authorization;
@@ -133,15 +118,6 @@ export const appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
-    walletChallenge: publicProcedure.input(z.object({ walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/), origin: z.string().url().max(2048) })).mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      let challenge;
-      try { challenge = createWalletLoginChallenge(input); } catch { throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid wallet address" }); }
-      const challengeId = `wl_${nanoid(12)}`;
-      await db.insert(walletLoginChallenges).values({ id: challengeId, walletAddress: input.walletAddress, message: challenge.message, nonceHash: challenge.nonceHash, expiresAt: challenge.expiresAt });
-      return { challengeId, nonce: challenge.nonce, message: challenge.message, expiresAt: challenge.expiresAt, walletAddress: input.walletAddress };
-    }),
     privyLogin: publicProcedure.input(z.object({ accessToken: z.string().min(20).max(4096) })).mutation(async ({ input, ctx }) => {
       let verified;
       try { verified = await verifyPrivyToken(input.accessToken); } catch { throw new TRPCError({ code: "UNAUTHORIZED", message: "Privy authentication could not be verified" }); }
@@ -154,26 +130,6 @@ export const appRouter = router({
       const token = await sdk.createSessionToken(openId, { name });
       ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 365 * 24 * 60 * 60 * 1000 });
       return { authenticated: true, openId, name } as const;
-    }),
-    walletLogin: publicProcedure.input(z.object({ challengeId: z.string().min(1).max(32), nonce: z.string().min(1).max(128), signature: z.string().regex(/^0x[0-9a-fA-F]+$/) })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      const [challenge] = await db.select().from(walletLoginChallenges).where(eq(walletLoginChallenges.id, input.challengeId)).limit(1);
-      if (!challenge) throw new TRPCError({ code: "NOT_FOUND", message: "Wallet login challenge not found" });
-      if (!isWalletLoginChallengeUsable(challenge)) throw new TRPCError({ code: "BAD_REQUEST", message: "Wallet login challenge is expired or already used" });
-      if (hashWalletLoginNonce(input.nonce) !== challenge.nonceHash) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid wallet login nonce" });
-      const valid = await verifyOwnershipSignature({ walletAddress: challenge.walletAddress, message: challenge.message, signature: input.signature as `0x${string}` });
-      if (!valid) throw new TRPCError({ code: "BAD_REQUEST", message: "Wallet signature does not match the login wallet" });
-      const usedAt = new Date();
-      const updateResult = await db.update(walletLoginChallenges).set({ usedAt }).where(and(eq(walletLoginChallenges.id, challenge.id), isNull(walletLoginChallenges.usedAt)));
-      const affectedRows = Number((updateResult as any)?.[0]?.affectedRows ?? (updateResult as any)?.affectedRows ?? 0);
-      if (affectedRows !== 1) throw new TRPCError({ code: "CONFLICT", message: "Wallet login challenge was already used" });
-      const openId = walletOpenId(challenge.walletAddress);
-      const name = `Wallet ${challenge.walletAddress.slice(0, 6)}…${challenge.walletAddress.slice(-4)}`;
-      await db.insert(users).values({ openId, name, loginMethod: "wallet", lastSignedIn: usedAt }).onDuplicateKeyUpdate({ set: { name, loginMethod: "wallet", lastSignedIn: usedAt } });
-      const token = await sdk.createSessionToken(openId, { name });
-      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 365 * 24 * 60 * 60 * 1000 });
-      return { authenticated: true, walletAddress: challenge.walletAddress, name } as const;
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
@@ -233,33 +189,11 @@ export const appRouter = router({
       if (!account || (ctx.user.role !== "admin" && account.ownerUserId !== ctx.user.id)) throw new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to retry this delivery" });
       return retryWebhookDelivery(db, input.deliveryId);
     }),
-    createOwnershipChallenge: protectedProcedure.input(z.object({ seller: sellerRoutingInput, origin: z.string().url().max(2048) })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      const account = await resolveMerchantAccountForOperator(db, input.seller, ctx.user, { allowPending: true });
-      const challenge = createOwnershipChallenge({ marketplaceId: account.marketplaceId, sellerId: account.externalSellerId, walletAddress: account.receivingAddress, origin: input.origin });
-      const challengeId = `oc_${nanoid(12)}`;
-      await db.insert(ownershipChallenges).values({ id: challengeId, merchantAccountId: account.id, marketplaceId: account.marketplaceId, sellerId: account.externalSellerId, walletAddress: account.receivingAddress, message: challenge.message, nonceHash: challenge.nonceHash, expiresAt: challenge.expiresAt });
-      return { challengeId, nonce: challenge.nonce, message: challenge.message, expiresAt: challenge.expiresAt, walletAddress: account.receivingAddress };
-    }),
-    verifyOwnership: publicProcedure.input(z.object({ challengeId: z.string().min(1).max(32), nonce: z.string().min(1).max(128), signature: z.string().regex(/^0x[0-9a-fA-F]+$/) })).mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      const [challenge] = await db.select().from(ownershipChallenges).where(eq(ownershipChallenges.id, input.challengeId)).limit(1);
-      if (!challenge) throw new TRPCError({ code: "NOT_FOUND", message: "Ownership challenge not found" });
-      if (!isOwnershipChallengeUsable({ usedAt: challenge.usedAt, expiresAt: challenge.expiresAt })) throw new TRPCError({ code: "BAD_REQUEST", message: "Ownership challenge is expired or already used" });
-      if (hashOwnershipNonce(input.nonce) !== challenge.nonceHash) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid ownership nonce" });
-      const valid = await verifyOwnershipSignature({ walletAddress: challenge.walletAddress, message: challenge.message, signature: input.signature as `0x${string}` });
-      if (!valid) throw new TRPCError({ code: "BAD_REQUEST", message: "Wallet signature does not match the approved receiving address" });
-      await db.update(ownershipChallenges).set({ usedAt: new Date() }).where(and(eq(ownershipChallenges.id, challenge.id), isNull(ownershipChallenges.usedAt)));
-      await db.update(merchantAccounts).set({ walletVerifiedAt: new Date() }).where(eq(merchantAccounts.id, challenge.merchantAccountId));
-      return { verified: true, merchantAccountId: challenge.merchantAccountId, walletAddress: challenge.walletAddress };
-    }),
     approve: adminProcedure.input(z.object({ merchantAccountId: z.string().min(1).max(32) })).mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
       const [accountBeforeApproval] = await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, input.merchantAccountId)).limit(1);
-      if (!accountBeforeApproval || !canApproveSeller({ walletVerifiedAt: accountBeforeApproval.walletVerifiedAt })) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Seller wallet ownership must be verified before approval" });
+      if (!accountBeforeApproval) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant account not found" });
       await db.update(merchantAccounts).set({ status: "active" }).where(eq(merchantAccounts.id, input.merchantAccountId));
       const [account] = await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, input.merchantAccountId)).limit(1);
       if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant account not found" });
@@ -348,26 +282,23 @@ export const appRouter = router({
     listIntents: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
-      const scope = operatorPaymentScope(accountIds, ctx.user);
-      if (!scope) return [];
-      return db!.select().from(paymentIntents).where(scope);
+      if (!accountIds.length) return [];
+      return db!.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
     }),
 
     verifiedPayments: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
-      const scope = operatorPaymentScope(accountIds, ctx.user);
-      if (!scope) return [];
-      return db!.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(scope);
+      if (!accountIds.length) return [];
+      return db!.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
     }),
 
     summary: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
-      const scope = operatorPaymentScope(accountIds, ctx.user);
-      if (!scope) return { availableUsdc: "0.00", grossUsdc: "0.00", pendingUsdc: "0.00", successfulCount: 0, pendingCount: 0, totalCount: 0 };
-      const intents = await db!.select().from(paymentIntents).where(scope);
-      const verifiedRows = await db!.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(scope);
+      if (!accountIds.length) return { availableUsdc: "0.00", grossUsdc: "0.00", pendingUsdc: "0.00", successfulCount: 0, pendingCount: 0, totalCount: 0 };
+      const intents = await db!.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      const verifiedRows = await db!.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
       const pending = intents.filter(intent => intent.status === "requires_payment" || intent.status === "submitted" || intent.status === "verifying");
       const verifiedSummary = summarizeVerifiedRows(verifiedRows);
       const pendingAtomic = pending.reduce((sum, intent) => sum + BigInt(intent.amountAtomic), BigInt(0));
@@ -380,42 +311,6 @@ export const appRouter = router({
       const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, input.id)).limit(1);
       if (!intent) throw new TRPCError({ code: "NOT_FOUND", message: "Payment Intent not found" });
       return intent;
-    }),
-
-    prepareTransfer: publicProcedure.input(z.object({ id: z.string().min(1), buyerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/) })).mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, input.id)).limit(1);
-      if (!intent) throw new TRPCError({ code: "NOT_FOUND", message: "Payment Intent not found" });
-      if (intent.expiresAt.getTime() <= Date.now()) throw new TRPCError({ code: "BAD_REQUEST", message: "Payment Intent has expired" });
-      await db.update(paymentIntents).set({ buyerAddress: input.buyerAddress, status: "submitted" }).where(eq(paymentIntents.id, input.id));
-      return buildUsdcTransferRequest(intent.amountAtomic, intent.merchantAddress);
-    }),
-
-    verifyTransfer: publicProcedure.input(z.object({ id: z.string().min(1), idempotencyKey: z.string().min(1).max(128).optional(), transactionHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/) })).mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-      const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, input.id)).limit(1);
-      if (!intent) throw new TRPCError({ code: "NOT_FOUND", message: "Payment Intent not found" });
-      if (input.idempotencyKey && input.idempotencyKey !== intent.idempotencyKey) throw new TRPCError({ code: "CONFLICT", message: "Verification idempotency key does not match the Payment Intent" });
-      if (intent.status === "succeeded") return intent;
-      const [existingTransaction] = await db.select().from(paymentTransactions).where(eq(paymentTransactions.transactionHash, input.transactionHash)).limit(1);
-      if (existingTransaction) {
-        try { assertTransactionOwnership(existingTransaction.paymentIntentId, intent.id); } catch (error) { throw new TRPCError({ code: "CONFLICT", message: error instanceof Error ? error.message : "Transaction hash conflict" }); }
-        const [alreadyUpdated] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, intent.id)).limit(1);
-        return alreadyUpdated;
-      }
-      try {
-        const verified = await verifyArcUsdcTransfer(input.transactionHash as `0x${string}`, intent.amountAtomic, intent.merchantAddress);
-        const transactionRecord = { paymentIntentId: intent.id, transactionHash: verified.transactionHash, fromAddress: verified.fromAddress, toAddress: verified.toAddress, tokenAddress: buildUsdcTransferRequest(intent.amountAtomic, intent.merchantAddress).tokenAddress, amountAtomic: verified.amountAtomic, chainId: 5042002, finalizedAt: new Date() };
-        await db.insert(paymentTransactions).values(transactionRecord);
-        await db.update(paymentIntents).set({ status: "succeeded", transactionHash: verified.transactionHash }).where(and(eq(paymentIntents.id, intent.id), eq(paymentIntents.status, "submitted")));
-        try { await dispatchPaymentVerified(db, intent, transactionRecord as never); } catch (deliveryError) { console.error("[Webhook] payment.verified dispatch failed", deliveryError); }
-      } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Unable to verify Arc transaction" });
-      }
-      const [updated] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, intent.id)).limit(1);
-      return updated;
     }),
 
     sellerIntents: protectedProcedure.input(sellerRoutingInput).query(async ({ input, ctx }) => {

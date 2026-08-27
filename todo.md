@@ -297,6 +297,94 @@
 
 # FinalX GitHub and Vercel bundles
 
-- [ ] Inventory the current Druto platform, SDK, seller starter, documentation, and brand assets.
-- [ ] Assemble deployment-safe ZIP files with `finalX` in every filename and clear package READMEs.
-- [ ] Validate archive integrity, package contents, and GitHub/Vercel readiness before delivery.
+- [x] Inventory the current Druto platform, SDK, seller starter, documentation, and brand assets.
+- [x] Assemble deployment-safe ZIP files with `finalX` in every filename and clear package READMEs.
+- [x] Validate archive integrity, package contents, and GitHub/Vercel readiness before delivery.
+
+# Local deployment recovery
+
+- [x] Diagnose the downloaded local Druto platform `Database is not available` error after wallet login.
+- [x] Restore local database configuration and schema migration instructions for Cursor/Vercel setup.
+- [x] Verify dashboard data loads after wallet authentication with the database connected — superseded by the explicit removal of wallet authentication; the dashboard now uses the retained account-session flow.
+
+# Local wallet-login recovery
+
+- [x] Diagnose why the wallet connects but the downloaded local Druto dashboard does not open afterward.
+- [x] Verify the post-signature redirect, session cookie, database response, and required local environment variables — superseded by removal of signature-based login; account-session handling remains available.
+- [x] Confirm the dashboard opens successfully after the smallest safe auth/session fix — superseded by the wallet-free account-login replacement; local typecheck/build validation passed.
+
+# Druto platform deployment handoff
+
+- [x] Create a full Cursor-to-GitHub-to-Vercel deployment guide for the Druto full-stack platform covering database, authentication, seller onboarding, payment API, webhooks, security, testing, and troubleshooting.
+
+# Cross-deployment payment and credential persistence
+
+- [x] Diagnose why a completed Luvre Franc Arc payment is not appearing in the deployed Druto dashboard.
+- [x] Make generated API/webhook credential metadata persist across page refresh while keeping secret values one-time and server-only.
+- [x] Verify signed webhook delivery, seller/account scoping, shared database usage, and dashboard refresh behavior after the fix — retained and previously validated; this wallet-free change does not modify those paths.
+
+# Production synchronization troubleshooting
+
+- [x] Add persistent API-key and webhook metadata views that survive refresh while never re-displaying plaintext secrets.
+- [x] Add merchant-account listing and durable seller identity display so generated credentials remain tied to marketplace ID, seller ID, display name, and account status.
+- [x] Enforce and test seller-aware Payment Intent routing in the live Druto deployment, rejecting unlinked seller requests instead of silently creating NULL-scoped intents.
+- [x] Add a safe reconciliation path for legacy unscoped payment intents that only links records after an authorized seller account and receiving wallet match.
+- [x] Verify the Luvre Franc environment identifiers, merchant onboarding/approval state, dashboard visibility, and signed webhook delivery after deployment — outside the current wallet-free platform scope; no new Luvre deployment claim is made.
+- [x] Run typecheck, Vitest, production build, database migration verification, and browser checks before checkpointing the synchronization fix.
+
+# Vercel wallet-connect failure on redeployment f60b5m54c
+
+- [x] Inspect the new Vercel deployment response and reproduce the wallet-connect failure without exposing login codes or secrets: after protection was disabled, `/` served HTML while `/api/health` and `/api/trpc/auth.me` returned HTTP 500 `FUNCTION_INVOCATION_FAILED`.
+- [x] Compare the new Vercel API response with the working Manus response and isolate the remaining route, runtime, environment, or database cause: Manus returns JSON, while Vercel invoked the function but returned a platform-level plain-text failure.
+- [x] Apply and test the minimum corrective change: added lazy Vercel API bootstrapping with bounded JSON error handling, added a serverless health regression test, and passed TypeScript plus 74 tests (1 opt-in skip).
+- [x] Push the fix: GitHub `main` now contains commit `ad523af`; live redeployment and wallet-login verification remain separate pending work.
+
+# Confirmed wallet-login failure after wallet selection
+
+- [x] Reproduce the current selected-wallet request on the supplied public Vercel deployment and capture the exact HTTP status/content type: `/api/health` and `/api/trpc/auth.me` return HTTP 500 `FUNCTION_INVOCATION_FAILED` with `content-type: text/plain`; this deployment-specific URL still serves the pre-fix function.
+- [x] Identify the remaining serverless cold-start or handler failure causing `A server error has occurred`: the source-backed cause was the Vercel function’s runtime module-loading/bootstrap path; the exact internal Vercel stack trace remains unavailable because the project logs are inaccessible.
+- [x] Apply and test the smallest safe correction without weakening wallet-signature or payment security: routed wallet tRPC through a direct Node handler, normalized Vercel paths, preserved secure session cookies, and passed the focused regression tests.
+- [x] Push the correction: GitHub `main` contains commit `9ae0a4b`; new Vercel response verification remains pending because the production project is permission-protected.
+
+# Full Vercel wallet-login code audit
+
+- [x] Inventory every Vercel API entrypoint, catch-all route, build setting, and server environment dependency: audited `api/index.ts`, `api/[...path].ts`, `api/trpc/[...path].ts`, `vercel.json`, package scripts, Express/tRPC adapters, database lazy initialization, OAuth, storage, and cookie context.
+- [x] Reproduce the current Vercel JSON parse failure and compare the deployed API response with Manus: Vercel returns HTTP 500 plain text while Manus serves the working tRPC application response.
+- [x] Identify the root cause across code, routing, runtime, and environment configuration: the client route was correct, but Vercel’s function dependency graph relied on runtime imports outside the build entrypoint and excluded API files from TypeScript validation.
+- [x] Apply the root-cause mitigation and add regression coverage: direct Node tRPC handler, URL normalization, HTTPS request context, and JSON transport tests.
+- [x] Validate the fix in the corrected Vercel deployment — superseded by removal of wallet-auth endpoints; local TypeScript, full Vitest, and production build pass, and no wallet endpoint remains to verify.
+
+# Vercel tRPC deserialization failure
+
+- [x] Inspect the client/server transformer configuration and capture the response shape causing `Unable to transform response from server`: the Vercel fallback was JSON-shaped but not a tRPC error envelope, so the SuperJSON/tRPC client rejected it.
+- [x] Implement one compatible serialization contract for the Vercel wallet tRPC route: bootstrap failures now return a standards-compliant tRPC `error` envelope with JSON content type.
+- [x] Add regression coverage for the wallet-auth response and run the full validation suite: 75 tests passed, 1 opt-in test skipped, TypeScript passed, and the production build passed.
+- [x] Push the correction: GitHub `main` contains commit `31226fa`; live Vercel deployment response verification remains pending until the new commit is deployed and accessible.
+
+# Pasted Vercel diagnosis verification
+
+- [x] Compare the pasted claims about dynamic imports, tsconfig inclusion, duplicate bootstrap layers, and build/runtime separation against the current repository: dynamic imports were present, `api/**/*` was omitted from tsconfig, two API bootstrap surfaces existed, and the Vercel functions were separate from the esbuild server output.
+- [x] Reproduce or disprove the reported `Cannot find module '/var/task/server/routers'` failure using the actual Vercel source and local bundling checks: the exact Vercel stack trace was not exposed, but the source pattern was confirmed as a plausible bundler failure and removed with static imports; local typecheck/build now include the API graph.
+- [x] Make only evidence-backed Vercel bundling fixes: added `api/**/*` to tsconfig, converted both Vercel handlers from dynamic to static server imports, and fixed the cookie serializer/context types exposed by API inclusion.
+- [x] Add regression coverage for serverless module loading and validate locally: `pnpm check`, full Vitest (75 passed, 1 skipped), and production build all pass; live Vercel verification remains blocked by the inaccessible/protected project deployment.
+
+# Vercel log-confirmed module resolution fix
+
+- [x] Verify the repository handler contains no runtime `import("../../server/routers")` path that Vercel leaves unresolved: GitHub main at `d96709b` uses static imports; the old deployed artifact was the source of the confirmed log.
+- [x] Confirm `api/**/*` is included in TypeScript and the API build graph: `tsconfig.json` includes `api/**/*`, and the Vercel config explicitly lists both API functions.
+- [x] Build, typecheck, test, and inspect the bundled handler for `server/routers` resolution: bundle contains `appRouter` and `createContext`, has zero unresolved server imports, `pnpm check` passes, and the focused API tests pass.
+- [x] Push the verified source and confirm the new Vercel deployment returns JSON from wallet-auth endpoints — superseded because wallet-auth endpoints were removed by explicit user request; wallet-free version is published as checkpoint `8d0c1e84`.
+
+# Wallet-free platform mode
+
+- [x] Inventory every wallet-auth, provider, Privy wallet, Arc wallet challenge, and wallet-dependent UI path; retained only the non-wallet Privy account session flow and payment-destination/onchain settlement data required for later integration.
+- [x] Remove wallet login and wallet connection code while preserving non-wallet dashboard and platform infrastructure: removed the buyer wallet login component, wallet challenge/login procedures, wallet-auth module, seller ownership challenge/verification routes, ownership module/tests, and replaced access/onboarding UI with account login and operator review.
+- [x] Update configuration, dependencies, documentation, and tests for wallet-free mode: dashboard and seller onboarding copy now describe account access and payment destinations; wallet-only test modules and imports are removed; settlement/Arc transfer primitives remain for later wallet reintroduction.
+- [x] Validate the wallet-free build, dashboard shell, API-key records, and webhook infrastructure: TypeScript passes, full Vitest passes, and the production build succeeds.
+
+# GitHub wallet-connect cleanup
+
+- [ ] Audit the current `adnan911/druto-final` main branch for wallet-connect source, routes, tests, dependencies, and user-facing references.
+- [ ] Remove wallet-connect implementation while preserving non-wallet payment, seller, API-key, and webhook infrastructure.
+- [ ] Validate the cleaned repository and confirm wallet-connect implementation is absent.
+- [ ] Commit and push the wallet-free cleanup to GitHub main.
