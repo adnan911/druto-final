@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
-import { serialize } from "cookie";
+import * as cookieModule from "cookie";
+import { appRouter } from "../../server/routers";
+import { createContext } from "../../server/_core/context";
 
 type CookieOptions = {
   maxAge?: number;
@@ -22,7 +24,8 @@ type ExpressLikeRequest = NodeRequest & {
 };
 type NodeResponse = ServerResponse;
 
-let handlerPromise: Promise<(req: IncomingMessage, res: ServerResponse) => void> | undefined;
+type CookieSerializer = (name: string, value: string, options: CookieOptions) => string;
+const serializeCookie = (cookieModule as unknown as { serialize: CookieSerializer }).serialize;
 
 function appendSetCookie(res: ServerResponse, value: string) {
   const current = res.getHeader("set-cookie");
@@ -33,13 +36,13 @@ function appendSetCookie(res: ServerResponse, value: string) {
 function createCookieResponse(res: ServerResponse): CookieResponse {
   return {
     cookie(name, value, options = {}) {
-      appendSetCookie(res, serialize(name, value, {
+      appendSetCookie(res, serializeCookie(name, value, {
         ...options,
         sameSite: options.sameSite ?? "lax",
       }));
     },
     clearCookie(name, options = {}) {
-      appendSetCookie(res, serialize(name, "", {
+      appendSetCookie(res, serializeCookie(name, "", {
         ...options,
         maxAge: 0,
         sameSite: options.sameSite ?? "lax",
@@ -60,24 +63,15 @@ function normalizeRequest(req: NodeRequest): ExpressLikeRequest {
   return normalized;
 }
 
-async function getHandler() {
-  handlerPromise ??= (async () => {
-    const [{ appRouter }, { createContext }] = await Promise.all([
-      import("../../server/routers"),
-      import("../../server/_core/context"),
-    ]);
-
-    return createHTTPHandler({
-      router: appRouter,
-      basePath: "/",
-      createContext: ({ req, res }) => createContext({
-        req: req as never,
-        res: createCookieResponse(res) as never,
-      }),
-    });
-  })();
-  return handlerPromise;
-}
+const trpcHandler = createHTTPHandler({
+  router: appRouter,
+  basePath: "/",
+  createContext: ({ req, res }) => createContext({
+    req: req as never,
+    res: createCookieResponse(res) as never,
+    info: {} as never,
+  } as never),
+});
 
 function safeErrorMessage(error: unknown) {
   if (!(error instanceof Error)) return "Unknown tRPC bootstrap error";
@@ -95,7 +89,6 @@ export default async function handler(req: NodeRequest, res: NodeResponse) {
   }
 
   try {
-    const trpcHandler = await getHandler();
     return trpcHandler(normalizeRequest(req), res);
   } catch (error) {
     console.error("[Vercel tRPC bootstrap] failed", error);
