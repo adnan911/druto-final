@@ -17,7 +17,7 @@ import {
   Activity, AlertCircle, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, LogOut, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, Wallet, WalletCards, X, Zap
 } from "lucide-react";
 
-const logo = "/manus-storage/druto-arc-mark_c8c084dd.png";
+const logo = "/DRUTO_D_logo.png";
 const heroVisual = "/manus-storage/druto-editorial-network_c7fbc025.jpg";
 const flowVisual = "/manus-storage/druto-payment-flow_17da128c.jpg";
 const settleVisual = "/manus-storage/druto-settlement-abstract_ac9457d1.jpg";

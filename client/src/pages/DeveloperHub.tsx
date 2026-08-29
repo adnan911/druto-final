@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { developerSdkSnippet } from "@/lib/developer";
 
-const logo = "/manus-storage/druto-arc-mark_c8c084dd.png";
+const logo = "/DRUTO_D_logo.png";
 const sdkPackageUrl = "/manus-storage/druto-sdk-0.1.0_4dbf00a5.zip";
 const sdkGuideUrl = "/manus-storage/GUIDE_60d3c182.md";
 const sdkReadmeUrl = "/manus-storage/README_6ca76bed.md";

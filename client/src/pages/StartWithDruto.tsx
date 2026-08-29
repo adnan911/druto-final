@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { copyTextToClipboard, type CopyFeedback } from "@/lib/clipboard";
 
-const logo = "/manus-storage/druto-arc-mark_c8c084dd.png";
+const logo = "/DRUTO_D_logo.png";
 const starterZipUrl = "/manus-storage/druto-nextjs-starter-0.1.0_b97da8c9.zip";
 const installSnippet = `pnpm add @druto/sdk\n\n# During local development\npnpm add ../druto-sdk`;
 const serverSnippet = `import { DrutoCheckout } from "@druto/sdk";\n\nconst druto = new DrutoCheckout({\n  environment: "testnet",\n  network: "arc",\n  asset: "USDC",\n  checkoutBaseUrl: process.env.DRUTO_CHECKOUT_BASE_URL!,\n  createPayment: async (request) => {\n    const response = await fetch(process.env.DRUTO_CREATE_INTENT_ENDPOINT!, {\n      method: "POST",\n      headers: {\n        "content-type": "application/json",\n        authorization: \`Bearer \${process.env.DRUTO_API_KEY}\`,\n      },\n      body: JSON.stringify({ json: request }),\n    });\n    return (await response.json()).result.data.json;\n  },\n});`;

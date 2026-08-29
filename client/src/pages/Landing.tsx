@@ -1,7 +1,7 @@
 import { ArrowRight, Check, Code2, ExternalLink, Layers3, LockKeyhole, Network, Play, ShieldCheck, Sparkles, WalletCards, Webhook } from "lucide-react";
 import { Link } from "wouter";
 
-const logo = "/manus-storage/druto-arc-mark_c8c084dd.png";
+const logo = "/DRUTO_D_logo.png";
 const heroVisual = "/manus-storage/druto-editorial-network_c7fbc025.jpg";
 
 function Brand() {
