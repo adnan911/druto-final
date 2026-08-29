@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
 import * as cookieModule from "cookie";
-import { appRouter } from "../../server/routers";
-import { createContext } from "../../server/_core/context";
+import { appRouter } from "../../server/routers.js";
+import { createContext } from "../../server/_core/context.js";
 
 type CookieOptions = {
   maxAge?: number;
