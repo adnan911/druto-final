@@ -5,10 +5,10 @@
   "installCommand": "pnpm install --no-frozen-lockfile",
   "framework": "vite",
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "maxDuration": 60
     },
-    "api/trpc/[...path].ts": {
+    "api/trpc/[...path].js": {
       "maxDuration": 60
     }
   }
