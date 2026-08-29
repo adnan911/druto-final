@@ -11,5 +11,11 @@
     "api/trpc/[...path].js": {
       "maxDuration": 60
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api|assets|__manus__|favicon.ico).*)*",
+      "destination": "/index.html"
+    }
+  ]
 }
