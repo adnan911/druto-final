@@ -10,11 +10,11 @@ describe("Druto product access contract", () => {
     expect(isPublicProductRoute("/dashboard")).toBe(false);
   });
 
-  it("accepts wallet and Privy sessions for the dashboard", () => {
+  it("accepts wallet, Privy, and account sessions for the dashboard", () => {
     expect(isWalletSession(null)).toBe(false);
     expect(isPrivySession(null)).toBe(false);
     expect(dashboardAccessState(null)).toBe("connect_wallet");
-    expect(dashboardAccessState({ openId: "oauth-user-1" })).toBe("connect_wallet");
+    expect(dashboardAccessState({ openId: "oauth-user-1" })).toBe("workspace");
     expect(isWalletSession({ openId: "wallet:0xabc" })).toBe(true);
     expect(dashboardAccessState({ openId: "wallet:0xabc" })).toBe("workspace");
     expect(isPrivySession({ openId: "privy:did:privy:abc123" })).toBe(true);

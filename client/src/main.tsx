@@ -72,13 +72,18 @@ const trpcClient = trpc.createClient({
   ],
 });
 
+import { WagmiProvider } from "wagmi";
+import { wagmiConfig } from "@/lib/arcChain";
+
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID as string | undefined;
 const app = <trpc.Provider client={trpcClient} queryClient={queryClient}>
-  <QueryClientProvider client={queryClient}>
-    <App />
-  </QueryClientProvider>
+  <WagmiProvider config={wagmiConfig}>
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  </WagmiProvider>
 </trpc.Provider>;
 
 createRoot(document.getElementById("root")!).render(
-  privyAppId ? <PrivyProvider appId={privyAppId} config={{ loginMethods: ["email", "google", "github", "wallet"], appearance: { theme: "light", accentColor: "#2458d6" } }}>{app}</PrivyProvider> : app
+  privyAppId ? <PrivyProvider appId={privyAppId} config={{ loginMethods: ["email", "google", "github"], appearance: { theme: "light", accentColor: "#2458d6" } }}>{app}</PrivyProvider> : app
 );

@@ -2,6 +2,7 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
+import { usePrivy } from "@privy-io/react-auth";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -16,6 +17,13 @@ export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath } = options ?? {};
   const utils = trpc.useUtils();
 
+  let privy: any = null;
+  try {
+    privy = usePrivy();
+  } catch {
+    privy = null;
+  }
+
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
@@ -29,6 +37,9 @@ export function useAuth(options?: UseAuthOptions) {
 
   const logout = useCallback(async () => {
     try {
+      if (privy?.authenticated) {
+        await privy.logout();
+      }
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
       if (

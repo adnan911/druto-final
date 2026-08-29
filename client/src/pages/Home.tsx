@@ -7,12 +7,14 @@ import { developerSdkSnippet } from "@/lib/developer";
 import AccountLoginCard from "@/components/AccountLoginCard";
 import ApiKeyManager from "@/components/ApiKeyManager";
 import SellerOnboarding from "@/components/SellerOnboarding";
+import WalletConnectButton from "@/components/WalletConnectButton";
 import { buildReceiptSummary, copyReceiptValue } from "@/lib/receipt";
 import { dashboardAccessState } from "@/lib/access";
+import { ARC_CHAIN_ID, ARC_CHAIN_ID_HEX, ARC_RPC_URL, ARC_USDC_ADDRESS, CIRCLE_FAUCET_URL, fetchArcUsdcBalance, encodeArcUsdcTransfer } from "@/lib/arcChain";
 import { toast } from "sonner";
 import { usePrivy } from "@privy-io/react-auth";
 import {
-  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, LogOut, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, WalletCards, X, Zap
+  Activity, AlertCircle, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, LogOut, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, Wallet, WalletCards, X, Zap
 } from "lucide-react";
 
 const logo = "/manus-storage/druto-arc-mark_c8c084dd.png";
@@ -93,10 +95,25 @@ function NavIcon({ item }: { item: string }) {
 }
 
 function Topbar({ title, onCreate }: { title: string; onCreate: () => void }) {
+  let privy: any = null;
+  try {
+    privy = usePrivy();
+  } catch {
+    privy = null;
+  }
   const logout = trpc.auth.logout.useMutation();
   const utils = trpc.useUtils();
-  const disconnect = async () => { await logout.mutateAsync(); utils.auth.me.setData(undefined, null); window.location.href = "/"; };
-  return <header className="topbar"><div className="topbar-title"><div className="breadcrumb">Workspace <span>/</span> Operations</div><h1>{title}</h1></div><div className="topbar-actions"><div className="search-field"><Search size={15} /><input placeholder="Search anything" aria-label="Search" /><kbd>⌘ K</kbd></div><button className="icon-button"><Bell size={17} /><i className="notification-dot" /></button><button className="button button-primary" onClick={onCreate}><Plus size={16} /> Create payment</button><button className="button button-quiet" onClick={() => void disconnect()} disabled={logout.isPending}>{logout.isPending ? "Signing out…" : "Sign out"}</button></div></header>;
+  const disconnect = async () => {
+    try {
+      if (privy?.authenticated) await privy.logout();
+    } catch (e) {
+      console.error("Privy logout failed", e);
+    }
+    await logout.mutateAsync();
+    utils.auth.me.setData(undefined, null);
+    window.location.href = "/";
+  };
+  return <header className="topbar"><div className="topbar-title"><div className="breadcrumb">Workspace <span>/</span> Operations</div><h1>{title}</h1></div><div className="topbar-actions"><div className="search-field"><Search size={15} /><input placeholder="Search anything" aria-label="Search" /><kbd>⌘ K</kbd></div><button className="icon-button"><Bell size={17} /><i className="notification-dot" /></button><WalletConnectButton /><button className="button button-primary" onClick={onCreate}><Plus size={16} /> Create payment</button><button className="button button-quiet" onClick={() => void disconnect()} disabled={logout.isPending}>{logout.isPending ? "Signing out…" : "Sign out"}</button></div></header>;
 }
 
 function Overview({ setActive, onCreate }: { setActive: (v: string) => void; onCreate: () => void }) {
@@ -240,9 +257,320 @@ function CheckoutPage() {
   const [location] = useLocation();
   const intentId = location.split("/").filter(Boolean).pop() || "";
   const intentQuery = trpc.payments.getIntent.useQuery({ id: intentId }, { enabled: Boolean(intentId) });
+  const verifyTransfer = trpc.payments.verifyTransfer.useMutation();
   const intent = intentQuery.data;
   const amountDisplay = intent ? (Number(intent.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00";
-  return <div className="checkout-shell"><div className="checkout-brand"><Mark /><span>druto</span><span className="checkout-test"><span className="live-dot" /> Arc Testnet</span></div><main className="checkout-main"><div className="checkout-intro"><span className="eyebrow"><span className="eyebrow-line" /> Hosted payment flow</span><h1>Payment flow <em>paused.</em></h1><p>Wallet settlement is temporarily removed from this release. The order and webhook contracts remain available for a future payment module.</p></div><div className="checkout-card"><div className="checkout-card-head"><span>Order #{(intent?.externalOrderId ?? intentId) || "pending"}</span><span className="checkout-expiry"><Timer size={14} /> {intent ? "Intent status: " + intent.status : "Intent unavailable"}</span></div><div className="checkout-amount"><span>Total recorded</span><strong>{"$" + amountDisplay} <small>USDC</small></strong></div><div className="checkout-network"><span className="network-symbol">A</span><span><strong>USDC on Arc</strong><small>Settlement module paused · chain 5042002</small></span><BadgeCheck size={17} /></div><div className="wallet-placeholder"><div className="wallet-ring"><ShieldCheck size={26} /></div><strong>Wallet payment module removed</strong><span>Druto is ready to retain the intent, receipt, seller record, and signed webhook contract. Wallet connection and transfer signing can be added later as an isolated module.</span></div>{intent && <button className="button button-primary full-width" onClick={() => window.location.href = "/receipt/" + intent.id}>View buyer receipt</button>}<div className="checkout-note" role="status"><LockKeyhole size={13} /> No wallet connection, QR scan, signature, or blockchain transaction is requested in this release.</div><div className="checkout-footer"><span>Powered by <strong>druto</strong></span><span><LockKeyhole size={12} /> Wallet-free mode</span></div></div></main></div>;
+
+  const [address, setAddress] = useState<`0x${string}` | null>(null);
+  const [chainId, setChainId] = useState<number | null>(null);
+  const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+
+  const isArc = chainId === ARC_CHAIN_ID;
+  const isSucceeded = intent?.status === "succeeded";
+
+  const updateBalance = async (addr: `0x${string}`) => {
+    try {
+      const bal = await fetchArcUsdcBalance(addr);
+      setUsdcBalance(bal);
+    } catch {
+      setUsdcBalance("0.00");
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.ethereum) {
+      window.ethereum.request({ method: "eth_accounts" })
+        .then((accounts: string[]) => {
+          if (accounts.length > 0) {
+            const addr = accounts[0] as `0x${string}`;
+            setAddress(addr);
+            void updateBalance(addr);
+          }
+        })
+        .catch(console.error);
+
+      window.ethereum.request({ method: "eth_chainId" })
+        .then((hex: string) => setChainId(parseInt(hex, 16)))
+        .catch(console.error);
+
+      const handleAccounts = (accounts: string[]) => {
+        if (accounts.length > 0) {
+          const addr = accounts[0] as `0x${string}`;
+          setAddress(addr);
+          void updateBalance(addr);
+        } else {
+          setAddress(null);
+          setUsdcBalance(null);
+        }
+      };
+
+      const handleChain = (hex: string) => {
+        const parsed = parseInt(hex, 16);
+        setChainId(parsed);
+        if (address) void updateBalance(address);
+      };
+
+      window.ethereum.on?.("accountsChanged", handleAccounts);
+      window.ethereum.on?.("chainChanged", handleChain);
+
+      return () => {
+        window.ethereum?.removeListener?.("accountsChanged", handleAccounts);
+        window.ethereum?.removeListener?.("chainChanged", handleChain);
+      };
+    }
+  }, [address]);
+
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      toast.error("No EVM wallet detected (e.g. MetaMask or Rabby)");
+      return;
+    }
+    setConnecting(true);
+    try {
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      if (accounts && accounts.length > 0) {
+        const addr = accounts[0] as `0x${string}`;
+        setAddress(addr);
+        const hex = await window.ethereum.request({ method: "eth_chainId" });
+        const parsed = parseInt(hex, 16);
+        setChainId(parsed);
+        void updateBalance(addr);
+        if (parsed !== ARC_CHAIN_ID) {
+          await switchToArc();
+        }
+        toast.success("Wallet connected");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to connect wallet");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const switchToArc = async () => {
+    if (!window.ethereum) return;
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: ARC_CHAIN_ID_HEX }],
+      });
+      toast.success("Switched to Arc Testnet");
+    } catch (switchError: any) {
+      if (switchError.code === 4902 || switchError.message?.includes("Unrecognized chain")) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: ARC_CHAIN_ID_HEX,
+                chainName: "Arc Testnet",
+                nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+                rpcUrls: [ARC_RPC_URL],
+                blockExplorerUrls: ["https://explorer.testnet.arc.io"],
+              },
+            ],
+          });
+          toast.success("Arc Testnet added to wallet");
+        } catch {
+          toast.error("Could not add Arc Testnet to wallet");
+        }
+      } else {
+        toast.error("Failed to switch network to Arc Testnet");
+      }
+    }
+  };
+
+  const handlePay = async () => {
+    if (!intent) return;
+    if (!address) {
+      await connectWallet();
+      return;
+    }
+    if (!isArc) {
+      await switchToArc();
+      return;
+    }
+
+    setPaying(true);
+    try {
+      const data = encodeArcUsdcTransfer(intent.merchantAddress as `0x${string}`, intent.amountAtomic);
+      const hash = await window.ethereum.request({
+        method: "eth_sendTransaction",
+        params: [
+          {
+            from: address,
+            to: ARC_USDC_ADDRESS,
+            data,
+          },
+        ],
+      });
+
+      setTxHash(hash);
+      setPaying(false);
+      setVerifying(true);
+      toast.info("Transaction broadcast. Verifying on Arc Testnet…");
+
+      const result = await verifyTransfer.mutateAsync({
+        paymentIntentId: intent.id,
+        transactionHash: hash,
+      });
+
+      toast.success("Payment verified onchain!");
+      window.location.href = `/receipt/${intent.id}`;
+    } catch (err: any) {
+      setPaying(false);
+      setVerifying(false);
+      toast.error(err?.message || "Payment transaction failed or was rejected");
+    }
+  };
+
+  return (
+    <div className="checkout-shell">
+      <div className="checkout-brand">
+        <Mark />
+        <span>druto</span>
+        <span className="checkout-test">
+          <span className="live-dot" /> Arc Testnet
+        </span>
+      </div>
+
+      <main className="checkout-main">
+        <div className="checkout-intro">
+          <span className="eyebrow">
+            <span className="eyebrow-line" /> Hosted payment flow
+          </span>
+          <h1>
+            Pay with <em>Arc USDC.</em>
+          </h1>
+          <p>
+            Non-custodial checkout direct to the seller wallet on Arc Testnet.
+          </p>
+          <div className="checkout-trust">
+            <span><ShieldCheck size={14} /> Direct seller settlement</span>
+            <span><LockKeyhole size={14} /> Non-custodial</span>
+            <span><Zap size={14} /> Fast finality</span>
+          </div>
+        </div>
+
+        <div className="checkout-card">
+          <div className="checkout-card-head">
+            <span>Order #{(intent?.externalOrderId ?? intentId) || "pending"}</span>
+            <span className="checkout-expiry">
+              <Timer size={14} /> {intent ? "Item: " + intent.itemName : "Intent unavailable"}
+            </span>
+          </div>
+
+          <div className="checkout-amount">
+            <span>Total due</span>
+            <strong>{"$" + amountDisplay} <small>USDC</small></strong>
+          </div>
+
+          <div className="checkout-network">
+            <span className="network-symbol">A</span>
+            <div>
+              <strong>Arc Testnet</strong>
+              <small>Chain ID: 5042002 · Asset: USDC</small>
+            </div>
+            <BadgeCheck size={17} style={{ color: "#1e9b83", marginLeft: "auto" }} />
+          </div>
+
+          <div className="card p-4" style={{ background: "#fafafa", borderRadius: "8px", border: "1px solid #eaeaea", margin: "14px 0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span style={{ fontSize: "12px", color: "#666", fontWeight: 500 }}>Buyer Wallet</span>
+              {address ? (
+                <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#1e9b83", fontWeight: 600 }}>
+                  {address.slice(0, 6)}…{address.slice(-4)}
+                </span>
+              ) : (
+                <span style={{ fontSize: "12px", color: "#888" }}>Not connected</span>
+              )}
+            </div>
+
+            {address && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", paddingTop: "6px", borderTop: "1px solid #f0f0f0" }}>
+                <span style={{ color: "#666" }}>Arc USDC Balance:</span>
+                <strong style={{ color: Number(usdcBalance ?? 0) < Number(intent ? Number(intent.amountAtomic) / 1_000_000 : 0) ? "#e17055" : "#1e9b83" }}>
+                  {usdcBalance !== null ? `${usdcBalance} USDC` : "Loading…"}
+                </strong>
+              </div>
+            )}
+
+            {!isArc && address && (
+              <div style={{ marginTop: "10px" }}>
+                <button
+                  type="button"
+                  className="button button-quiet full-width"
+                  style={{ background: "#ffeaa7", color: "#d63031", border: "none", fontSize: "12px", fontWeight: 600, padding: "6px" }}
+                  onClick={switchToArc}
+                >
+                  <AlertCircle size={14} /> Switch to Arc Testnet
+                </button>
+              </div>
+            )}
+          </div>
+
+          {isSucceeded ? (
+            <button
+              className="button button-primary full-width"
+              onClick={() => window.location.href = `/receipt/${intent.id}`}
+            >
+              <Check size={16} /> View buyer receipt
+            </button>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {!address ? (
+                <button
+                  className="button button-primary full-width"
+                  onClick={connectWallet}
+                  disabled={connecting}
+                >
+                  <Wallet size={16} /> {connecting ? "Connecting Wallet…" : "Connect EVM Wallet"}
+                </button>
+              ) : (
+                <button
+                  className="button button-primary full-width"
+                  onClick={handlePay}
+                  disabled={paying || verifying || !isArc}
+                >
+                  {paying ? (
+                    <>Confirm in wallet…</>
+                  ) : verifying ? (
+                    <><RefreshCw size={14} className="animate-spin" /> Verifying on Arc Testnet…</>
+                  ) : (
+                    <>Pay ${amountDisplay} USDC with Wallet</>
+                  )}
+                </button>
+              )}
+
+              {intent && (
+                <button
+                  type="button"
+                  className="button button-quiet full-width"
+                  style={{ fontSize: "12px" }}
+                  onClick={() => window.location.href = `/receipt/${intent.id}`}
+                >
+                  View receipt / pending state
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="checkout-note" role="status" style={{ marginTop: "12px" }}>
+            <LockKeyhole size={13} /> Direct onchain transfer of USDC on Arc Testnet (chain 5042002).
+          </div>
+
+          <div className="checkout-footer">
+            <span>Powered by <strong>druto</strong></span>
+            <span><LockKeyhole size={12} /> Arc Testnet</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 }
 const marketplaceProducts = [
   { id: "api-pro", name: "Arc API Pro", category: "Developer tools", description: "Production-shaped API workspace with usage insights and team controls.", price: 1, seller: "Druto Labs", sellerId: "druto-labs", image: heroVisual, badge: "Bestseller", availability: "In stock" },
@@ -291,16 +619,27 @@ function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: s
 
 function DashboardAccess() {
   const session = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
-  const { ready: privyReady, authenticated: privyAuthenticated, getAccessToken } = usePrivy();
   const privyLogin = trpc.auth.privyLogin.useMutation();
   const utils = trpc.useUtils();
   const [privyExchangeState, setPrivyExchangeState] = useState<"idle" | "loading" | "error">("idle");
 
+  let privy: any = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    privy = usePrivy();
+  } catch {
+    privy = null;
+  }
+
+  const privyReady = privy?.ready;
+  const privyAuthenticated = privy?.authenticated;
+  const getAccessToken = privy?.getAccessToken;
+
   useEffect(() => {
-    if (!privyReady || !privyAuthenticated || session.data || privyExchangeState !== "idle") return;
+    if (!privyReady || !privyAuthenticated || session.data || privyExchangeState !== "idle" || !getAccessToken) return;
     let active = true;
     setPrivyExchangeState("loading");
-    void getAccessToken().then(async accessToken => {
+    void getAccessToken().then(async (accessToken: string | null) => {
       if (!active) return;
       if (!accessToken) {
         setPrivyExchangeState("error");

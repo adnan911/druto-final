@@ -9,8 +9,8 @@ export function isPrivySession(user: { openId?: string | null } | null | undefin
 }
 
 export function dashboardAccessState(user: { openId?: string | null } | null | undefined) {
-  if (!user) return "connect_wallet" as const;
-  return isWalletSession(user) || isPrivySession(user) ? "workspace" as const : "connect_wallet" as const;
+  if (!user || !user.openId) return "connect_wallet" as const;
+  return "workspace" as const;
 }
 
 export function isPublicProductRoute(pathname: string) {

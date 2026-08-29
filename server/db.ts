@@ -2,17 +2,22 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { createMemoryDb } from "./memoryDb";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
+// Lazily create the drizzle instance or fallback to memory DB for local development.
+export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
+  if (!_db) {
+    if (process.env.DATABASE_URL) {
+      try {
+        _db = drizzle(process.env.DATABASE_URL);
+      } catch (error) {
+        console.warn("[Database] Failed to connect MySQL, falling back to in-memory:", error);
+        _db = createMemoryDb() as any;
+      }
+    } else {
+      _db = createMemoryDb() as any;
     }
   }
   return _db;
