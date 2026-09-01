@@ -25,8 +25,10 @@ var decodeOAuthState = (state) => {
 
 // server/routers.ts
 import { and as and2, eq as eq3, inArray, isNull } from "drizzle-orm";
+import { createHash as createHash4 } from "node:crypto";
 import { nanoid as nanoid2 } from "nanoid";
 import { z as z2 } from "zod";
+import { getAddress as getAddress2, verifyMessage } from "viem";
 
 // drizzle/schema.ts
 import { int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
@@ -187,6 +189,7 @@ function getTableName(table) {
   if (table === paymentTransactions) return "paymentTransactions";
   if (table === webhookEndpoints) return "webhookEndpoints";
   if (table === webhookDeliveries) return "webhookDeliveries";
+  if (table === walletLoginChallenges) return "walletLoginChallenges";
   return "unknown";
 }
 function createMemoryDb() {
@@ -287,7 +290,8 @@ function createMemoryDb() {
       }
     ],
     webhookEndpoints: [],
-    webhookDeliveries: []
+    webhookDeliveries: [],
+    walletLoginChallenges: []
   };
   function getTableList(table) {
     const name = getTableName(table);
@@ -489,12 +493,21 @@ function createMemoryDb() {
 }
 
 // server/db.ts
+import mysql from "mysql2/promise";
 var _db = null;
 async function getDb() {
   if (!_db) {
     if (process.env.DATABASE_URL) {
       try {
-        _db = drizzle(process.env.DATABASE_URL);
+        const isSslNeeded = process.env.DATABASE_URL.includes("tidb") || process.env.DATABASE_URL.includes("ssl") || process.env.DATABASE_URL.includes("aivencloud") || process.env.DATABASE_URL.includes("planetscale");
+        const pool = mysql.createPool({
+          uri: process.env.DATABASE_URL,
+          ssl: isSslNeeded ? { minVersion: "TLSv1.2", rejectUnauthorized: true } : void 0,
+          waitForConnections: true,
+          connectionLimit: 10,
+          queueLimit: 0
+        });
+        _db = drizzle(pool);
       } catch (error) {
         console.warn("[Database] Failed to connect MySQL, falling back to in-memory:", error);
         _db = createMemoryDb();
@@ -1325,6 +1338,78 @@ var appRouter = router({
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
+    createWalletChallenge: publicProcedure.input(z2.object({ walletAddress: z2.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid EVM wallet address") })).mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const walletAddress = getAddress2(input.walletAddress);
+      const challengeId = `wch_${nanoid2(12)}`;
+      const nonce = nanoid2(24);
+      const issuedAt = /* @__PURE__ */ new Date();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1e3);
+      const message = `Sign in to Druto Platform
+
+Wallet: ${walletAddress}
+Nonce: ${nonce}
+Issued At: ${issuedAt.toISOString()}`;
+      const nonceHash = createHash4("sha256").update(nonce).digest("hex");
+      await db.insert(walletLoginChallenges).values({
+        id: challengeId,
+        walletAddress,
+        message,
+        nonceHash,
+        expiresAt
+      });
+      return { challengeId, message, expiresAt };
+    }),
+    verifyWalletLogin: publicProcedure.input(z2.object({
+      challengeId: z2.string().min(1).max(32),
+      walletAddress: z2.string().regex(/^0x[a-fA-F0-9]{40}$/),
+      signature: z2.string().regex(/^0x[a-fA-F0-9]+$/)
+    })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const walletAddress = getAddress2(input.walletAddress);
+      const [challenge] = await db.select().from(walletLoginChallenges).where(eq3(walletLoginChallenges.id, input.challengeId)).limit(1);
+      if (!challenge) throw new TRPCError3({ code: "NOT_FOUND", message: "Login challenge not found" });
+      if (challenge.usedAt) throw new TRPCError3({ code: "BAD_REQUEST", message: "Login challenge already used" });
+      if (/* @__PURE__ */ new Date() > new Date(challenge.expiresAt)) throw new TRPCError3({ code: "BAD_REQUEST", message: "Login challenge expired" });
+      if (challenge.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+        throw new TRPCError3({ code: "BAD_REQUEST", message: "Challenge wallet mismatch" });
+      }
+      let isValid = false;
+      try {
+        isValid = await verifyMessage({
+          address: walletAddress,
+          message: challenge.message,
+          signature: input.signature
+        });
+      } catch (err) {
+        console.error("[Wallet Verify Error]", err);
+        isValid = false;
+      }
+      if (!isValid) {
+        throw new TRPCError3({ code: "UNAUTHORIZED", message: "Invalid wallet signature" });
+      }
+      await db.update(walletLoginChallenges).set({ usedAt: /* @__PURE__ */ new Date() }).where(eq3(walletLoginChallenges.id, challenge.id));
+      const openId = `wallet-${walletAddress.toLowerCase()}`;
+      const name = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+      const signedInAt = /* @__PURE__ */ new Date();
+      await db.insert(users).values({
+        openId,
+        name,
+        loginMethod: "wallet",
+        role: "admin",
+        lastSignedIn: signedInAt
+      }).onDuplicateKeyUpdate({
+        set: { name, loginMethod: "wallet", role: "admin", lastSignedIn: signedInAt }
+      });
+      const token = await sdk.createSessionToken(openId, { name });
+      ctx.res.cookie(COOKIE_NAME, token, {
+        ...getSessionCookieOptions(ctx.req),
+        maxAge: 365 * 24 * 60 * 60 * 1e3
+      });
+      return { authenticated: true, openId, name, token, walletAddress };
+    }),
     directAccountLogin: publicProcedure.input(z2.object({ email: z2.string().email().optional(), name: z2.string().optional() }).optional()).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
@@ -1589,9 +1674,11 @@ var appRouter = router({
       const [updatedIntent] = await db.select().from(paymentIntents).where(eq3(paymentIntents.id, intent.id)).limit(1);
       const [finalTx] = await db.select().from(paymentTransactions).where(eq3(paymentTransactions.transactionHash, verifiedTransfer.transactionHash)).limit(1);
       if (updatedIntent && finalTx) {
-        void dispatchPaymentVerified(db, updatedIntent, finalTx).catch((err) => {
+        try {
+          await dispatchPaymentVerified(db, updatedIntent, finalTx);
+        } catch (err) {
           console.error("[Webhook Dispatch Error]", err);
-        });
+        }
       }
       return {
         paymentIntentId: intent.id,

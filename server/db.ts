@@ -4,6 +4,8 @@ import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createMemoryDb } from "./memoryDb";
 
+import mysql from "mysql2/promise";
+
 let _db: ReturnType<typeof drizzle> | null = null;
 
 // Lazily create the drizzle instance or fallback to memory DB for local development.
@@ -11,7 +13,20 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
   if (!_db) {
     if (process.env.DATABASE_URL) {
       try {
-        _db = drizzle(process.env.DATABASE_URL);
+        const isSslNeeded = process.env.DATABASE_URL.includes("tidb") ||
+          process.env.DATABASE_URL.includes("ssl") ||
+          process.env.DATABASE_URL.includes("aivencloud") ||
+          process.env.DATABASE_URL.includes("planetscale");
+
+        const pool = mysql.createPool({
+          uri: process.env.DATABASE_URL,
+          ssl: isSslNeeded ? { minVersion: "TLSv1.2", rejectUnauthorized: true } : undefined,
+          waitForConnections: true,
+          connectionLimit: 10,
+          queueLimit: 0,
+        });
+
+        _db = drizzle(pool as any);
       } catch (error) {
         console.warn("[Database] Failed to connect MySQL, falling back to in-memory:", error);
         _db = createMemoryDb() as any;

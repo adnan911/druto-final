@@ -35,7 +35,7 @@ export default function SellerOnboarding() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!marketplaceId.trim() || !sellerId.trim() || !displayName.trim() || !/^0x[a-f-fA-F0-9]{40}$/.test(receivingAddress.trim())) {
+    if (!marketplaceId.trim() || !sellerId.trim() || !displayName.trim() || !/^0x[a-fA-F0-9]{40}$/.test(receivingAddress.trim())) {
       toast.error("Complete the seller identity and valid payment destination");
       return;
     }

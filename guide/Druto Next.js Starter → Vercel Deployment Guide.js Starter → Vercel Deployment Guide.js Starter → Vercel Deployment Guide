@@ -1,0 +1,177 @@
+# Druto Next.js Starter → Vercel Deployment Guide
+
+This guide deploys the current Druto Next.js seller starter to Vercel. The starter provides a server-side create-payment route, a signed webhook route, and a client-side `PayWithDrutoButton`. It is configured for **Arc Testnet and USDC**.
+
+## Important limitation before starting
+
+The starter is an integration template, not a complete Dashda commerce backend. Before accepting real customer orders, replace the example order handling in `app/api/druto/create-payment/route.ts` with a lookup against your Dashda database. The server must calculate the trusted total and store the returned Druto Payment Intent ID. Similarly, replace the comments in `app/api/webhooks/druto/route.ts` with an idempotent database transaction that marks the correct Dashda order as paid.
+
+For your first demonstration, you can deploy the starter with a controlled test order. For a real Dashda launch, connect a database such as Supabase PostgreSQL and add the order and webhook-event tables described in `DASHDA_DATABASE_SYNC.md`.
+
+## 1. Extract the starter
+
+Download `druto-nextjs-starter-finalX-0.1.0.zip` and extract it. Open a terminal in the extracted folder. The folder should contain `package.json`, `pnpm-lock.yaml`, `app/`, `components/`, and `lib/`.
+
+The recommended project folder name is `dashda-druto`.
+
+## 2. Test locally first
+
+Install Node.js 20 or newer and pnpm. Then run:
+
+```bash
+pnpm install
+cp .env.example .env.local
+pnpm typecheck
+pnpm dev
+```
+
+Open `http://localhost:3000`. Confirm the sample page loads and the Pay with Druto button is visible. Do not use production credentials locally or in source control.
+
+## 3. Create or select the Druto seller account
+
+In Druto, create the seller using a stable `marketplaceId` and `sellerId`. The seller account begins as pending. Complete the wallet ownership challenge with `personal_sign`, then have the authorized operator activate the seller account. The receiving wallet must be an approved public Arc Testnet wallet.
+
+Create or copy the seller’s Druto API key. Register a webhook endpoint and copy the generated webhook signing secret. Keep both values private.
+
+## 4. Push the starter to GitHub
+
+Create a private GitHub repository. From the extracted starter folder, run:
+
+```bash
+git init
+git add .
+git commit -m "Add Dashda Druto payment starter"
+git branch -M main
+git remote add origin https://github.com/YOUR_ACCOUNT/YOUR_REPOSITORY.git
+git push -u origin main
+```
+
+Before running `git add .`, confirm that `.env.local` does not exist in the folder. Never commit `DRUTO_API_KEY`, `DRUTO_WEBHOOK_SECRET`, database passwords, private keys, or wallet seed phrases.
+
+## 5. Import the repository into Vercel
+
+1. Sign in to Vercel.
+2. Select **Add New → Project**.
+3. Import the GitHub repository.
+4. Select the repository root as the **Root Directory**.
+5. Confirm that Vercel detects **Next.js**.
+6. Keep the default build settings unless your repository has custom requirements.
+7. Deploy once. The first deployment gives you a temporary URL such as `https://your-project.vercel.app`.
+
+The starter includes `pnpm-lock.yaml`, so Vercel should detect pnpm automatically. If Vercel asks for commands, use `pnpm install` for installation and the project’s default Next.js build command.
+
+## 6. Add Vercel environment variables
+
+Open **Vercel Project → Settings → Environment Variables**. Add each variable for the environments you intend to use. For the live demonstration, select **Production**. It is useful to select **Preview** as well for safe testing.
+
+| Variable | Value | Exposure |
+| --- | --- | --- |
+| `DRUTO_API_KEY` | The seller’s Druto API key, such as `druto_test_...` | Server-only |
+| `DRUTO_WEBHOOK_SECRET` | The secret generated when registering the Druto webhook | Server-only |
+| `DRUTO_CHECKOUT_BASE_URL` | The deployed Druto host, not localhost | Server-only |
+| `DRUTO_CREATE_INTENT_ENDPOINT` | `/api/trpc/payments.createIntent` | Server-only |
+| `NEXT_PUBLIC_SHOP_URL` | Your public Dashda URL, such as `https://dashda.vercel.app` | Browser-safe URL |
+
+The starter’s exact `.env.example` currently contains:
+
+```env
+DRUTO_API_KEY=druto_test_replace_me
+DRUTO_WEBHOOK_SECRET=replace_after_registering_webhook
+DRUTO_CHECKOUT_BASE_URL=https://your-druto-host.example
+DRUTO_CREATE_INTENT_ENDPOINT=/api/trpc/payments.createIntent
+NEXT_PUBLIC_SHOP_URL=http://localhost:3000
+```
+
+Replace every placeholder. Do not rename the server-only variables with a `NEXT_PUBLIC_` prefix. After saving environment variables, trigger a new deployment because Vercel environment changes apply to new builds/functions.
+
+## 7. Confirm the public URL
+
+After redeploying, open the production URL and check that the starter page loads. Set `NEXT_PUBLIC_SHOP_URL` to the exact production URL, including `https://` and without a trailing path that does not exist.
+
+If you later bind a custom Dashda domain, update `NEXT_PUBLIC_SHOP_URL` to that domain and redeploy.
+
+## 8. Register the Druto webhook URL
+
+The webhook URL must use the production Vercel domain:
+
+```text
+https://YOUR_PROJECT.vercel.app/api/webhooks/druto
+```
+
+If you use a custom domain:
+
+```text
+https://dashda.example/api/webhooks/druto
+```
+
+Register this URL in Druto and copy the generated signing secret into `DRUTO_WEBHOOK_SECRET` in Vercel. Do not use a temporary Vercel preview URL for the permanent webhook because preview URLs can change.
+
+The included webhook route expects the raw request body, the `druto-signature` header, and the `x-druto-event-id` header. It must verify the signature before updating an order. Your production version must store the event ID in a database and ignore a duplicate event ID.
+
+## 9. Connect the Dashda database
+
+For a real store, add a managed database. Supabase PostgreSQL is a reasonable demo choice. Add the database connection string as a server-only Vercel variable, normally named something such as `DATABASE_URL`, after you add Prisma, Drizzle, or another database client to the starter.
+
+Add these payment fields to Dashda’s order record:
+
+```text
+paymentStatus
+ drutoPaymentIntentId
+ arcTransactionHash
+ paymentCurrency
+ paidAt
+```
+
+Add a separate webhook-event table with a unique `eventId`. In `create-payment/route.ts`, load the order by ID, calculate the amount from trusted product data, create the Druto Payment Intent, and save the intent ID. In `webhooks/druto/route.ts`, verify the signed event, deduplicate `eventId`, match `externalOrderId`, save the transaction hash, and mark the order paid exactly once.
+
+Do not fulfill an order based only on the customer’s browser redirect or a transaction hash supplied by the browser.
+
+## 10. Test the payment flow on Arc Testnet
+
+Use a disposable buyer wallet. Before approving, confirm all of the following in the Druto checkout and wallet prompt:
+
+- Network is Arc Testnet.
+- Asset is USDC.
+- Amount matches the Dashda order.
+- Receiving wallet is the approved seller wallet.
+- Order reference is the expected Dashda order ID.
+
+Then:
+
+1. Open the Dashda production URL.
+2. Create or select the test order.
+3. Click **Pay with Druto**.
+4. Connect the buyer wallet or scan the QR code.
+5. Approve the small USDC testnet payment.
+6. Wait for Druto verification.
+7. Open the buyer receipt.
+8. Open the Arcscan transaction link and confirm sender, recipient, asset, amount, and status.
+9. Open the seller’s Druto dashboard and refresh the payments view.
+10. Confirm the verified payment, Payment Intent ID, transaction hash, receipt, and seller details are visible.
+11. Confirm Dashda’s webhook handler changed the order to `paid` exactly once.
+
+## 11. Troubleshooting
+
+### The deployment shows a missing environment variable
+
+Open Vercel Project Settings → Environment Variables and check spelling, environment selection, and whether you redeployed after saving. Server variables must not be renamed.
+
+### The payment button returns a server error
+
+Check that `DRUTO_API_KEY` is valid, the seller is active, `DRUTO_CHECKOUT_BASE_URL` points to the actual Druto host, and `DRUTO_CREATE_INTENT_ENDPOINT` is exactly the supported endpoint path. Check Vercel Runtime Logs, not only browser logs.
+
+### The browser returns to Dashda but the order is still pending
+
+A browser return is not proof of payment. Check whether Druto verified the transaction and whether the webhook reached `/api/webhooks/druto`. Confirm the webhook secret, production URL, raw-body handling, event ID, and database update transaction.
+
+### The webhook endpoint returns 404
+
+Confirm the deployed route exists at `/api/webhooks/druto`, the repository root is correct, and the latest deployment contains the route file. Do not add a client-side route for the webhook.
+
+### The buyer paid but the seller dashboard is empty
+
+Confirm the payment was created with the correct `sellerId`, the seller wallet is approved and active, the Arc transaction is finalized, and the seller dashboard is refreshed. A pending or failed payment should not appear as a verified payment.
+
+## 12. Do not use mainnet yet
+
+This starter is configured for Arc Testnet and USDC. Before accepting production funds, complete a separate mainnet review covering wallet configuration, API-key scopes and rotation, webhook retries and dead-letter handling, rate limits, monitoring, reconciliation, refunds, audit logs, backups, seller suspension, and operational access control.

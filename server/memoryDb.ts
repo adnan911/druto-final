@@ -6,6 +6,7 @@ import {
   paymentTransactions,
   webhookEndpoints,
   webhookDeliveries,
+  walletLoginChallenges,
 } from "../drizzle/schema";
 
 export interface MemoryStore {
@@ -16,6 +17,7 @@ export interface MemoryStore {
   paymentTransactions: any[];
   webhookEndpoints: any[];
   webhookDeliveries: any[];
+  walletLoginChallenges: any[];
   [key: string]: any[];
 }
 
@@ -31,6 +33,7 @@ function getTableName(table: any): string {
   if (table === paymentTransactions) return "paymentTransactions";
   if (table === webhookEndpoints) return "webhookEndpoints";
   if (table === webhookDeliveries) return "webhookDeliveries";
+  if (table === walletLoginChallenges) return "walletLoginChallenges";
   return "unknown";
 }
 
@@ -133,6 +136,7 @@ export function createMemoryDb() {
     ],
     webhookEndpoints: [],
     webhookDeliveries: [],
+    walletLoginChallenges: [],
   };
 
   function getTableList(table: any): any[] {
