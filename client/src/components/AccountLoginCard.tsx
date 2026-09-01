@@ -116,7 +116,7 @@ export default function AccountLoginCard() {
       <div className="wallet-login-grid">
         <section className="wallet-login-copy">
           <div className="public-brand">
-            <img src="/manus-storage/druto-arc-mark_c8c084dd.png" alt="" />
+            <img src="/DRUTO_D_logo.png" alt="" />
             <strong>druto</strong>
           </div>
           <span className="public-kicker">
