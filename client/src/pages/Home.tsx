@@ -13,6 +13,7 @@ import { dashboardAccessState } from "@/lib/access";
 import { ARC_CHAIN_ID, ARC_CHAIN_ID_HEX, ARC_RPC_URL, ARC_USDC_ADDRESS, CIRCLE_FAUCET_URL, fetchArcUsdcBalance, encodeArcUsdcTransfer } from "@/lib/arcChain";
 import { toast } from "sonner";
 import { usePrivy } from "@privy-io/react-auth";
+import { useAccount, useConnect, useSignMessage } from "wagmi";
 import {
   Activity, AlertCircle, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, LogOut, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, Wallet, WalletCards, X, Zap
 } from "lucide-react";
@@ -50,10 +51,46 @@ function privyIdentityLabel(privyUser: ReturnType<typeof usePrivy>["user"]) {
 function Sidebar({ active, setActive, collapsed, setCollapsed, user }: { active: string; setActive: (value: string) => void; collapsed: boolean; setCollapsed: (value: boolean) => void; user: { name?: string | null; openId?: string | null } }) {
   const { user: privyUser, authenticated: privyAuthenticated, logout: privyLogout } = usePrivy();
   const drutoLogout = trpc.auth.logout.useMutation();
+  const createChallenge = trpc.auth.createWalletChallenge.useMutation();
+  const bindWallet = trpc.auth.bindWallet.useMutation();
   const utils = trpc.useUtils();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isBinding, setIsBinding] = useState(false);
   const isPrivy = user.openId?.startsWith("privy:") === true;
   const identity = isPrivy ? privyIdentityLabel(privyUser) : null;
+  const { address, isConnected } = useAccount();
+  const { connectAsync, connectors } = useConnect();
+  const { signMessageAsync } = useSignMessage();
+
+  const handleBindWallet = async () => {
+    setIsBinding(true);
+    try {
+      let activeAddress = address;
+      if (!isConnected || !activeAddress) {
+        const connector = connectors[0];
+        if (!connector) throw new Error("No EVM wallet detected (e.g. MetaMask).");
+        const connectResult = await connectAsync({ connector });
+        activeAddress = connectResult.accounts[0];
+      }
+      if (!activeAddress) throw new Error("Could not detect wallet address.");
+      const challenge = await createChallenge.mutateAsync({ walletAddress: activeAddress });
+      const signature = await signMessageAsync({ message: challenge.message });
+      await bindWallet.mutateAsync({
+        challengeId: challenge.challengeId,
+        walletAddress: activeAddress,
+        signature,
+      });
+      await utils.auth.me.invalidate();
+      toast.success(`Wallet ${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)} bound to your account!`);
+      setProfileOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to bind wallet");
+    } finally {
+      setIsBinding(false);
+    }
+  };
+
   const logout = async () => {
     try {
       if (privyAuthenticated) await privyLogout();
@@ -68,7 +105,31 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user }: { active:
     <div className="brand-row"><div className="brand-lockup"><Mark /><span>druto</span></div><button className="icon-button sidebar-toggle" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle navigation"><Menu size={17} /></button></div>
     <div className="environment-switch"><span className="live-dot" /> <span>Test environment</span><ChevronDown size={13} /></div>
     <nav className="side-nav">{navGroups.map(group => <div key={group.label} className="nav-group"><div className="nav-label">{group.label}</div>{group.items.map(item => <button key={item} onClick={() => item === "Developers" ? window.location.href = "/developers" : setActive(item)} className={classNames("nav-item", active === item && "nav-active")}><NavIcon item={item} /><span>{item}</span>{item === "Risk & compliance" && <span className="nav-count">3</span>}</button>)}</div>)}</nav>
-    <div className="sidebar-bottom"><button className="nav-item"><LifeBuoy size={17} /><span>Support</span></button><div className={classNames("profile-wrap", profileOpen && "profile-open")}><button className="user-card" onClick={() => setProfileOpen(!profileOpen)} aria-expanded={profileOpen} aria-label="Open profile menu"><div className="avatar">{user.name?.slice(0, 2).toUpperCase() || "DR"}</div><div className="user-meta"><strong>{user.name || "Workspace"}</strong><span>{isPrivy ? "Signed in with Privy" : "Workspace owner"}</span></div><MoreHorizontal size={16} /></button>{profileOpen && <div className="profile-menu"><div className="profile-menu-heading"><strong>{isPrivy ? "Signed in with Privy" : "Signed in"}</strong><span>{identity || "Authenticated workspace"}</span></div><button className="profile-logout" onClick={() => void logout()} disabled={drutoLogout.isPending}><LogOut size={15} />{drutoLogout.isPending ? "Logging out…" : "Logout"}</button></div>}</div></div>
+    <div className="sidebar-bottom">
+      <button className="nav-item"><LifeBuoy size={17} /><span>Support</span></button>
+      <div className={classNames("profile-wrap", profileOpen && "profile-open")}>
+        <button className="user-card" onClick={() => setProfileOpen(!profileOpen)} aria-expanded={profileOpen} aria-label="Open profile menu">
+          <div className="avatar">{user.name?.slice(0, 2).toUpperCase() || "DR"}</div>
+          <div className="user-meta">
+            <strong>{user.name || "Workspace"}</strong>
+            <span>{isPrivy ? "Signed in with Privy" : "Workspace owner"}</span>
+          </div>
+          <MoreHorizontal size={16} />
+        </button>
+        {profileOpen && <div className="profile-menu">
+          <div className="profile-menu-heading">
+            <strong>{isPrivy ? "Signed in with Privy" : "Signed in"}</strong>
+            <span>{identity || "Authenticated workspace"}</span>
+          </div>
+          <button className="profile-logout" onClick={() => void handleBindWallet()} disabled={isBinding} style={{ borderBottom: "1px solid var(--border-subtle, rgba(0,0,0,0.08))", marginBottom: "0.25rem", borderRadius: "0" }}>
+            <Wallet size={15} />{isBinding ? "Binding…" : "Bind EVM Wallet"}
+          </button>
+          <button className="profile-logout" onClick={() => void logout()} disabled={drutoLogout.isPending}>
+            <LogOut size={15} />{drutoLogout.isPending ? "Logging out…" : "Logout"}
+          </button>
+        </div>}
+      </div>
+    </div>
   </aside>;
 }
 

@@ -100,7 +100,15 @@ export default function AccountLoginCard() {
       }
       const accessToken = await privy.getAccessToken();
       if (!accessToken) throw new Error("Your account session is not ready yet");
-      await privyAccountLogin.mutateAsync({ accessToken });
+      const userEmail = privy.user?.email?.address || privy.user?.google?.email || undefined;
+      const userWallet = privy.user?.wallet?.address || undefined;
+      const userName = privy.user?.google?.name || (userEmail ? userEmail.split("@")[0] : undefined);
+      await privyAccountLogin.mutateAsync({
+        accessToken,
+        email: userEmail,
+        name: userName,
+        walletAddress: userWallet,
+      });
       await utils.auth.me.invalidate();
       toast.success("Account connected");
       window.location.reload();

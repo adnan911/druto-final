@@ -181,25 +181,45 @@ export const appRouter = router({
 
         await db.update(walletLoginChallenges).set({ usedAt: new Date() }).where(eq(walletLoginChallenges.id, challenge.id));
 
-        const openId = `wallet-${walletAddress.toLowerCase()}`;
-        const name = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+        // Check if this wallet is associated with an existing merchant account or user
+        const [boundAccount] = await db
+          .select()
+          .from(merchantAccounts)
+          .where(eq(merchantAccounts.receivingAddress, walletAddress))
+          .limit(1);
+
+        let targetOpenId = `wallet-${walletAddress.toLowerCase()}`;
+        let targetName = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+
+        if (boundAccount && boundAccount.ownerUserId !== null) {
+          const [ownerUser] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, boundAccount.ownerUserId))
+            .limit(1);
+          if (ownerUser) {
+            targetOpenId = ownerUser.openId;
+            targetName = ownerUser.name || targetName;
+          }
+        }
+
         const signedInAt = new Date();
         await db.insert(users).values({
-          openId,
-          name,
+          openId: targetOpenId,
+          name: targetName,
           loginMethod: "wallet",
           role: "admin",
           lastSignedIn: signedInAt,
         }).onDuplicateKeyUpdate({
-          set: { name, loginMethod: "wallet", role: "admin", lastSignedIn: signedInAt },
+          set: { name: targetName, loginMethod: "wallet", role: "admin", lastSignedIn: signedInAt },
         });
 
-        const token = await sdk.createSessionToken(openId, { name });
+        const token = await sdk.createSessionToken(targetOpenId, { name: targetName });
         ctx.res.cookie(COOKIE_NAME, token, {
           ...getSessionCookieOptions(ctx.req),
           maxAge: 365 * 24 * 60 * 60 * 1000,
         });
-        return { authenticated: true, openId, name, token, walletAddress } as const;
+        return { authenticated: true, openId: targetOpenId, name: targetName, token, walletAddress } as const;
       }),
     directAccountLogin: publicProcedure.input(z.object({ email: z.string().email().optional(), name: z.string().optional() }).optional()).mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -213,19 +233,68 @@ export const appRouter = router({
       ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 365 * 24 * 60 * 60 * 1000 });
       return { authenticated: true, openId, name, token } as const;
     }),
-    privyLogin: publicProcedure.input(z.object({ accessToken: z.string().min(20).max(4096) })).mutation(async ({ input, ctx }) => {
+    privyLogin: publicProcedure.input(z.object({
+      accessToken: z.string().min(20).max(4096),
+      email: z.string().email().optional(),
+      name: z.string().optional(),
+      walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+    })).mutation(async ({ input, ctx }) => {
       let verified;
       try { verified = await verifyPrivyToken(input.accessToken); } catch { throw new TRPCError({ code: "UNAUTHORIZED", message: "Privy authentication could not be verified" }); }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
       const openId = privyOpenId(verified.user_id);
-      const name = "Privy workspace";
+      const email = input.email;
+      const name = input.name || (email ? email.split("@")[0] : "Privy workspace");
       const signedInAt = new Date();
-      await db.insert(users).values({ openId, name, loginMethod: "privy", lastSignedIn: signedInAt }).onDuplicateKeyUpdate({ set: { name, loginMethod: "privy", lastSignedIn: signedInAt } });
+      await db.insert(users).values({ openId, name, email, loginMethod: "privy", role: "admin", lastSignedIn: signedInAt }).onDuplicateKeyUpdate({ set: { name, email, loginMethod: "privy", role: "admin", lastSignedIn: signedInAt } });
       const token = await sdk.createSessionToken(openId, { name });
       ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 365 * 24 * 60 * 60 * 1000 });
       return { authenticated: true, openId, name } as const;
     }),
+    bindWallet: protectedProcedure
+      .input(z.object({
+        challengeId: z.string().min(1).max(32),
+        walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+        signature: z.string().regex(/^0x[a-fA-F0-9]+$/),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+        const walletAddress = getAddress(input.walletAddress);
+        const [challenge] = await db
+          .select()
+          .from(walletLoginChallenges)
+          .where(eq(walletLoginChallenges.id, input.challengeId))
+          .limit(1);
+        if (!challenge) throw new TRPCError({ code: "NOT_FOUND", message: "Challenge not found" });
+        if (challenge.usedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Challenge already used" });
+        if (new Date() > new Date(challenge.expiresAt)) throw new TRPCError({ code: "BAD_REQUEST", message: "Challenge expired" });
+        if (challenge.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Wallet mismatch" });
+        }
+
+        const isValid = await verifyMessage({
+          address: walletAddress,
+          message: challenge.message,
+          signature: input.signature as `0x${string}`,
+        }).catch(() => false);
+
+        if (!isValid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid wallet signature" });
+
+        await db.update(walletLoginChallenges).set({ usedAt: new Date() }).where(eq(walletLoginChallenges.id, challenge.id));
+
+        const updatedName = ctx.user.name && !ctx.user.name.startsWith("0x")
+          ? `${ctx.user.name} (${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)})`
+          : `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`;
+
+        await db.update(users).set({
+          name: updatedName,
+          updatedAt: new Date(),
+        }).where(eq(users.id, ctx.user.id));
+
+        return { success: true, walletAddress, name: updatedName };
+      }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
