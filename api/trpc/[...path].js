@@ -1391,24 +1391,32 @@ Issued At: ${issuedAt.toISOString()}`;
         throw new TRPCError3({ code: "UNAUTHORIZED", message: "Invalid wallet signature" });
       }
       await db.update(walletLoginChallenges).set({ usedAt: /* @__PURE__ */ new Date() }).where(eq3(walletLoginChallenges.id, challenge.id));
-      const openId = `wallet-${walletAddress.toLowerCase()}`;
-      const name = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+      const [boundAccount] = await db.select().from(merchantAccounts).where(eq3(merchantAccounts.receivingAddress, walletAddress)).limit(1);
+      let targetOpenId = `wallet-${walletAddress.toLowerCase()}`;
+      let targetName = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+      if (boundAccount && boundAccount.ownerUserId !== null) {
+        const [ownerUser] = await db.select().from(users).where(eq3(users.id, boundAccount.ownerUserId)).limit(1);
+        if (ownerUser) {
+          targetOpenId = ownerUser.openId;
+          targetName = ownerUser.name || targetName;
+        }
+      }
       const signedInAt = /* @__PURE__ */ new Date();
       await db.insert(users).values({
-        openId,
-        name,
+        openId: targetOpenId,
+        name: targetName,
         loginMethod: "wallet",
         role: "admin",
         lastSignedIn: signedInAt
       }).onDuplicateKeyUpdate({
-        set: { name, loginMethod: "wallet", role: "admin", lastSignedIn: signedInAt }
+        set: { name: targetName, loginMethod: "wallet", role: "admin", lastSignedIn: signedInAt }
       });
-      const token = await sdk.createSessionToken(openId, { name });
+      const token = await sdk.createSessionToken(targetOpenId, { name: targetName });
       ctx.res.cookie(COOKIE_NAME, token, {
         ...getSessionCookieOptions(ctx.req),
         maxAge: 365 * 24 * 60 * 60 * 1e3
       });
-      return { authenticated: true, openId, name, token, walletAddress };
+      return { authenticated: true, openId: targetOpenId, name: targetName, token, walletAddress };
     }),
     directAccountLogin: publicProcedure.input(z2.object({ email: z2.string().email().optional(), name: z2.string().optional() }).optional()).mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1422,7 +1430,12 @@ Issued At: ${issuedAt.toISOString()}`;
       ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 365 * 24 * 60 * 60 * 1e3 });
       return { authenticated: true, openId, name, token };
     }),
-    privyLogin: publicProcedure.input(z2.object({ accessToken: z2.string().min(20).max(4096) })).mutation(async ({ input, ctx }) => {
+    privyLogin: publicProcedure.input(z2.object({
+      accessToken: z2.string().min(20).max(4096),
+      email: z2.string().email().optional(),
+      name: z2.string().optional(),
+      walletAddress: z2.string().regex(/^0x[a-fA-F0-9]{40}$/).optional()
+    })).mutation(async ({ input, ctx }) => {
       let verified;
       try {
         verified = await verifyPrivyToken(input.accessToken);
@@ -1432,12 +1445,42 @@ Issued At: ${issuedAt.toISOString()}`;
       const db = await getDb();
       if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
       const openId = privyOpenId(verified.user_id);
-      const name = "Privy workspace";
+      const email = input.email;
+      const name = input.name || (email ? email.split("@")[0] : "Privy workspace");
       const signedInAt = /* @__PURE__ */ new Date();
-      await db.insert(users).values({ openId, name, loginMethod: "privy", lastSignedIn: signedInAt }).onDuplicateKeyUpdate({ set: { name, loginMethod: "privy", lastSignedIn: signedInAt } });
+      await db.insert(users).values({ openId, name, email, loginMethod: "privy", role: "admin", lastSignedIn: signedInAt }).onDuplicateKeyUpdate({ set: { name, email, loginMethod: "privy", role: "admin", lastSignedIn: signedInAt } });
       const token = await sdk.createSessionToken(openId, { name });
       ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 365 * 24 * 60 * 60 * 1e3 });
       return { authenticated: true, openId, name };
+    }),
+    bindWallet: protectedProcedure.input(z2.object({
+      challengeId: z2.string().min(1).max(32),
+      walletAddress: z2.string().regex(/^0x[a-fA-F0-9]{40}$/),
+      signature: z2.string().regex(/^0x[a-fA-F0-9]+$/)
+    })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const walletAddress = getAddress2(input.walletAddress);
+      const [challenge] = await db.select().from(walletLoginChallenges).where(eq3(walletLoginChallenges.id, input.challengeId)).limit(1);
+      if (!challenge) throw new TRPCError3({ code: "NOT_FOUND", message: "Challenge not found" });
+      if (challenge.usedAt) throw new TRPCError3({ code: "BAD_REQUEST", message: "Challenge already used" });
+      if (/* @__PURE__ */ new Date() > new Date(challenge.expiresAt)) throw new TRPCError3({ code: "BAD_REQUEST", message: "Challenge expired" });
+      if (challenge.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+        throw new TRPCError3({ code: "BAD_REQUEST", message: "Wallet mismatch" });
+      }
+      const isValid = await verifyMessage({
+        address: walletAddress,
+        message: challenge.message,
+        signature: input.signature
+      }).catch(() => false);
+      if (!isValid) throw new TRPCError3({ code: "UNAUTHORIZED", message: "Invalid wallet signature" });
+      await db.update(walletLoginChallenges).set({ usedAt: /* @__PURE__ */ new Date() }).where(eq3(walletLoginChallenges.id, challenge.id));
+      const updatedName = ctx.user.name && !ctx.user.name.startsWith("0x") ? `${ctx.user.name} (${walletAddress.slice(0, 6)}\u2026${walletAddress.slice(-4)})` : `${walletAddress.slice(0, 6)}\u2026${walletAddress.slice(-4)}`;
+      await db.update(users).set({
+        name: updatedName,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq3(users.id, ctx.user.id));
+      return { success: true, walletAddress, name: updatedName };
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
