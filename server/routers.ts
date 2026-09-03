@@ -295,6 +295,24 @@ export const appRouter = router({
 
         return { success: true, walletAddress, name: updatedName };
       }),
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().optional(),
+        profileImage: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+        
+        await db.update(users).set({
+          name: input.name ?? ctx.user.name,
+          profileImage: input.profileImage ?? ctx.user.profileImage,
+          updatedAt: new Date(),
+        }).where(eq(users.id, ctx.user.id));
+        
+        const [updatedUser] = await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1);
+        return updatedUser;
+      }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });

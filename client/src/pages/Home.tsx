@@ -48,13 +48,57 @@ function privyIdentityLabel(privyUser: ReturnType<typeof usePrivy>["user"]) {
   return null;
 }
 
-function Sidebar({ active, setActive, collapsed, setCollapsed, user }: { active: string; setActive: (value: string) => void; collapsed: boolean; setCollapsed: (value: boolean) => void; user: { name?: string | null; openId?: string | null } }) {
+function ProfileEditModal({ user, onClose }: { user: { name?: string | null; profileImage?: string | null }; onClose: () => void }) {
+  const [name, setName] = useState(user.name || "");
+  const [profileImage, setProfileImage] = useState(user.profileImage || "");
+  const updateProfile = trpc.auth.updateProfile.useMutation();
+  const utils = trpc.useUtils();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateProfile.mutateAsync({ name, profileImage });
+      await utils.auth.me.invalidate();
+      toast.success("Profile updated!");
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update profile");
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="card" onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: "400px", padding: "20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <h3 style={{ margin: 0 }}>Edit Profile</h3>
+          <button className="icon-button" onClick={onClose}><X size={16} /></button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div>
+            <label style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }}>Name</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }}>Profile Image URL</label>
+            <input type="text" value={profileImage} onChange={e => setProfileImage(e.target.value)} placeholder="https://example.com/avatar.png" style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
+          </div>
+          <button type="submit" className="button button-primary" disabled={updateProfile.isPending} style={{ marginTop: "8px", justifyContent: "center" }}>
+            {updateProfile.isPending ? "Saving..." : "Save Changes"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ active, setActive, collapsed, setCollapsed, user }: { active: string; setActive: (value: string) => void; collapsed: boolean; setCollapsed: (value: boolean) => void; user: { name?: string | null; openId?: string | null; profileImage?: string | null } }) {
   const { user: privyUser, authenticated: privyAuthenticated, logout: privyLogout } = usePrivy();
   const drutoLogout = trpc.auth.logout.useMutation();
   const createChallenge = trpc.auth.createWalletChallenge.useMutation();
   const bindWallet = trpc.auth.bindWallet.useMutation();
   const utils = trpc.useUtils();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [isBinding, setIsBinding] = useState(false);
   const isPrivy = user.openId?.startsWith("privy:") === true;
   const identity = isPrivy ? privyIdentityLabel(privyUser) : null;
@@ -109,7 +153,9 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user }: { active:
       <button className="nav-item"><LifeBuoy size={17} /><span>Support</span></button>
       <div className={classNames("profile-wrap", profileOpen && "profile-open")}>
         <button className="user-card" onClick={() => setProfileOpen(!profileOpen)} aria-expanded={profileOpen} aria-label="Open profile menu">
-          <div className="avatar">{user.name?.slice(0, 2).toUpperCase() || "DR"}</div>
+          <div className="avatar" style={{ overflow: "hidden" }}>
+            {user.profileImage ? <img src={user.profileImage} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (user.name?.slice(0, 2).toUpperCase() || "DR")}
+          </div>
           <div className="user-meta">
             <strong>{user.name || "Workspace"}</strong>
             <span>{isPrivy ? "Signed in with Privy" : "Workspace owner"}</span>
@@ -121,6 +167,9 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user }: { active:
             <strong>{isPrivy ? "Signed in with Privy" : "Signed in"}</strong>
             <span>{identity || "Authenticated workspace"}</span>
           </div>
+          <button className="profile-logout" onClick={() => { setEditModalOpen(true); setProfileOpen(false); }} style={{ borderBottom: "1px solid var(--border-subtle, rgba(0,0,0,0.08))", marginBottom: "0.25rem", borderRadius: "0", color: "inherit" }}>
+            <Settings2 size={15} /> Edit Profile
+          </button>
           <button className="profile-logout" onClick={() => void handleBindWallet()} disabled={isBinding} style={{ borderBottom: "1px solid var(--border-subtle, rgba(0,0,0,0.08))", marginBottom: "0.25rem", borderRadius: "0" }}>
             <Wallet size={15} />{isBinding ? "Binding…" : "Bind EVM Wallet"}
           </button>
@@ -130,6 +179,7 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user }: { active:
         </div>}
       </div>
     </div>
+    {editModalOpen && <ProfileEditModal user={user} onClose={() => setEditModalOpen(false)} />}
   </aside>;
 }
 
