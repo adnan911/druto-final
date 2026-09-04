@@ -478,24 +478,39 @@ export const appRouter = router({
 
     listIntents: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      if (ctx.user.role === "admin") {
+        return db.select().from(paymentIntents);
+      }
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
       if (!accountIds.length) return [];
-      return db!.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      return db.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
     }),
 
     verifiedPayments: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      if (ctx.user.role === "admin") {
+        return db.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id));
+      }
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
       if (!accountIds.length) return [];
-      return db!.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      return db.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
     }),
 
     summary: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
-      const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
-      if (!accountIds.length) return { availableUsdc: "0.00", grossUsdc: "0.00", pendingUsdc: "0.00", successfulCount: 0, pendingCount: 0, totalCount: 0 };
-      const intents = await db!.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
-      const verifiedRows = await db!.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      let intents, verifiedRows;
+      if (ctx.user.role === "admin") {
+        intents = await db.select().from(paymentIntents);
+        verifiedRows = await db.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id));
+      } else {
+        const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
+        if (!accountIds.length) return { availableUsdc: "0.00", grossUsdc: "0.00", pendingUsdc: "0.00", successfulCount: 0, pendingCount: 0, totalCount: 0 };
+        intents = await db.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
+        verifiedRows = await db.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      }
       const pending = intents.filter(intent => intent.status === "requires_payment" || intent.status === "submitted" || intent.status === "verifying");
       const verifiedSummary = summarizeVerifiedRows(verifiedRows);
       const pendingAtomic = pending.reduce((sum, intent) => sum + BigInt(intent.amountAtomic), BigInt(0));
