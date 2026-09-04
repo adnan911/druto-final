@@ -79,7 +79,7 @@ export type VerifiedArcTransfer = {
 };
 
 export async function verifyArcUsdcTransfer(hash: Hash, expectedAmountAtomic: string, expectedRecipient: string = ARC_MERCHANT_WALLET_ADDRESS): Promise<VerifiedArcTransfer> {
-  const receipt = await arcPublicClient.waitForTransactionReceipt({ hash, confirmations: 1, pollingInterval: 500 });
+  const receipt = await arcPublicClient.waitForTransactionReceipt({ hash, confirmations: 1, pollingInterval: 500, timeout: 60_000 });
   if (receipt.status !== "success") throw new Error("Arc transaction reverted");
 
   const resolvedRecipient = getAddress(expectedRecipient) as `0x${string}`;
