@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@druto/sdk':
-        specifier: file:../druto-sdk
-        version: file:../druto-sdk
+        specifier: file:./lib/druto-sdk
+        version: file:lib/druto-sdk
       next:
         specifier: ^14.2.0
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -36,8 +36,8 @@ importers:
 
 packages:
 
-  '@druto/sdk@file:../druto-sdk':
-    resolution: {directory: ../druto-sdk, type: directory}
+  '@druto/sdk@file:lib/druto-sdk':
+    resolution: {directory: lib/druto-sdk, type: directory}
 
   '@next/env@14.2.35':
     resolution: {integrity: sha512-DuhvCtj4t9Gwrx80dmz2F4t/zKQ4ktN8WrMwOuVzkJfBilwAwGr6v16M5eI8yCuZ63H9TTuEU09Iu2HqkzFPVQ==}
@@ -219,7 +219,7 @@ packages:
 
 snapshots:
 
-  '@druto/sdk@file:../druto-sdk': {}
+  '@druto/sdk@file:lib/druto-sdk': {}
 
   '@next/env@14.2.35': {}
 

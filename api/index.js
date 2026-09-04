@@ -43,6 +43,7 @@ var users = mysqlTable("users", {
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
+  profileImage: text("profileImage"),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -533,7 +534,7 @@ async function upsertUser(user) {
       openId: user.openId
     };
     const updateSet = {};
-    const textFields = ["name", "email", "loginMethod"];
+    const textFields = ["name", "email", "profileImage", "loginMethod"];
     const assignNullable = (field) => {
       const value = user[field];
       if (value === void 0) return;
@@ -1483,6 +1484,20 @@ Issued At: ${issuedAt.toISOString()}`;
       }).where(eq3(users.id, ctx.user.id));
       return { success: true, walletAddress, name: updatedName };
     }),
+    updateProfile: protectedProcedure.input(z2.object({
+      name: z2.string().optional(),
+      profileImage: z2.string().optional()
+    })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      await db.update(users).set({
+        name: input.name ?? ctx.user.name,
+        profileImage: input.profileImage ?? ctx.user.profileImage,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq3(users.id, ctx.user.id));
+      const [updatedUser] = await db.select().from(users).where(eq3(users.id, ctx.user.id)).limit(1);
+      return updatedUser;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -1501,6 +1516,20 @@ Issued At: ${issuedAt.toISOString()}`;
     register: protectedProcedure.input(z2.object({ marketplaceId: z2.string().min(1).max(128), sellerId: z2.string().min(1).max(128), displayName: z2.string().min(1).max(255), receivingAddress: z2.string().regex(/^0x[a-fA-F0-9]{40}$/) })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const [existing] = await db.select().from(merchantAccounts).where(and2(eq3(merchantAccounts.marketplaceId, input.marketplaceId), eq3(merchantAccounts.externalSellerId, input.sellerId))).limit(1);
+      if (existing) {
+        if (existing.ownerUserId && existing.ownerUserId !== ctx.user.id && ctx.user.role !== "admin") {
+          throw new TRPCError3({ code: "CONFLICT", message: `Seller ID '${input.sellerId}' in marketplace '${input.marketplaceId}' is already registered by another account.` });
+        }
+        await db.update(merchantAccounts).set({
+          displayName: input.displayName,
+          receivingAddress: input.receivingAddress,
+          ownerUserId: ctx.user.id,
+          updatedAt: /* @__PURE__ */ new Date()
+        }).where(eq3(merchantAccounts.id, existing.id));
+        const [updated] = await db.select().from(merchantAccounts).where(eq3(merchantAccounts.id, existing.id)).limit(1);
+        return updated;
+      }
       const id = `ma_${nanoid2(12)}`;
       try {
         await db.insert(merchantAccounts).values({ id, marketplaceId: input.marketplaceId, externalSellerId: input.sellerId, ownerUserId: ctx.user.id, displayName: input.displayName, receivingAddress: input.receivingAddress, status: "pending" });

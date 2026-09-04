@@ -336,6 +336,20 @@ export const appRouter = router({
     register: protectedProcedure.input(z.object({ marketplaceId: z.string().min(1).max(128), sellerId: z.string().min(1).max(128), displayName: z.string().min(1).max(255), receivingAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/) })).mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const [existing] = await db.select().from(merchantAccounts).where(and(eq(merchantAccounts.marketplaceId, input.marketplaceId), eq(merchantAccounts.externalSellerId, input.sellerId))).limit(1);
+      if (existing) {
+        if (existing.ownerUserId && existing.ownerUserId !== ctx.user.id && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "CONFLICT", message: `Seller ID '${input.sellerId}' in marketplace '${input.marketplaceId}' is already registered by another account.` });
+        }
+        await db.update(merchantAccounts).set({
+          displayName: input.displayName,
+          receivingAddress: input.receivingAddress,
+          ownerUserId: ctx.user.id,
+          updatedAt: new Date(),
+        }).where(eq(merchantAccounts.id, existing.id));
+        const [updated] = await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, existing.id)).limit(1);
+        return updated;
+      }
       const id = `ma_${nanoid(12)}`;
       try {
         await db.insert(merchantAccounts).values({ id, marketplaceId: input.marketplaceId, externalSellerId: input.sellerId, ownerUserId: ctx.user.id, displayName: input.displayName, receivingAddress: input.receivingAddress, status: "pending" });
