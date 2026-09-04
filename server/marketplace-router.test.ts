@@ -75,15 +75,15 @@ describe("marketplace Payment Intent router contract", () => {
     await expect(caller.payments.createIntent({ externalOrderId: "SELLER-AUTH", itemName: "Seller item", amount: "1.00", seller: { marketplaceId: "market_auth", sellerId: "seller_auth" } })).rejects.toThrow("seller API key is required");
   });
 
-  it("allows self-service pending seller registration before admin approval", async () => {
-    const { db, rows } = createDbMock();
+  it("allows self-service seller registration", async () => {
+    const { db, rows } = createDbMock([], [[], [], []]);
     getDbMock.mockResolvedValue(db);
     const adminCaller = appRouter.createCaller({ user: { id: 7, openId: "admin-owner", role: "admin" }, req: {}, res: {} } as never);
     await adminCaller.merchantAccounts.register({ marketplaceId: "market_1", sellerId: "seller_new", displayName: "New Seller", receivingAddress: "0x2222222222222222222222222222222222222222" });
-    expect(rows[0]).toMatchObject({ ownerUserId: 7, status: "pending", receivingAddress: "0x2222222222222222222222222222222222222222" });
+    expect(rows[0]).toMatchObject({ ownerUserId: 7, status: "active", receivingAddress: "0x2222222222222222222222222222222222222222" });
     const userCaller = appRouter.createCaller({ user: { id: 8, openId: "regular-user", role: "user" }, req: {}, res: {} } as never);
     const selfRegistered = await userCaller.merchantAccounts.register({ marketplaceId: "market_2", sellerId: "seller_other", displayName: "Other Seller", receivingAddress: "0x5555555555555555555555555555555555555555" });
-    expect(selfRegistered).toMatchObject({ ownerUserId: 8, status: "pending", marketplaceId: "market_2", externalSellerId: "seller_other" });
+    expect(selfRegistered).toMatchObject({ ownerUserId: 8, status: "active", marketplaceId: "market_2", externalSellerId: "seller_other" });
   });
 
   it("provisions a webhook secret for an owner’s pending seller account", async () => {
