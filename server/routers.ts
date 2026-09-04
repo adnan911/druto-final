@@ -345,6 +345,7 @@ export const appRouter = router({
           displayName: input.displayName,
           receivingAddress: input.receivingAddress,
           ownerUserId: ctx.user.id,
+          status: "active",
           updatedAt: new Date(),
         }).where(eq(merchantAccounts.id, existing.id));
         const [updated] = await db.select().from(merchantAccounts).where(eq(merchantAccounts.id, existing.id)).limit(1);
@@ -352,7 +353,7 @@ export const appRouter = router({
       }
       const id = `ma_${nanoid(12)}`;
       try {
-        await db.insert(merchantAccounts).values({ id, marketplaceId: input.marketplaceId, externalSellerId: input.sellerId, ownerUserId: ctx.user.id, displayName: input.displayName, receivingAddress: input.receivingAddress, status: "pending" });
+        await db.insert(merchantAccounts).values({ id, marketplaceId: input.marketplaceId, externalSellerId: input.sellerId, ownerUserId: ctx.user.id, displayName: input.displayName, receivingAddress: input.receivingAddress, status: "active" });
       } catch (error) {
         throw new TRPCError({ code: "CONFLICT", message: error instanceof Error ? error.message : "Seller account already exists" });
       }
