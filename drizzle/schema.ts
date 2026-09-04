@@ -40,7 +40,7 @@ export const apiKeys = mysqlTable("apiKeys", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   lastUsedAt: timestamp("lastUsedAt"),
   revokedAt: timestamp("revokedAt"),
-}, table => ({ ownerCreatedIndex: uniqueIndex("apiKeys_owner_created_unique").on(table.ownerUserId, table.createdAt) }));
+});
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type InsertApiKey = typeof apiKeys.$inferInsert;

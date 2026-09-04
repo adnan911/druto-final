@@ -63,7 +63,7 @@ var apiKeys = mysqlTable("apiKeys", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   lastUsedAt: timestamp("lastUsedAt"),
   revokedAt: timestamp("revokedAt")
-}, (table) => ({ ownerCreatedIndex: uniqueIndex("apiKeys_owner_created_unique").on(table.ownerUserId, table.createdAt) }));
+});
 var walletLoginChallenges = mysqlTable("walletLoginChallenges", {
   id: varchar("id", { length: 32 }).primaryKey(),
   walletAddress: varchar("walletAddress", { length: 42 }).notNull(),

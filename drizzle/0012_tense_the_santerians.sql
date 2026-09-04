@@ -1,0 +1,1 @@
+ALTER TABLE `apiKeys` DROP INDEX `apiKeys_owner_created_unique`;
