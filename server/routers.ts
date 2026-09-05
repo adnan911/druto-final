@@ -75,15 +75,18 @@ function filterMerchantRows<T extends { merchantAccountId?: string | null }>(row
   return rows.filter(row => row.merchantAccountId === merchantAccountId);
 }
 
-async function requireSellerApiKey(db: Awaited<ReturnType<typeof getDb>>, request: { headers: { authorization?: string | string[] } }, seller: z.infer<typeof sellerRoutingInput>) {
+async function requireSellerApiKey(db: Awaited<ReturnType<typeof getDb>>, request: { headers?: { authorization?: string | string[] } } | undefined, seller?: z.infer<typeof sellerRoutingInput>) {
   if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
-  const authorization = request.headers.authorization;
+  const authorization = request?.headers?.authorization;
   if (typeof authorization !== "string" || !authorization.startsWith("Bearer ")) throw new TRPCError({ code: "UNAUTHORIZED", message: "A Druto seller API key is required" });
   const secret = authorization.slice("Bearer ".length).trim();
   if (!secret) throw new TRPCError({ code: "UNAUTHORIZED", message: "A Druto seller API key is required" });
   const [key] = await db.select().from(apiKeys).where(eq(apiKeys.secretHash, hashApiKey(secret))).limit(1);
   if (!key || key.revokedAt) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid or revoked Druto API key" });
-  if (key.marketplaceId !== seller.marketplaceId || key.sellerId !== seller.sellerId || !key.merchantAccountId) throw new TRPCError({ code: "FORBIDDEN", message: "This API key is not linked to the requested seller" });
+  if (key.merchantAccountId && seller) {
+    if (key.marketplaceId && key.marketplaceId !== seller.marketplaceId) throw new TRPCError({ code: "FORBIDDEN", message: "This API key is not linked to the requested seller" });
+    if (key.sellerId && key.sellerId !== seller.sellerId) throw new TRPCError({ code: "FORBIDDEN", message: "This API key is not linked to the requested seller" });
+  }
   await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, key.id));
   return key;
 }
@@ -406,7 +409,11 @@ export const appRouter = router({
       const amountAtomic = amountToAtomicUsdc(input.amount);
       const orderContext = input.orderContext ? JSON.stringify(input.orderContext) : null;
       const returnUrl = normalizeMarketplaceReturnUrl(input.returnUrl);
-      if (input.seller && !resolveLegacyDemoMerchantAccount(input.seller)) await requireSellerApiKey(db, ctx.req, input.seller);
+      const authorization = ctx.req?.headers?.authorization;
+      const hasApiKey = typeof authorization === "string" && authorization.startsWith("Bearer ");
+      if (hasApiKey || (input.seller && !resolveLegacyDemoMerchantAccount(input.seller))) {
+        await requireSellerApiKey(db, ctx.req, input.seller);
+      }
       const merchantAccount = input.seller ? await resolveMerchantAccount(db, input.seller) : null;
       const merchantAddress = merchantAccount?.receivingAddress ?? process.env.ARC_MERCHANT_WALLET_ADDRESS!;
       const [existing] = await db.select().from(paymentIntents).where(eq(paymentIntents.idempotencyKey, idempotencyKey)).limit(1);
