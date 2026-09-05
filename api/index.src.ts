@@ -14,6 +14,12 @@ async function createApp(): Promise<Express> {
   const app = express();
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.use((req, _res, next) => {
+    if (req.method === "POST" && req.body && typeof req.body === "object" && !("json" in req.body) && !Array.isArray(req.body)) {
+      req.body = { json: req.body };
+    }
+    next();
+  });
   registerStorageProxy(app);
   registerOAuthRoutes(app);
 

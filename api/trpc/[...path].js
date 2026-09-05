@@ -1605,7 +1605,8 @@ Issued At: ${issuedAt.toISOString()}`;
         } catch (error) {
           throw new TRPCError3({ code: "CONFLICT", message: error instanceof Error ? error.message : "Idempotency mismatch" });
         }
-        return { id: existing.id, externalOrderId: existing.externalOrderId, itemName: existing.itemName, buyerLabel: existing.buyerLabel, returnUrl: existing.returnUrl, displayAmount: (Number(existing.amountAtomic) / 1e6).toFixed(6), asset: "USDC", network: "arc-testnet", marketplaceId: existing.marketplaceId, sellerId: existing.sellerId, merchantAccountId: existing.merchantAccountId, merchantAddress: existing.merchantAddress, expiresAt: existing.expiresAt, checkoutUrl: `/checkout/${existing.id}` };
+        const baseUrl2 = process.env.DRUTO_API_URL || "https://druto-final.vercel.app";
+        return { id: existing.id, externalOrderId: existing.externalOrderId, itemName: existing.itemName, buyerLabel: existing.buyerLabel, returnUrl: existing.returnUrl, displayAmount: (Number(existing.amountAtomic) / 1e6).toFixed(6), asset: "USDC", network: "arc-testnet", marketplaceId: existing.marketplaceId, sellerId: existing.sellerId, merchantAccountId: existing.merchantAccountId, merchantAddress: existing.merchantAddress, expiresAt: existing.expiresAt, checkoutUrl: `/checkout/${existing.id}`, redirectUrl: `${baseUrl2}/checkout/${existing.id}` };
       }
       const id = `pi_${nanoid2(12)}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1e3);
@@ -1627,6 +1628,7 @@ Issued At: ${issuedAt.toISOString()}`;
         status: "requires_payment",
         expiresAt
       });
+      const baseUrl = process.env.DRUTO_API_URL || "https://druto-final.vercel.app";
       return {
         id,
         externalOrderId: input.externalOrderId,
@@ -1641,7 +1643,8 @@ Issued At: ${issuedAt.toISOString()}`;
         network: "arc-testnet",
         merchantAddress,
         expiresAt,
-        checkoutUrl: `/checkout/${id}`
+        checkoutUrl: `/checkout/${id}`,
+        redirectUrl: `${baseUrl}/checkout/${id}`
       };
     }),
     reconcileLegacyIntent: protectedProcedure.input(z2.object({ intentId: z2.string().min(1).max(32).optional(), transactionHash: z2.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(), seller: sellerRoutingInput }).refine((value) => Boolean(value.intentId || value.transactionHash), { message: "Provide a Payment Intent ID or transaction hash" })).mutation(async ({ input, ctx }) => {
@@ -1873,6 +1876,33 @@ function safeErrorMessage(error) {
   if (!(error instanceof Error)) return "Unknown tRPC bootstrap error";
   return error.message.replace(/\s+/g, " ").slice(0, 240) || "Unknown tRPC bootstrap error";
 }
+async function parseAndNormalizeBody(req) {
+  if (req.body !== void 0) {
+    if (req.body && typeof req.body === "object" && !("json" in req.body) && !Array.isArray(req.body)) {
+      req.body = { json: req.body };
+    }
+    return;
+  }
+  if (req.method === "POST") {
+    const buffers = [];
+    for await (const chunk of req) {
+      buffers.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    }
+    const raw = Buffer.concat(buffers).toString("utf8");
+    if (raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !("json" in parsed) && !Array.isArray(parsed)) {
+          req.body = { json: parsed };
+        } else {
+          req.body = parsed;
+        }
+      } catch {
+        req.body = raw;
+      }
+    }
+  }
+}
 async function handler(req, res) {
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
@@ -1883,6 +1913,7 @@ async function handler(req, res) {
     return;
   }
   try {
+    await parseAndNormalizeBody(req);
     return trpcHandler(normalizeRequest(req), res);
   } catch (error) {
     console.error("[Vercel tRPC bootstrap] failed", error);

@@ -78,6 +78,34 @@ function safeErrorMessage(error: unknown) {
   return error.message.replace(/\s+/g, " ").slice(0, 240) || "Unknown tRPC bootstrap error";
 }
 
+async function parseAndNormalizeBody(req: NodeRequest) {
+  if (req.body !== undefined) {
+    if (req.body && typeof req.body === "object" && !("json" in (req.body as object)) && !Array.isArray(req.body)) {
+      req.body = { json: req.body };
+    }
+    return;
+  }
+  if (req.method === "POST") {
+    const buffers: Buffer[] = [];
+    for await (const chunk of req) {
+      buffers.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    }
+    const raw = Buffer.concat(buffers).toString("utf8");
+    if (raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !("json" in parsed) && !Array.isArray(parsed)) {
+          req.body = { json: parsed };
+        } else {
+          req.body = parsed;
+        }
+      } catch {
+        req.body = raw;
+      }
+    }
+  }
+}
+
 export default async function handler(req: NodeRequest, res: NodeResponse) {
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
@@ -89,6 +117,7 @@ export default async function handler(req: NodeRequest, res: NodeResponse) {
   }
 
   try {
+    await parseAndNormalizeBody(req);
     return trpcHandler(normalizeRequest(req), res);
   } catch (error) {
     console.error("[Vercel tRPC bootstrap] failed", error);

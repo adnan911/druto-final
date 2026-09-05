@@ -415,7 +415,8 @@ export const appRouter = router({
           assertIdempotentMatch(existing, { externalOrderId: input.externalOrderId, itemName: input.itemName, amountAtomic });
           if (input.seller && (existing.marketplaceId !== input.seller.marketplaceId || existing.sellerId !== input.seller.sellerId || existing.merchantAccountId !== merchantAccount?.id)) throw new Error("Seller routing mismatch for reused idempotency key");
         } catch (error) { throw new TRPCError({ code: "CONFLICT", message: error instanceof Error ? error.message : "Idempotency mismatch" }); }
-        return { id: existing.id, externalOrderId: existing.externalOrderId, itemName: existing.itemName, buyerLabel: existing.buyerLabel, returnUrl: existing.returnUrl, displayAmount: (Number(existing.amountAtomic) / 1_000_000).toFixed(6), asset: "USDC" as const, network: "arc-testnet" as const, marketplaceId: existing.marketplaceId, sellerId: existing.sellerId, merchantAccountId: existing.merchantAccountId, merchantAddress: existing.merchantAddress, expiresAt: existing.expiresAt, checkoutUrl: `/checkout/${existing.id}` };
+        const baseUrl = process.env.DRUTO_API_URL || "https://druto-final.vercel.app";
+        return { id: existing.id, externalOrderId: existing.externalOrderId, itemName: existing.itemName, buyerLabel: existing.buyerLabel, returnUrl: existing.returnUrl, displayAmount: (Number(existing.amountAtomic) / 1_000_000).toFixed(6), asset: "USDC" as const, network: "arc-testnet" as const, marketplaceId: existing.marketplaceId, sellerId: existing.sellerId, merchantAccountId: existing.merchantAccountId, merchantAddress: existing.merchantAddress, expiresAt: existing.expiresAt, checkoutUrl: `/checkout/${existing.id}`, redirectUrl: `${baseUrl}/checkout/${existing.id}` };
       }
       const id = `pi_${nanoid(12)}`;
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
@@ -437,6 +438,7 @@ export const appRouter = router({
         status: "requires_payment",
         expiresAt,
       });
+      const baseUrl = process.env.DRUTO_API_URL || "https://druto-final.vercel.app";
       return {
         id,
         externalOrderId: input.externalOrderId,
@@ -452,6 +454,7 @@ export const appRouter = router({
         merchantAddress,
         expiresAt,
         checkoutUrl: `/checkout/${id}`,
+        redirectUrl: `${baseUrl}/checkout/${id}`,
       };
     }),
 
