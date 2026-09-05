@@ -582,17 +582,27 @@ async function getUserByOpenId(openId) {
 import {
   createPublicClient,
   decodeEventLog,
+  defineChain,
   getAddress,
   http,
   parseUnits
 } from "viem";
-import { arcTestnet } from "viem/chains";
 var ARC_CHAIN_ID = 5042002;
 var ARC_RPC_URL = "https://rpc.testnet.arc.io";
 var ARC_USDC_ADDRESS = getAddress("0x3600000000000000000000000000000000000000");
 var ARC_MERCHANT_WALLET_ADDRESS = getAddress(
   process.env.ARC_MERCHANT_WALLET_ADDRESS ?? "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217"
 );
+var arcTestnet = defineChain({
+  id: ARC_CHAIN_ID,
+  name: "Arc Testnet",
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+  rpcUrls: { default: { http: [ARC_RPC_URL] } },
+  blockExplorers: {
+    default: { name: "ArcScan", url: "https://testnet.arcscan.app" }
+  },
+  testnet: true
+});
 var erc20Abi = [
   {
     type: "function",
@@ -622,7 +632,7 @@ function amountToAtomicUsdc(amount) {
   return parseUnits(amount, 6).toString();
 }
 async function verifyArcUsdcTransfer(hash, expectedAmountAtomic, expectedRecipient = ARC_MERCHANT_WALLET_ADDRESS) {
-  const receipt = await arcPublicClient.waitForTransactionReceipt({ hash, confirmations: 1, pollingInterval: 500 });
+  const receipt = await arcPublicClient.waitForTransactionReceipt({ hash, confirmations: 1, pollingInterval: 500, timeout: 6e4 });
   if (receipt.status !== "success") throw new Error("Arc transaction reverted");
   const resolvedRecipient = getAddress(expectedRecipient);
   const matchingTransfer = receipt.logs.filter((log) => log.address.toLowerCase() === ARC_USDC_ADDRESS.toLowerCase()).map((log) => {
@@ -1525,6 +1535,7 @@ Issued At: ${issuedAt.toISOString()}`;
           displayName: input.displayName,
           receivingAddress: input.receivingAddress,
           ownerUserId: ctx.user.id,
+          status: "active",
           updatedAt: /* @__PURE__ */ new Date()
         }).where(eq3(merchantAccounts.id, existing.id));
         const [updated] = await db.select().from(merchantAccounts).where(eq3(merchantAccounts.id, existing.id)).limit(1);
@@ -1532,7 +1543,7 @@ Issued At: ${issuedAt.toISOString()}`;
       }
       const id = `ma_${nanoid2(12)}`;
       try {
-        await db.insert(merchantAccounts).values({ id, marketplaceId: input.marketplaceId, externalSellerId: input.sellerId, ownerUserId: ctx.user.id, displayName: input.displayName, receivingAddress: input.receivingAddress, status: "pending" });
+        await db.insert(merchantAccounts).values({ id, marketplaceId: input.marketplaceId, externalSellerId: input.sellerId, ownerUserId: ctx.user.id, displayName: input.displayName, receivingAddress: input.receivingAddress, status: "active" });
       } catch (error) {
         throw new TRPCError3({ code: "CONFLICT", message: error instanceof Error ? error.message : "Seller account already exists" });
       }
@@ -1656,22 +1667,37 @@ Issued At: ${issuedAt.toISOString()}`;
     }),
     listIntents: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
+      if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      if (ctx.user.role === "admin") {
+        return db.select().from(paymentIntents);
+      }
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
       if (!accountIds.length) return [];
       return db.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
     }),
     verifiedPayments: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
+      if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      if (ctx.user.role === "admin") {
+        return db.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq3(paymentTransactions.paymentIntentId, paymentIntents.id));
+      }
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
       if (!accountIds.length) return [];
       return db.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq3(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
     }),
     summary: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
-      const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
-      if (!accountIds.length) return { availableUsdc: "0.00", grossUsdc: "0.00", pendingUsdc: "0.00", successfulCount: 0, pendingCount: 0, totalCount: 0 };
-      const intents = await db.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
-      const verifiedRows = await db.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq3(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      let intents, verifiedRows;
+      if (ctx.user.role === "admin") {
+        intents = await db.select().from(paymentIntents);
+        verifiedRows = await db.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq3(paymentTransactions.paymentIntentId, paymentIntents.id));
+      } else {
+        const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
+        if (!accountIds.length) return { availableUsdc: "0.00", grossUsdc: "0.00", pendingUsdc: "0.00", successfulCount: 0, pendingCount: 0, totalCount: 0 };
+        intents = await db.select().from(paymentIntents).where(inArray(paymentIntents.merchantAccountId, accountIds));
+        verifiedRows = await db.select({ amountAtomic: paymentTransactions.amountAtomic, paymentIntentId: paymentTransactions.paymentIntentId }).from(paymentTransactions).innerJoin(paymentIntents, eq3(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
+      }
       const pending = intents.filter((intent) => intent.status === "requires_payment" || intent.status === "submitted" || intent.status === "verifying");
       const verifiedSummary = summarizeVerifiedRows(verifiedRows);
       const pendingAtomic = pending.reduce((sum, intent) => sum + BigInt(intent.amountAtomic), BigInt(0));
