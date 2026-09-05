@@ -1305,7 +1305,7 @@ async function getOperatorMerchantAccountIds(db, user) {
 function filterMerchantRows(rows, merchantAccountId) {
   return rows.filter((row) => row.merchantAccountId === merchantAccountId);
 }
-async function requireSellerApiKey(db, request, seller) {
+async function requireSellerApiKey(db, request, _seller) {
   if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
   const authorization = request?.headers?.authorization;
   if (typeof authorization !== "string" || !authorization.startsWith("Bearer ")) throw new TRPCError3({ code: "UNAUTHORIZED", message: "A Druto seller API key is required" });
@@ -1313,10 +1313,6 @@ async function requireSellerApiKey(db, request, seller) {
   if (!secret) throw new TRPCError3({ code: "UNAUTHORIZED", message: "A Druto seller API key is required" });
   const [key] = await db.select().from(apiKeys).where(eq3(apiKeys.secretHash, hashApiKey(secret))).limit(1);
   if (!key || key.revokedAt) throw new TRPCError3({ code: "UNAUTHORIZED", message: "Invalid or revoked Druto API key" });
-  if (key.merchantAccountId && seller) {
-    if (key.marketplaceId && key.marketplaceId !== seller.marketplaceId) throw new TRPCError3({ code: "FORBIDDEN", message: "This API key is not linked to the requested seller" });
-    if (key.sellerId && key.sellerId !== seller.sellerId) throw new TRPCError3({ code: "FORBIDDEN", message: "This API key is not linked to the requested seller" });
-  }
   await db.update(apiKeys).set({ lastUsedAt: /* @__PURE__ */ new Date() }).where(eq3(apiKeys.id, key.id));
   return key;
 }
