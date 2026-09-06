@@ -13,6 +13,12 @@ export async function copyReceiptValue(value: string, clipboard?: ClipboardWrite
   }
 }
 
+export function truncateHash(hash?: string | null, startLen = 6, endLen = 6): string {
+  if (!hash) return "";
+  if (hash.length <= startLen + endLen + 3) return hash;
+  return `${hash.slice(0, startLen)}...${hash.slice(-endLen)}`;
+}
+
 export function buildReceiptSummary(intent: { amountAtomic: number | string; status: string; itemName: string; buyerLabel?: string | null; orderContext?: string | null }) {
   const orderContext = parseMarketplaceOrderContext(intent.orderContext);
   const lineItems = orderContext?.items?.length ? orderContext.items : [{ productId: "fallback", name: intent.itemName, seller: "Merchant", unitPrice: Number(intent.amountAtomic) / 1_000_000, quantity: 1 }];

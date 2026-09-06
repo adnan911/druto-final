@@ -144,7 +144,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .receipt-layout { align-items: start; }
 .receipt-intro { padding-top: 34px; }
 .receipt-intro .checkout-trust { margin-top: 30px; }
-.receipt-print { margin-top: 28px; width: fit-content; }
+.receipt-side-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 28px; width: fit-content; }
+.receipt-print { width: fit-content; margin: 0; }
+.receipt-side-btn { width: fit-content; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
 .receipt-card-enhanced { max-width: 520px; padding: 27px; }
 .receipt-final { border-color: #bfe1d2; }
 .receipt-pending { border-color: #d7dfec; }
@@ -179,7 +181,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .receipt-meta-wide { grid-column: 1 / -1; padding-top: 2px; }
 .proof-section { padding-bottom: 12px; }
 .proof-section .detail-line { padding: 10px 0; }
-.proof-section .detail-line strong { max-width: 65%; text-align: right; overflow-wrap: anywhere; }
+.proof-section .detail-line strong { max-width: 65%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; justify-content: flex-end; }
 .proof-section .detail-line strong svg { flex: 0 0 auto; color: var(--sea); }
 .receipt-actions { display: grid; gap: 8px; }
 .receipt-actions .button { min-height: 40px; }

@@ -8,7 +8,7 @@ import AccountLoginCard from "@/components/AccountLoginCard";
 import ApiKeyManager from "@/components/ApiKeyManager";
 import SellerOnboarding from "@/components/SellerOnboarding";
 import WalletConnectButton from "@/components/WalletConnectButton";
-import { buildReceiptSummary, copyReceiptValue } from "@/lib/receipt";
+import { buildReceiptSummary, copyReceiptValue, truncateHash } from "@/lib/receipt";
 import { dashboardAccessState } from "@/lib/access";
 import { ARC_CHAIN_ID, ARC_CHAIN_ID_HEX, ARC_RPC_URL, ARC_USDC_ADDRESS, CIRCLE_FAUCET_URL, fetchArcUsdcBalance, encodeArcUsdcTransfer } from "@/lib/arcChain";
 import { toast } from "sonner";
@@ -417,25 +417,258 @@ function DetailDrawer({ id, close }: { id: string; close: () => void }) {
     </div>
   );
 }
-function DetailLine({ label, value, mono, copy }: { label: string; value: string; mono?: boolean; copy?: boolean }) { const handleCopy = async () => { const copied = await copyReceiptValue(value); if (copied) toast.success(`${label} copied`); else toast.info(`Select and copy the ${label.toLowerCase()} manually.`); }; return <div className="detail-line"><span>{label}</span><strong className={mono ? "mono-id" : ""}>{value}{copy && <button type="button" className="copy-control" aria-label={`Copy ${label}`} onClick={handleCopy}><Copy size={13} /></button>}</strong></div>; }
+function DetailLine({ label, value, displayValue, mono, copy }: { label: string; value: string; displayValue?: string; mono?: boolean; copy?: boolean }) {
+  const handleCopy = async () => {
+    const copied = await copyReceiptValue(value);
+    if (copied) toast.success(`${label} copied`);
+    else toast.info(`Select and copy the ${label.toLowerCase()} manually.`);
+  };
+  return (
+    <div className="detail-line">
+      <span>{label}</span>
+      <strong className={mono ? "mono-id" : ""} title={value}>
+        {displayValue ?? value}
+        {copy && (
+          <button type="button" className="copy-control" aria-label={`Copy ${label}`} onClick={handleCopy}>
+            <Copy size={13} />
+          </button>
+        )}
+      </strong>
+    </div>
+  );
+}
 
 function ReceiptPage() {
   const [location] = useLocation();
   const pathname = typeof window !== "undefined" ? window.location.pathname : location.split("?")[0];
   const intentId = pathname.split("/").filter(Boolean).pop() || "";
   const receiptPreview = new URLSearchParams(typeof window !== "undefined" ? window.location.search : location.split("?")[1] ?? "").get("demo") === "mixed-receipt";
-  const query = trpc.payments.getIntent.useQuery({ id: intentId }, { enabled: Boolean(intentId) && !receiptPreview });
+  const utils = trpc.useUtils();
+  const query = trpc.payments.getIntent.useQuery(
+    { id: intentId },
+    { enabled: Boolean(intentId) && !receiptPreview, refetchInterval: (query) => (query.state.data?.status === "succeeded" ? false : 3000) }
+  );
+  const verifyTransfer = trpc.payments.verifyTransfer.useMutation();
+  const [manualHash, setManualHash] = useState("");
+  const [isVerifyingManual, setIsVerifyingManual] = useState(false);
+
   const [paymentQueue] = useState<MarketplacePaymentQueue | null>(() => { try { if (receiptPreview) return { orderId: "DR-MULTI-PREVIEW", intentIds: ["preview-intent-a", "preview-intent-b"], checkoutUrls: ["/receipt/preview-intent-a?demo=mixed-receipt", "/receipt/preview-intent-b?demo=mixed-receipt"], sellerNames: ["Druto Labs", "Mosaic Works"] }; const saved = window.localStorage.getItem(MARKETPLACE_PAYMENT_QUEUE_KEY); return saved ? JSON.parse(saved) as MarketplacePaymentQueue : null; } catch { return null; } });
   const previewSeller = intentId === "preview-intent-b" ? { name: "Mosaic Works", productId: "ledger-kit", itemName: "Ledger Operations Kit", amountAtomic: "2500000", sellerId: "mosaic-works" } : { name: "Druto Labs", productId: "api-pro", itemName: "Arc API Pro", amountAtomic: "1000000", sellerId: "druto-labs" };
   const previewOrderContext = JSON.stringify({ items: [{ productId: previewSeller.productId, name: previewSeller.itemName, seller: previewSeller.name, unitPrice: Number(previewSeller.amountAtomic) / 1_000_000, quantity: 1 }], delivery: "Digital delivery", shippingAddress: { name: "Alex Rivera", line1: "1 Main St", city: "Arc City", postalCode: "10001", country: "United States" }, buyerEmail: "buyer@example.com" });
-  const previewIntent = { id: intentId, externalOrderId: `DR-MULTI-PREVIEW-${previewSeller.sellerId}`, marketplaceId: "druto-demo-marketplace", sellerId: previewSeller.sellerId, merchantAccountId: `legacy-demo-${previewSeller.sellerId}`, idempotencyKey: `preview-${previewSeller.sellerId}`, itemName: previewSeller.itemName, buyerLabel: "buyer@example.com", returnUrl: "/marketplace", orderContext: previewOrderContext, amountAtomic: previewSeller.amountAtomic, asset: "USDC", network: "arc-testnet", merchantAddress: "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217", buyerAddress: null, status: "succeeded", transactionHash: null, expiresAt: new Date(), createdAt: new Date(), updatedAt: new Date() } as NonNullable<typeof query.data>;
+  const previewIntent = { id: intentId, externalOrderId: `DR-MULTI-PREVIEW-${previewSeller.sellerId}`, marketplaceId: "druto-demo-marketplace", sellerId: previewSeller.sellerId, merchantAccountId: `legacy-demo-${previewSeller.sellerId}`, idempotencyKey: `preview-${previewSeller.sellerId}`, itemName: previewSeller.itemName, buyerLabel: "buyer@example.com", returnUrl: "/marketplace", orderContext: previewOrderContext, amountAtomic: previewSeller.amountAtomic, asset: "USDC", network: "arc-testnet", merchantAddress: "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217", buyerAddress: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e", status: "succeeded", transactionHash: "0x3f7a18b9c6f2e8319e7a8f94cb44d32e185c7210e3954f9a0c3b84a9235d72f1", expiresAt: new Date(), createdAt: new Date(), updatedAt: new Date() } as NonNullable<typeof query.data>;
   const intent = query.data ?? (receiptPreview ? previewIntent : undefined);
   const nextCheckout = paymentQueue ? getNextMarketplaceCheckout(paymentQueue, intentId) : null;
+
+  const handleManualVerify = async () => {
+    if (!intent || !manualHash.trim().startsWith("0x")) {
+      toast.error("Please enter a valid Arc transaction hash (starts with 0x...)");
+      return;
+    }
+    setIsVerifyingManual(true);
+    try {
+      await verifyTransfer.mutateAsync({
+        paymentIntentId: intent.id,
+        transactionHash: manualHash.trim(),
+      });
+      await query.refetch();
+      await utils.payments.summary.invalidate();
+      await utils.payments.verifiedPayments.invalidate();
+      toast.success("Payment successfully verified on ArcScan!");
+    } catch (err: any) {
+      toast.error(err?.message || "ArcScan transfer verification failed. Please ensure the transaction is confirmed on Arc.");
+    } finally {
+      setIsVerifyingManual(false);
+    }
+  };
+
   if (!intent) return <div className="checkout-shell"><div className="checkout-brand"><Mark /><span>druto</span></div><main className="checkout-main"><div className="checkout-card"><strong>Loading buyer receipt…</strong></div></main></div>;
   const { amount, isSucceeded, orderContext, lineItems, buyerEmail, shipping } = buildReceiptSummary(intent);
-  const statusLabel = isSucceeded ? "Payment verified" : "Verification in progress";
+  const statusLabel = isSucceeded ? "Payment Receipt" : "Verification in progress";
   const copyValue = async (value: string, label: string) => { const copied = await copyReceiptValue(value); if (copied) toast.success(`${label} copied`); else toast.info(`Select and copy the ${label.toLowerCase()} manually.`); };
-  return <div className="checkout-shell"><div className="checkout-brand"><Mark /><span>druto</span><span className="checkout-test"><span className="live-dot" /> {receiptPreview ? "Mixed-seller preview" : "Buyer receipt"}</span></div><main className="checkout-main receipt-layout"><div className="checkout-intro receipt-intro"><span className="eyebrow"><span className="eyebrow-line" /> Payment receipt</span><h1>Payment <em>{isSucceeded ? "verified." : "awaiting verification."}</em></h1><p>{isSucceeded ? "Your USDC payment was recorded on Arc Testnet and accepted by the merchant." : "Your receipt is saved and will update after Druto verifies the Arc Testnet transaction."}</p><div className="checkout-trust"><span><ShieldCheck size={14} /> Verified payment state</span><span><LockKeyhole size={14} /> Non-custodial checkout</span><span><ReceiptText size={14} /> Order context preserved</span></div><button className="button button-quiet receipt-print" onClick={() => window.print()}><Printer size={14} /> Save or print receipt</button></div><div className={`checkout-card receipt-card receipt-card-enhanced ${isSucceeded ? "receipt-final" : "receipt-pending"}`}><div className="receipt-hero"><div className={isSucceeded ? "success-mark" : "submitted-orbit"}>{isSucceeded ? <Check size={26} /> : <RefreshCw size={24} />}</div><div><span className="eyebrow">{statusLabel}</span><h2>${amount} <small>USDC</small></h2><span className="receipt-status-copy">{isSucceeded ? "Final on Arc Testnet" : "Awaiting final chain confirmation"}</span></div></div><div className="receipt-order-banner"><div><span className="eyebrow">Order</span><strong>{intent.externalOrderId}</strong></div><div className="receipt-order-badge"><Box size={14} /> {lineItems.length} {lineItems.length === 1 ? "item" : "items"}</div></div><section className="receipt-section"><div className="receipt-section-heading"><span><Box size={15} /> Purchased items</span><span>Qty</span></div><div className="receipt-items">{lineItems.map((item, index) => <div className="receipt-item" key={`${item.productId}-${index}`}><div><strong>{item.name}</strong><small>{item.seller} · ${item.unitPrice.toFixed(2)} each</small></div><strong>× {item.quantity}</strong></div>)}</div><div className="receipt-total"><span>Total paid</span><strong>${amount} <small>USDC</small></strong></div></section><section className="receipt-section receipt-meta-grid"><div><span className="receipt-meta-label"><RefreshCw size={13} /> Delivery</span><strong>{orderContext?.delivery ?? "Digital delivery"}</strong></div><div><span className="receipt-meta-label"><Mail size={13} /> Buyer</span><strong>{buyerEmail}</strong></div>{shipping && <div className="receipt-meta-wide"><span className="receipt-meta-label"><MapPin size={13} /> Shipping to</span><strong>{shipping.name}</strong><small>{shipping.line1}, {shipping.city}, {shipping.postalCode}, {shipping.country}</small></div>}</section><section className="receipt-section proof-section"><div className="receipt-section-heading"><span><ShieldCheck size={15} /> Onchain proof</span><span className="proof-badge"><span className="live-dot" /> {isSucceeded ? "Verified" : "Pending"}</span></div><DetailLine label="Payment Intent" value={intent.id} mono copy /><DetailLine label="Network / asset" value="Arc Testnet · USDC" /><DetailLine label="Merchant wallet" value={intent.merchantAddress} mono copy /><DetailLine label="Transaction" value={intent.transactionHash ?? "Pending verification"} mono copy /></section><div className="receipt-actions">{intent.transactionHash && <a className="button button-primary full-width" href={`https://testnet.arcscan.app/tx/${intent.transactionHash}`} target="_blank" rel="noreferrer"><ExternalLink size={15} /> View verified transaction</a>}{intent.transactionHash && <button className="button button-quiet full-width" onClick={() => copyValue(intent.transactionHash!, "Transaction hash")}><Copy size={14} /> Copy transaction hash</button>}{isSucceeded && nextCheckout && <button className="button button-primary full-width" onClick={() => window.location.href = nextCheckout.checkoutUrl}>Pay next seller · {nextCheckout.sellerName} <ArrowUpRight size={14} /></button>}{intent.returnUrl && <button className="button button-quiet full-width" onClick={() => window.location.href = intent.returnUrl!}>Return to marketplace <ArrowUpRight size={14} /></button>}</div><div className="checkout-footer"><span>Receipt generated by <strong>druto</strong></span><span><LockKeyhole size={12} /> {isSucceeded ? "Verified onchain" : "Awaiting Arc verification"}</span></div></div></main></div>;
+
+  return (
+    <div className="checkout-shell">
+      <div className="checkout-brand">
+        <Mark />
+        <span>druto</span>
+        <span className="checkout-test">
+          <span className="live-dot" /> {receiptPreview ? "Mixed-seller preview" : "Buyer receipt"}
+        </span>
+      </div>
+
+      <main className="checkout-main receipt-layout">
+        <div className="checkout-intro receipt-intro">
+          <h1>Payment <em>{isSucceeded ? "verified." : "awaiting verification."}</em></h1>
+          <p>{isSucceeded ? "Your USDC payment was recorded on Arc Testnet and accepted by the merchant." : "Your receipt is saved and will update after Druto verifies the Arc Testnet transaction."}</p>
+          <div className="checkout-trust">
+            <span><ShieldCheck size={14} /> Verified payment state</span>
+            <span><LockKeyhole size={14} /> Non-custodial checkout</span>
+            <span><ReceiptText size={14} /> Order context preserved</span>
+          </div>
+          <div className="receipt-side-actions">
+            <button className="button button-quiet receipt-print" onClick={() => window.print()}>
+              <Printer size={14} /> Save or print receipt
+            </button>
+            {intent.transactionHash ? (
+              <a
+                className="button button-primary receipt-side-btn"
+                href={`https://testnet.arcscan.app/tx/${intent.transactionHash}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink size={15} /> View on ArcScan Explorer
+              </a>
+            ) : (
+              <a
+                className="button button-quiet receipt-side-btn"
+                href={`https://testnet.arcscan.app/address/${intent.merchantAddress}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink size={15} /> View Merchant on ArcScan Explorer
+              </a>
+            )}
+          </div>
+        </div>
+
+        <div className={`checkout-card receipt-card receipt-card-enhanced ${isSucceeded ? "receipt-final" : "receipt-pending"}`}>
+          <div className="receipt-hero">
+            <div className={isSucceeded ? "success-mark" : "submitted-orbit"}>
+              {isSucceeded ? <Check size={26} /> : <RefreshCw size={24} className="animate-spin" />}
+            </div>
+            <div>
+              <span className="eyebrow">{statusLabel}</span>
+              <h2>${amount} <small>USDC</small></h2>
+            </div>
+          </div>
+
+          <div className="receipt-order-banner">
+            <div>
+              <span className="eyebrow">Order</span>
+              <strong>{intent.externalOrderId}</strong>
+            </div>
+            <div className="receipt-order-badge">
+              <Box size={14} /> {lineItems.length} {lineItems.length === 1 ? "item" : "items"}
+            </div>
+          </div>
+
+          <section className="receipt-section">
+            <div className="receipt-section-heading">
+              <span><Box size={15} /> Purchased items</span>
+              <span>Qty</span>
+            </div>
+            <div className="receipt-items">
+              {lineItems.map((item, index) => (
+                <div className="receipt-item" key={`${item.productId}-${index}`}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <small>{item.seller} · ${item.unitPrice.toFixed(2)} each</small>
+                  </div>
+                  <strong>× {item.quantity}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="receipt-total">
+              <span>Total paid</span>
+              <strong>${amount} <small>USDC</small></strong>
+            </div>
+          </section>
+
+          <section className="receipt-section receipt-meta-grid">
+            <div>
+              <span className="receipt-meta-label"><RefreshCw size={13} /> Delivery</span>
+              <strong>{orderContext?.delivery ?? "Digital delivery"}</strong>
+            </div>
+            <div>
+              <span className="receipt-meta-label"><Mail size={13} /> Buyer</span>
+              <strong>{buyerEmail}</strong>
+            </div>
+            {shipping && (
+              <div className="receipt-meta-wide">
+                <span className="receipt-meta-label"><MapPin size={13} /> Shipping to</span>
+                <strong>{shipping.name}</strong>
+                <small>{shipping.line1}, {shipping.city}, {shipping.postalCode}, {shipping.country}</small>
+              </div>
+            )}
+          </section>
+
+          <section className="receipt-section proof-section">
+            <div className="receipt-section-heading">
+              <span><ShieldCheck size={15} /> Onchain proof</span>
+              <span className="proof-badge">
+                <span className="live-dot" /> {isSucceeded ? "Verified on ArcScan" : "Pending"}
+              </span>
+            </div>
+            <DetailLine label="Payment Intent" value={intent.id} mono copy />
+            <DetailLine label="Network / asset" value="Arc Testnet · USDC" />
+            <DetailLine
+              label="Merchant wallet"
+              value={intent.merchantAddress}
+              displayValue={truncateHash(intent.merchantAddress, 7, 6)}
+              mono
+              copy
+            />
+            <DetailLine
+              label="Transaction"
+              value={intent.transactionHash ?? "Pending verification"}
+              displayValue={intent.transactionHash ? truncateHash(intent.transactionHash, 8, 6) : "Pending verification"}
+              mono={Boolean(intent.transactionHash)}
+              copy={Boolean(intent.transactionHash)}
+            />
+          </section>
+
+          {!isSucceeded && (
+            <div style={{ padding: "14px", background: "#f8fdf9", border: "1px solid #d4ebd9", borderRadius: "8px", margin: "12px 0" }}>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "#2d3436", display: "block", marginBottom: "4px" }}>
+                Already sent USDC on Arc Testnet?
+              </span>
+              <p style={{ fontSize: "11px", color: "#636e72", margin: "0 0 8px" }}>
+                Paste the Arc transaction hash from your wallet or ArcScan to instantly finalize verification.
+              </p>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <input
+                  type="text"
+                  placeholder="0x..."
+                  value={manualHash}
+                  onChange={e => setManualHash(e.target.value)}
+                  style={{ flex: 1, padding: "6px 8px", fontSize: "11px", border: "1px solid #ced6e0", borderRadius: "6px" }}
+                />
+                <button
+                  className="button button-primary"
+                  onClick={handleManualVerify}
+                  disabled={isVerifyingManual || !manualHash.trim()}
+                  style={{ fontSize: "11px", padding: "0 10px", height: "30px" }}
+                >
+                  {isVerifyingManual ? "Verifying…" : "Verify Tx"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="receipt-actions">
+            {!isSucceeded && (
+              <button
+                className="button button-primary full-width"
+                onClick={() => window.location.href = `/checkout/${intent.id}`}
+              >
+                <WalletCards size={15} /> Return to checkout & pay
+              </button>
+            )}
+
+            {intent.returnUrl && (
+              <button className="button button-quiet full-width" onClick={() => window.location.href = intent.returnUrl!}>
+                Return to marketplace <ArrowUpRight size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="checkout-footer">
+            <span>Receipt generated by <strong>druto</strong></span>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 }
 
 function CheckoutPage() {
