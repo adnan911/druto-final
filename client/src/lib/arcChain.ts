@@ -77,13 +77,64 @@ export const erc20Abi = [
 
 export async function fetchArcUsdcBalance(address: `0x${string}`): Promise<string> {
   try {
-    const rawBalance = await arcBrowserClient.readContract({
-      address: ARC_USDC_ADDRESS,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [address],
-    });
-    return formatUnits(rawBalance, 6);
+    // 1. Try reading via in-wallet ethereum provider first (most reliable with user network)
+    if (typeof window !== "undefined" && window.ethereum) {
+      try {
+        const data = encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [address],
+        });
+        const res = await window.ethereum.request({
+          method: "eth_call",
+          params: [{ to: ARC_USDC_ADDRESS, data }, "latest"],
+        });
+        if (res && res !== "0x" && res !== "0x0") {
+          const balBigInt = BigInt(res);
+          return formatUnits(balBigInt, 6);
+        }
+      } catch (e) {
+        console.warn("In-wallet eth_call balanceOf failed, trying RPC:", e);
+      }
+    }
+
+    // 2. Fallback to public client readContract
+    try {
+      const rawBalance = await arcBrowserClient.readContract({
+        address: ARC_USDC_ADDRESS,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [address],
+      });
+      if (rawBalance > BigInt(0)) {
+        return formatUnits(rawBalance, 6);
+      }
+    } catch (e) {
+      console.warn("RPC readContract balanceOf failed:", e);
+    }
+
+    // 3. Check native balance (on Arc Testnet, native currency is USDC with 18 decimals)
+    if (typeof window !== "undefined" && window.ethereum) {
+      try {
+        const nativeHex = await window.ethereum.request({
+          method: "eth_getBalance",
+          params: [address, "latest"],
+        });
+        if (nativeHex && nativeHex !== "0x0" && nativeHex !== "0x") {
+          const nativeBigInt = BigInt(nativeHex);
+          // Format as 18 decimals native USDC
+          const formatted = formatUnits(nativeBigInt, 18);
+          const num = parseFloat(formatted);
+          if (num > 0) {
+            return num.toFixed(2);
+          }
+        }
+      } catch (e) {
+        console.warn("eth_getBalance fallback failed:", e);
+      }
+    }
+
+    return "0.00";
   } catch (err) {
     console.error("Error reading Arc USDC balance:", err);
     return "0.00";
