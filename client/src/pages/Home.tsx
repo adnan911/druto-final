@@ -33,9 +33,21 @@ const navGroups = [
 
 function classNames(...values: Array<string | false | undefined>) { return values.filter(Boolean).join(" "); }
 
-function StatusPill({ status, tone = "neutral" }: { status: string; tone?: string }) {
-  const icon = tone === "success" ? <Check size={12} /> : tone === "warning" ? <Timer size={12} /> : tone === "danger" ? <AlertTriangle size={12} /> : <Activity size={12} />;
-  return <span className={classNames("status-pill", `status-${tone}`)}>{icon}{status}</span>;
+function StatusPill({ status, tone = "neutral", verified = false, txHash }: { status: string; tone?: string; verified?: boolean; txHash?: string }) {
+  const isSuccess = tone === "success" || status.toLowerCase() === "succeeded" || verified;
+  const icon = isSuccess ? <Check size={12} strokeWidth={3} /> : tone === "warning" ? <Timer size={12} /> : tone === "danger" ? <AlertTriangle size={12} /> : <Activity size={12} />;
+  
+  return (
+    <span className={classNames("status-pill", isSuccess ? "status-success" : `status-${tone}`)} title={isSuccess ? "Verified on Arc Testnet via ArcScan" : undefined}>
+      {icon}
+      {status}
+      {isSuccess && (
+        <span style={{ display: "inline-flex", alignItems: "center", marginLeft: "2px", opacity: 0.9 }}>
+          <ShieldCheck size={12} />
+        </span>
+      )}
+    </span>
+  );
 }
 
 function Mark() { return <img src={logo} alt="" className="brand-mark" />; }
@@ -212,16 +224,65 @@ function Topbar({ title, onCreate }: { title: string; onCreate: () => void }) {
 
 function Overview({ setActive, onCreate }: { setActive: (v: string) => void; onCreate: () => void }) {
   const [period, setPeriod] = useState("Last 30 days");
-  const summary = trpc.payments.summary.useQuery();
-  const liveIntents = trpc.payments.verifiedPayments.useQuery();
-  const refreshLive = () => { void summary.refetch(); void liveIntents.refetch(); toast.success("Live Arc activity refreshed"); };
-  const latestSale = [...(liveIntents.data ?? [])].sort((a, b) => new Date(b.finalizedAt ?? b.createdAt ?? Date.now()).getTime() - new Date(a.finalizedAt ?? a.createdAt ?? Date.now()).getTime())[0];
-  return <div className="page-content overview-page"><div className="live-ledger-strip"><div><span className="eyebrow"><span className="live-dot" /> Live Arc ledger</span><strong>{summary.data ? `$${summary.data.availableUsdc} USDC` : "No verified USDC yet"}</strong><small>{summary.data ? `${summary.data.successfulCount} verified · ${summary.data.pendingCount} pending` : "Create a Payment Intent to begin a testnet payment"}</small></div><div><span className="eyebrow">Latest sold item</span><strong>{latestSale?.itemName ?? "Awaiting first sale"}</strong><small>{latestSale ? `Succeeded · ${Number(latestSale.amountAtomic) / 1_000_000} USDC · ${latestSale.transactionHash.slice(0, 10)}…` : "Seller activity will appear here after verification"}</small></div><button className="button button-quiet ledger-refresh" onClick={refreshLive}><RefreshCw size={14} /> Refresh live data</button></div>
+  const utils = trpc.useUtils();
+  const summary = trpc.payments.summary.useQuery(undefined, { refetchInterval: 5000 });
+  const liveIntents = trpc.payments.verifiedPayments.useQuery(undefined, { refetchInterval: 5000 });
+  const syncMutation = trpc.payments.syncArcPayments.useMutation();
+
+  const handleSyncArcScan = async () => {
+    try {
+      const res = await syncMutation.mutateAsync();
+      await utils.payments.summary.invalidate();
+      await utils.payments.verifiedPayments.invalidate();
+      if (res.newlySynced > 0) {
+        toast.success(`Synced ${res.newlySynced} new payment${res.newlySynced === 1 ? "" : "s"} from ArcScan!`);
+      } else {
+        toast.info(`ArcScan sync complete (${res.scannedCount} recent transfers scanned, all up-to-date)`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "ArcScan sync failed");
+    }
+  };
+
+  const refreshLive = () => {
+    void summary.refetch();
+    void liveIntents.refetch();
+    toast.success("Live Arc activity refreshed");
+  };
+
+  const latestSale = [...(liveIntents.data ?? [])].sort(
+    (a, b) => new Date(b.finalizedAt ?? b.createdAt ?? Date.now()).getTime() - new Date(a.finalizedAt ?? a.createdAt ?? Date.now()).getTime()
+  )[0];
+
+  return (
+    <div className="page-content overview-page">
+      <div className="live-ledger-strip">
+        <div>
+          <span className="eyebrow"><span className="live-dot" /> Live Arc ledger</span>
+          <strong>{summary.data ? `$${summary.data.availableUsdc} USDC` : "No verified USDC yet"}</strong>
+          <small>{summary.data ? `${summary.data.successfulCount} verified · ${summary.data.pendingCount} pending` : "Create a Payment Intent to begin a testnet payment"}</small>
+        </div>
+        <div>
+          <span className="eyebrow">Latest sold item</span>
+          <strong>{latestSale?.itemName ?? "Awaiting first sale"}</strong>
+          <small>{latestSale ? `Succeeded · ${Number(latestSale.amountAtomic) / 1_000_000} USDC · ${latestSale.transactionHash.slice(0, 10)}…` : "Seller activity will appear here after verification"}</small>
+        </div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button className="button button-quiet ledger-refresh" onClick={refreshLive}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button className="button button-primary ledger-refresh" onClick={handleSyncArcScan} disabled={syncMutation.isPending} style={{ background: "var(--sea)" }}>
+            <Zap size={14} /> {syncMutation.isPending ? "Syncing Arc…" : "Sync ArcScan"}
+          </button>
+        </div>
+      </div>
+
     <section className="hero-panel"><div className="hero-copy"><span className="eyebrow"><span className="eyebrow-line" /> Ledger snapshot · 21 Aug 2026</span><h2>{summary.data ? `$${summary.data.availableUsdc}` : "Awaiting"}<br /><em>{summary.data ? "available to settle." : "verified balance."}</em></h2><p>{summary.data ? `Your live Arc ledger contains ${summary.data.successfulCount} verified payment${summary.data.successfulCount === 1 ? "" : "s"}. $${summary.data.pendingUsdc} remains pending across ${summary.data.pendingCount} intent${summary.data.pendingCount === 1 ? "" : "s"}.` : "Your ledger is balanced across testnet Payment Intents. Verified balances and pending amounts will appear here after the first Arc transfer."}</p><div className="hero-actions"><button className="button button-primary" onClick={() => setActive("Settlements")}><Send size={16} /> Review settlement</button><button className="button button-quiet" onClick={onCreate}><Plus size={16} /> New payment intent</button></div><div className="hero-footnote"><span><span className="live-dot" /> Arc Testnet</span><span className="foot-divider" /><span>{summary.data ? "Live summary refreshed" : "Awaiting backend summary"}</span></div></div><div className="hero-art"><img src={heroVisual} alt="Abstract ledger network illustration" /><div className="hero-art-note"><span className="arc-ring" /><span><strong>{summary.data ? `${summary.data.successfulCount} FINAL` : "0 FINAL"}</strong><small>verified transfers</small></span></div><div className="hero-art-label"><span className="arc-line" /> Arc confirmation <strong>Testnet</strong></div></div></section>
     <section className="metric-grid"><Metric label="Gross payments" value={summary.data ? `$${summary.data.grossUsdc}` : "—"} delta={summary.data ? `${summary.data.totalCount} intents` : "Awaiting verified data"} positive icon={<ArrowUpRight size={14} />} /><Metric label="Successful payments" value={summary.data && summary.data.totalCount > 0 ? `${Math.round((summary.data.successfulCount / summary.data.totalCount) * 100)}%` : "—"} delta={summary.data ? `${summary.data.successfulCount} verified` : "Awaiting first verified payment"} positive icon={<TrendingUp size={14} />} /><Metric label="Available balance" value={summary.data ? `$${summary.data.availableUsdc}` : "—"} delta="USDC · verified only" icon={<WalletCards size={14} />} /><Metric label="To settle" value={summary.data ? `$${summary.data.availableUsdc}` : "—"} delta="Verified USDC only" icon={<Send size={14} />} /></section>
     <section className="overview-grid"><div className="card revenue-card"><div className="card-heading"><div><span className="eyebrow">{summary.data ? "Verified volume" : "Demo visual · awaiting verified activity"}</span><h3>Payment activity</h3></div><button className="select-button" onClick={() => setPeriod(period === "Last 30 days" ? "Last 7 days" : "Last 30 days")}>{period}<ChevronDown size={14} /></button></div>{!summary.data?.successfulCount && <div className="chart-empty-state"><div className="empty-icon"><TrendingUp size={18} /></div><strong>No verified activity yet</strong><span>Complete an Arc Testnet USDC checkout to populate this analytics view.</span></div>}<div className="chart-wrap" style={{ display: summary.data?.successfulCount ? undefined : "none" }}><div className="chart-y"><span>{summary.data ? `$${summary.data.grossUsdc}` : "—"}</span><span>{summary.data ? `$${summary.data.pendingUsdc}` : "—"}</span><span>USDC</span><span>0</span></div><div className="chart"><div className="chart-grid"><i /><i /><i /><i /></div><svg viewBox="0 0 700 210" preserveAspectRatio="none" aria-label="Payment activity chart"><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#1e9b83" stopOpacity=".26" /><stop offset="1" stopColor="#1e9b83" stopOpacity="0" /></linearGradient></defs><path d="M0,175 C42,166 58,128 96,145 S151,102 190,123 S240,96 275,109 S321,49 358,82 S407,72 438,98 S489,58 520,68 S570,24 604,56 S661,28 700,38 L700,210 L0,210 Z" fill="url(#chartFill)" /><path d="M0,175 C42,166 58,128 96,145 S151,102 190,123 S240,96 275,109 S321,49 358,82 S407,72 438,98 S489,58 520,68 S570,24 604,56 S661,28 700,38" fill="none" stroke="#1e9b83" strokeWidth="3" /></svg><div className="chart-x"><span>01 Aug</span><span>08 Aug</span><span>15 Aug</span><span>22 Aug</span><span>Today</span></div></div></div><div className="chart-summary"><span><i className="legend-dot sea" /> Verified payments <strong>{summary.data ? `$${summary.data.grossUsdc}` : "—"}</strong></span><span><i className="legend-dot blue" /> Platform fees <strong>N/A</strong></span><span className="chart-summary-note">{summary.data ? "Verified Arc activity" : "Demo visual only · no live transfers yet"}</span></div></div><div className="card flow-card"><div className="card-heading"><div><span className="eyebrow">Settlement rail</span><h3>Payment flow</h3></div><button className="icon-button"><MoreHorizontal size={17} /></button></div><img src={flowVisual} alt="Payment flow illustration" /><div className="flow-steps"><FlowStep n="01" label="Request" value={summary.data ? `${summary.data.totalCount} intents` : "Ready"} done /><FlowStep n="02" label="Verify" value={summary.data ? `${summary.data.successfulCount} final` : "Awaiting payment"} done={Boolean(summary.data?.successfulCount)} /><FlowStep n="03" label="Settle" value={summary.data ? `${summary.data.pendingCount} pending` : "After finality"} /></div></div></section>
     <section className="lower-grid"><div className="card table-card"><div className="card-heading"><div><span className="eyebrow">Latest activity</span><h3>Recent payments</h3></div><button className="text-button" onClick={() => setActive("Payments")}>View all <ArrowUpRight size={14} /></button></div><PaymentTable compact /></div><div className="card queue-card"><div className="card-heading"><div><span className="eyebrow">Live operations</span><h3>Operations queue</h3></div><span className="queue-count">{summary.data?.pendingCount ?? 0}</span></div>{summary.data?.pendingCount ? <QueueItem icon={<RefreshCw />} title="Payment verification pending" detail={`${summary.data.pendingCount} intent${summary.data.pendingCount === 1 ? "" : "s"} awaiting Arc confirmation`} action="Open payments" tone="warning" /> : <div className="queue-empty"><ShieldCheck size={17} /><span>No live operations items from verified Arc data.</span></div>}</div></section>
-  </div>;
+    </div>
+  );
 }
 
 function Metric({ label, value, delta, positive, icon }: { label: string; value: string; delta: string; positive?: boolean; icon: React.ReactNode }) { return <div className="metric-card"><div className="metric-top"><span>{label}</span><span className="metric-icon">{icon}</span></div><strong>{value}</strong><div className={classNames("metric-delta", positive && "positive")}>{positive && <ArrowUpRight size={13} />}{delta}</div></div>; }
@@ -229,10 +290,10 @@ function FlowStep({ n, label, value, done }: { n: string; label: string; value: 
 function QueueItem({ icon, title, detail, action, tone }: { icon: React.ReactNode; title: string; detail: string; action: string; tone: string }) { return <div className="queue-item"><span className={classNames("queue-icon", `queue-${tone}`)}>{icon}</span><span className="queue-copy"><strong>{title}</strong><small>{detail}</small></span><button className="small-link" onClick={() => toast.info(`${action} is available in the full operations console.`)}>{action}</button></div>; }
 
 function PaymentTable({ compact = false }: { compact?: boolean }) {
-  const liveQuery = trpc.payments.verifiedPayments.useQuery();
-  const liveRows = (liveQuery.data ?? []).map(row => ({ id: row.paymentIntentId, customer: row.itemName, amount: `$${(Number(row.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, status: "Succeeded", time: new Date(row.finalizedAt ?? row.createdAt ?? Date.now()).toLocaleString(), hash: row.transactionHash, tone: "success" }));
+  const liveQuery = trpc.payments.verifiedPayments.useQuery(undefined, { refetchInterval: 5000 });
+  const liveRows = (liveQuery.data ?? []).map(row => ({ id: row.paymentIntentId, customer: row.itemName, amount: `$${(Number(row.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, status: "Verified", time: new Date(row.finalizedAt ?? row.createdAt ?? Date.now()).toLocaleString(), hash: row.transactionHash, tone: "success", verified: true }));
   const rows = liveRows;
-  return <div className="table-wrap"><table><thead><tr><th>Payment</th><th>Customer / item</th><th>Amount</th><th>Status</th><th>Received</th></tr></thead><tbody>{rows.slice(0, compact ? 4 : rows.length).map(row => <tr key={row.id}><td><span className="mono-id">{row.id}</span><small className="table-sub"><span className="mini-arc" />{row.hash}</small></td><td>{row.customer}</td><td className="amount-cell">{row.amount}<small>USDC</small></td><td><StatusPill status={row.status} tone={row.tone} /></td><td className="muted-cell">{row.time}</td></tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table><thead><tr><th>Payment</th><th>Customer / item</th><th>Amount</th><th>Status</th><th>Received</th></tr></thead><tbody>{rows.slice(0, compact ? 4 : rows.length).map(row => <tr key={row.id}><td><span className="mono-id">{row.id}</span><small className="table-sub"><span className="mini-arc" />{row.hash}</small></td><td>{row.customer}</td><td className="amount-cell">{row.amount}<small>USDC</small></td><td><StatusPill status={row.status} tone={row.tone} verified={row.verified} txHash={row.hash} /></td><td className="muted-cell">{row.time}</td></tr>)}</tbody></table></div>;
 }
 
 function TransactionHistory() {
@@ -337,18 +398,19 @@ function DetailDrawer({ id, close }: { id: string; close: () => void }) {
           <button className="icon-button" onClick={close}><X size={18} /></button>
         </div>
         <div className="drawer-status">
-          <StatusPill status={intent?.status === "succeeded" ? "Succeeded" : intent?.status ?? "Pending"} tone={intent?.status === "succeeded" ? "success" : "warning"} />
+          <StatusPill status={intent?.status === "succeeded" ? "Verified" : intent?.status ?? "Pending"} tone={intent?.status === "succeeded" ? "success" : "warning"} verified={intent?.status === "succeeded"} />
           <strong>${amountUsdc} <small>USDC</small></strong>
         </div>
         <DetailLine label="Payment Intent" value={id} mono copy />
         <DetailLine label="Customer / Item" value={intent?.itemName || intent?.buyerLabel || "Direct payment"} />
-        <DetailLine label="Network" value="Arc Testnet" />
+        <DetailLine label="Network" value="Arc Testnet · USDC" />
+        <DetailLine label="Verification Status" value={intent?.status === "succeeded" ? "Verified on ArcScan" : "Awaiting Arc transfer"} />
         <DetailLine label="Seller ID" value={intent?.sellerId || "—"} />
         <DetailLine label="Merchant Destination" value={intent?.merchantAddress ? `${intent.merchantAddress.slice(0, 10)}…${intent.merchantAddress.slice(-8)}` : "—"} mono copy />
         <DetailLine label="Transaction" value={intent?.transactionHash ? `${intent.transactionHash.slice(0, 12)}…${intent.transactionHash.slice(-8)}` : "Pending onchain"} mono copy />
         {intent?.transactionHash && (
-          <a className="button button-quiet full-width" href={`https://testnet.arcscan.app/tx/${intent.transactionHash}`} target="_blank" rel="noreferrer" style={{ marginTop: "1rem" }}>
-            <ExternalLink size={15} /> View on Arcscan Explorer
+          <a className="button button-primary full-width" href={`https://testnet.arcscan.app/tx/${intent.transactionHash}`} target="_blank" rel="noreferrer" style={{ marginTop: "1rem" }}>
+            <ExternalLink size={15} /> View on ArcScan Explorer
           </a>
         )}
       </aside>

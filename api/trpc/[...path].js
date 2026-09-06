@@ -652,6 +652,42 @@ async function verifyArcUsdcTransfer(hash, expectedAmountAtomic, expectedRecipie
   };
 }
 
+// server/arcscan.ts
+var ARCSCAN_BASE_URL = "https://testnet.arcscan.app";
+var ARCSCAN_API_URL = process.env.ARCSCAN_API_URL || `${ARCSCAN_BASE_URL}/api`;
+var ARCSCAN_API_KEY = process.env.ARCSCAN_API_KEY || "";
+async function getArcScanTokenTransfers(params) {
+  try {
+    const url = new URL(ARCSCAN_API_URL);
+    url.searchParams.set("module", "account");
+    url.searchParams.set("action", "tokentx");
+    if (params.address) url.searchParams.set("address", params.address);
+    if (params.contractAddress) url.searchParams.set("contractaddress", params.contractAddress);
+    url.searchParams.set("page", String(params.page || 1));
+    url.searchParams.set("offset", String(params.offset || 20));
+    url.searchParams.set("sort", params.sort || "desc");
+    if (ARCSCAN_API_KEY) {
+      url.searchParams.set("apikey", ARCSCAN_API_KEY);
+    }
+    const res = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(8e3)
+    });
+    if (!res.ok) {
+      console.warn(`[ArcScan API] Request failed with status ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    if (data.status === "1" && Array.isArray(data.result)) {
+      return data.result;
+    }
+    return [];
+  } catch (error) {
+    console.warn("[ArcScan API] Error fetching token transfers:", error);
+    return [];
+  }
+}
+
 // server/_core/cookies.ts
 function isSecureRequest(req) {
   if (req.protocol === "https") return true;
@@ -1814,6 +1850,54 @@ Issued At: ${issuedAt.toISOString()}`;
       const verifiedSummary = summarizeVerifiedRows(filterMerchantRows(verifiedRows, account.id));
       const pendingAtomic = pending.reduce((sum, intent) => sum + BigInt(intent.amountAtomic), BigInt(0));
       return { merchantAccountId: account.id, marketplaceId: account.marketplaceId, sellerId: account.externalSellerId, displayName: account.displayName, receivingAddress: account.receivingAddress, availableUsdc: (Number(verifiedSummary.totalAtomic) / 1e6).toFixed(2), grossUsdc: (Number(verifiedSummary.totalAtomic) / 1e6).toFixed(2), pendingUsdc: (Number(pendingAtomic) / 1e6).toFixed(2), successfulCount: verifiedSummary.count, pendingCount: pending.length, totalCount: intents.length };
+    }),
+    syncArcPayments: protectedProcedure.mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError3({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const targetAddress = process.env.ARC_MERCHANT_WALLET_ADDRESS || ARC_MERCHANT_WALLET_ADDRESS;
+      const recentTransfers = await getArcScanTokenTransfers({
+        address: targetAddress,
+        contractAddress: ARC_USDC_ADDRESS,
+        offset: 15,
+        sort: "desc"
+      });
+      let newlySynced = 0;
+      for (const tx of recentTransfers) {
+        if (!tx.hash) continue;
+        const [existing] = await db.select().from(paymentTransactions).where(eq3(paymentTransactions.transactionHash, tx.hash)).limit(1);
+        if (!existing) {
+          const [pendingIntent] = await db.select().from(paymentIntents).where(
+            and2(
+              eq3(paymentIntents.status, "requires_payment"),
+              eq3(paymentIntents.amountAtomic, tx.value)
+            )
+          ).limit(1);
+          if (pendingIntent) {
+            await db.insert(paymentTransactions).values({
+              paymentIntentId: pendingIntent.id,
+              transactionHash: tx.hash,
+              fromAddress: tx.from,
+              toAddress: tx.to,
+              tokenAddress: ARC_USDC_ADDRESS,
+              amountAtomic: tx.value,
+              chainId: ARC_CHAIN_ID,
+              finalizedAt: new Date(Number(tx.timeStamp) * 1e3 || Date.now())
+            });
+            await db.update(paymentIntents).set({
+              status: "succeeded",
+              buyerAddress: tx.from,
+              transactionHash: tx.hash
+            }).where(eq3(paymentIntents.id, pendingIntent.id));
+            newlySynced++;
+          }
+        }
+      }
+      return {
+        success: true,
+        scannedCount: recentTransfers.length,
+        newlySynced,
+        lastSyncedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
     })
   })
 });

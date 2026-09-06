@@ -6,7 +6,8 @@ import { z } from "zod";
 import { getAddress, verifyMessage } from "viem";
 import { apiKeys, merchantAccounts, paymentIntents, paymentTransactions, users, walletLoginChallenges, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
 import { getDb } from "./db";
-import { amountToAtomicUsdc, ARC_CHAIN_ID, ARC_USDC_ADDRESS, verifyArcUsdcTransfer } from "./arc";
+import { amountToAtomicUsdc, ARC_CHAIN_ID, ARC_USDC_ADDRESS, ARC_MERCHANT_WALLET_ADDRESS, verifyArcUsdcTransfer } from "./arc";
+import { getArcScanTokenTransfers } from "./arcscan";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -645,6 +646,66 @@ export const appRouter = router({
       const verifiedSummary = summarizeVerifiedRows(filterMerchantRows(verifiedRows, account.id));
       const pendingAtomic = pending.reduce((sum, intent) => sum + BigInt(intent.amountAtomic), BigInt(0));
       return { merchantAccountId: account.id, marketplaceId: account.marketplaceId, sellerId: account.externalSellerId, displayName: account.displayName, receivingAddress: account.receivingAddress, availableUsdc: (Number(verifiedSummary.totalAtomic) / 1_000_000).toFixed(2), grossUsdc: (Number(verifiedSummary.totalAtomic) / 1_000_000).toFixed(2), pendingUsdc: (Number(pendingAtomic) / 1_000_000).toFixed(2), successfulCount: verifiedSummary.count, pendingCount: pending.length, totalCount: intents.length };
+    }),
+
+    syncArcPayments: protectedProcedure.mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      
+      const targetAddress = process.env.ARC_MERCHANT_WALLET_ADDRESS || ARC_MERCHANT_WALLET_ADDRESS;
+      const recentTransfers = await getArcScanTokenTransfers({
+        address: targetAddress,
+        contractAddress: ARC_USDC_ADDRESS,
+        offset: 15,
+        sort: "desc",
+      });
+
+      let newlySynced = 0;
+      for (const tx of recentTransfers) {
+        if (!tx.hash) continue;
+        const [existing] = await db.select().from(paymentTransactions).where(eq(paymentTransactions.transactionHash, tx.hash)).limit(1);
+        if (!existing) {
+          // Check if there's a pending intent that matches amount and destination
+          const [pendingIntent] = await db
+            .select()
+            .from(paymentIntents)
+            .where(
+              and(
+                eq(paymentIntents.status, "requires_payment"),
+                eq(paymentIntents.amountAtomic, tx.value)
+              )
+            )
+            .limit(1);
+
+          if (pendingIntent) {
+            await db.insert(paymentTransactions).values({
+              paymentIntentId: pendingIntent.id,
+              transactionHash: tx.hash,
+              fromAddress: tx.from,
+              toAddress: tx.to,
+              tokenAddress: ARC_USDC_ADDRESS,
+              amountAtomic: tx.value,
+              chainId: ARC_CHAIN_ID,
+              finalizedAt: new Date(Number(tx.timeStamp) * 1000 || Date.now()),
+            });
+
+            await db.update(paymentIntents).set({
+              status: "succeeded",
+              buyerAddress: tx.from,
+              transactionHash: tx.hash,
+            }).where(eq(paymentIntents.id, pendingIntent.id));
+
+            newlySynced++;
+          }
+        }
+      }
+
+      return {
+        success: true,
+        scannedCount: recentTransfers.length,
+        newlySynced,
+        lastSyncedAt: new Date().toISOString(),
+      };
     }),
   }),
 });
