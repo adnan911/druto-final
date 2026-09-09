@@ -20,6 +20,9 @@ function App() {
             <Route path="/" component={Landing} />
             <Route path="/developers" component={DeveloperHub} />
             <Route path="/developers/start" component={StartWithDruto} />
+            <Route path="/start" component={StartWithDruto} />
+            <Route path="/dev-hub" component={DeveloperHub} />
+            <Route path="/sandbox" component={DeveloperHub} />
             <Route path="/dashboard" component={Home} />
             <Route path="/checkout/:session" component={Home} />
             <Route path="/receipt/:session" component={Home} />
