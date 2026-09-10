@@ -1980,7 +1980,7 @@ function safeErrorMessage(error) {
 }
 async function parseAndNormalizeBody(req) {
   if (req.body !== void 0) {
-    if (req.body && typeof req.body === "object" && !("json" in req.body) && !Array.isArray(req.body)) {
+    if (req.body && typeof req.body === "object" && !("json" in req.body) && !("0" in req.body) && !Array.isArray(req.body)) {
       req.body = { json: req.body };
     }
     return;
@@ -1994,7 +1994,7 @@ async function parseAndNormalizeBody(req) {
     if (raw.trim()) {
       try {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object" && !("json" in parsed) && !Array.isArray(parsed)) {
+        if (parsed && typeof parsed === "object" && !("json" in parsed) && !("0" in parsed) && !Array.isArray(parsed)) {
           req.body = { json: parsed };
         } else {
           req.body = parsed;
