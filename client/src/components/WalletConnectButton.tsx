@@ -1,13 +1,46 @@
 import React, { useState } from "react";
 import { Wallet, ExternalLink, RefreshCw, AlertCircle, CheckCircle2, ChevronDown, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
-import { ARC_CHAIN_ID, CIRCLE_FAUCET_URL, ARC_USDC_ADDRESS } from "@/lib/arcChain";
+import { ARC_CHAIN_ID, CIRCLE_FAUCET_URL, ARC_USDC_ADDRESS, fetchArcUsdcBalance, erc20Abi } from "@/lib/arcChain";
 import { useAccount, useConnect, useDisconnect, useReadContract, useSwitchChain } from "wagmi";
 import { formatUnits } from "viem";
-import { erc20Abi } from "@/lib/arcChain";
 
 export default function WalletConnectButton() {
   const { address, isConnected, chainId } = useAccount();
+  const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
+  const [isRefreshingBal, setIsRefreshingBal] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showWalletList, setShowWalletList] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const isArc = chainId === ARC_CHAIN_ID;
+
+  const loadBalance = React.useCallback(async (targetAddr?: `0x${string}`) => {
+    const addr = targetAddr || (address as `0x${string}`);
+    if (!addr) return;
+    try {
+      setIsRefreshingBal(true);
+      const bal = await fetchArcUsdcBalance(addr);
+      const num = parseFloat(bal);
+      setUsdcBalance(!isNaN(num) ? num.toFixed(2) : "0.00");
+    } catch (e) {
+      console.warn("Could not fetch Arc USDC balance:", e);
+      setUsdcBalance("0.00");
+    } finally {
+      setIsRefreshingBal(false);
+    }
+  }, [address]);
+
+  React.useEffect(() => {
+    if (isConnected && address) {
+      loadBalance(address as `0x${string}`);
+      const interval = setInterval(() => loadBalance(address as `0x${string}`), 10000);
+      return () => clearInterval(interval);
+    } else {
+      setUsdcBalance(null);
+    }
+  }, [isConnected, address, chainId, loadBalance]);
+
   const { connect, connectors, isPending: isConnecting } = useConnect({
     mutation: {
       onSuccess: () => {
@@ -28,29 +61,13 @@ export default function WalletConnectButton() {
   });
   const { switchChain } = useSwitchChain({
     mutation: {
-      onSuccess: () => toast.success("Switched to Arc Testnet"),
+      onSuccess: () => {
+        toast.success("Switched to Arc Testnet");
+        if (address) loadBalance(address as `0x${string}`);
+      },
       onError: () => toast.error("Could not switch network to Arc Testnet"),
     }
   });
-
-  const { data: rawBalance, refetch: refreshBalance } = useReadContract({
-    address: ARC_USDC_ADDRESS as `0x${string}`,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    chainId: ARC_CHAIN_ID,
-    query: {
-      enabled: isConnected && !!address,
-      refetchInterval: 10000,
-    }
-  });
-
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showWalletList, setShowWalletList] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const isArc = chainId === ARC_CHAIN_ID;
-  const usdcBalance = typeof rawBalance === "bigint" ? Number(formatUnits(rawBalance, 6)).toFixed(2) : "0.00";
 
   const copyAddress = () => {
     if (!address) return;
@@ -191,7 +208,7 @@ export default function WalletConnectButton() {
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#1e9b83", fontWeight: 600 }}>
             <CheckCircle2 size={13} />
-            <span>{typeof rawBalance !== "undefined" ? `${usdcBalance} USDC` : "Loading..."}</span>
+            <span>{usdcBalance !== null ? `${usdcBalance} USDC` : isRefreshingBal ? "Loading…" : "0.00 USDC"}</span>
           </div>
         )}
 
@@ -237,11 +254,16 @@ export default function WalletConnectButton() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "6px", borderBottom: "1px solid #f0f0f0" }}>
             <span style={{ fontSize: "11px", color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>Arc Testnet (5042002)</span>
             <button
-              onClick={() => address && refreshBalance()}
+              onClick={async () => {
+                if (address) {
+                  await loadBalance(address as `0x${string}`);
+                  toast.success("Arc USDC balance updated");
+                }
+              }}
               style={{ background: "none", border: "none", cursor: "pointer", color: "#666" }}
               title="Refresh Balance"
             >
-              <RefreshCw size={12} />
+              <RefreshCw size={12} className={isRefreshingBal ? "animate-spin" : ""} />
             </button>
           </div>
 
