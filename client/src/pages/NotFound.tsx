@@ -11,9 +11,8 @@ export default function NotFound() {
     <div className="min-h-screen w-full flex flex-col justify-between bg-[var(--background)] font-sans antialiased text-[var(--muted-foreground)]">
       {/* Top Brand Bar */}
       <div className="max-w-7xl mx-auto w-full px-6 py-8 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 group transition-transform duration-300 active:scale-95">
-          <img src={logo} alt="Druto logo" className="h-8 w-auto object-contain" />
-          <span className="text-xl font-bold tracking-tight text-[var(--foreground)] font-serif">druto</span>
+        <Link href="/" className="flex items-center group transition-transform duration-300 active:scale-95">
+          <img src="/druto_logo_full.png" alt="Druto" className="h-16 md:h-[72px] w-auto object-contain -translate-y-1.5" />
         </Link>
         <Link href="/developers" className="text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors">
           Developer Hub

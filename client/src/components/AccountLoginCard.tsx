@@ -215,9 +215,8 @@ export default function AccountLoginCard() {
 
       {/* Top Navbar */}
       <header className="relative z-20 max-w-7xl mx-auto w-full px-6 py-6 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 group transition-transform duration-300 active:scale-95">
-          <img src="/DRUTO_D_logo.png" alt="Druto logo" className="h-8 w-auto object-contain" />
-          <span className="text-xl font-bold tracking-tight text-[var(--foreground)] font-serif">druto</span>
+        <Link href="/" className="flex items-center group transition-transform duration-300 active:scale-95">
+          <img src="/druto_logo_full.png" alt="Druto" className="h-16 md:h-[72px] w-auto object-contain -translate-y-1.5" />
         </Link>
         <div className="flex items-center gap-5">
           <Link href="/developers" className="text-xs font-mono font-medium text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors hidden sm:block">

@@ -181,12 +181,11 @@ export default function StartWithDruto() {
       {/* Navigation */}
       <nav className="fixed w-full z-50 border-b border-[var(--border)] top-0 right-0 left-0 bg-[var(--background)]/90 backdrop-blur-2xl transition-all duration-300">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="relative flex h-20 items-center justify-between">
+          <div className="relative flex h-20 md:h-24 items-center justify-between">
             {/* Logo */}
             <div className="flex items-center shrink-0 z-20">
-              <Link href="/" className="flex items-center gap-3 group transition-transform duration-300 active:scale-95">
-                <img src={logo} alt="Druto logo" className="h-9 w-auto object-contain" />
-                <span className="text-xl font-bold tracking-tight text-[var(--foreground)] font-serif">druto</span>
+              <Link href="/" className="flex items-center group transition-transform duration-300 active:scale-95">
+                <img src="/druto_logo_full.png" alt="Druto" className="h-16 md:h-[72px] w-auto object-contain -translate-y-1.5" />
               </Link>
             </div>
 

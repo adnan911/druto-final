@@ -18,7 +18,8 @@ import {
   Activity, AlertCircle, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, ChevronUp, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, LogOut, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Rocket, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, Wallet, WalletCards, X, Zap
 } from "lucide-react";
 
-const logo = "/DRUTO_D_logo.png";
+const logo = "/DRUTO_D_logo.svg";
+const logoFull = "/druto_logo_full.png";
 const heroVisual = "/manus-storage/druto-editorial-network_c7fbc025.jpg";
 const flowVisual = "/manus-storage/druto-payment-flow_17da128c.jpg";
 const settleVisual = "/manus-storage/druto-settlement-abstract_ac9457d1.jpg";
@@ -57,9 +58,6 @@ function saveStoredModuleToggles(toggles: ModuleToggles) {
   }
 }
 
-
-
-
 function classNames(...values: Array<string | false | undefined>) { return values.filter(Boolean).join(" "); }
 
 function StatusPill({ status, tone = "neutral", verified = false, txHash }: { status: string; tone?: string; verified?: boolean; txHash?: string }) {
@@ -79,7 +77,9 @@ function StatusPill({ status, tone = "neutral", verified = false, txHash }: { st
   );
 }
 
-function Mark() { return <img src={logo} alt="" className="brand-mark" />; }
+function Mark({ full = false }: { full?: boolean }) {
+  return <img src={full ? logoFull : logo} alt="Druto" className={full ? "brand-logo-full" : "brand-mark"} />;
+}
 
 function privyIdentityLabel(privyUser: ReturnType<typeof usePrivy>["user"]) {
   if (!privyUser) return null;
@@ -213,7 +213,14 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggl
     }
   };
   return <aside className={classNames("sidebar", collapsed && "sidebar-collapsed")}>
-    <div className="brand-row"><div className="brand-lockup"><Mark /><span>druto</span></div><button className="icon-button sidebar-toggle" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle navigation"><Menu size={17} /></button></div>
+    <div className="brand-row">
+      <div className="brand-lockup">
+        <Mark full={!collapsed} />
+      </div>
+      <button className="icon-button sidebar-toggle" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle navigation">
+        <Menu size={17} />
+      </button>
+    </div>
     <div className="environment-switch"><span className="live-dot" /> <span>Test environment</span><ChevronDown size={13} /></div>
     <nav className="side-nav">{navGroups.map(group => <div key={group.label} className="nav-group"><div className="nav-label">{group.label}</div>{group.items.map(item => <button key={item} onClick={() => item === "Developers" ? window.location.href = "/developers" : setActive(item)} className={classNames("nav-item", active === item && "nav-active")}><NavIcon item={item} /><span>{item}</span></button>)}</div>)}</nav>
     <div className="sidebar-bottom">
@@ -1140,7 +1147,7 @@ function ReceiptPage() {
     }
   };
 
-  if (!intent) return <div className="checkout-shell"><div className="checkout-brand"><Mark /><span>druto</span></div><main className="checkout-main"><div className="checkout-card"><strong>Loading buyer receipt…</strong></div></main></div>;
+  if (!intent) return <div className="checkout-shell"><div className="checkout-brand"><Mark full /></div><main className="checkout-main"><div className="checkout-card"><strong>Loading buyer receipt…</strong></div></main></div>;
   const { amount, isSucceeded, orderContext, lineItems, buyerEmail, shipping } = buildReceiptSummary(intent);
   const statusLabel = isSucceeded ? "Payment Receipt" : "Verification in progress";
   const copyValue = async (value: string, label: string) => { const copied = await copyReceiptValue(value); if (copied) toast.success(`${label} copied`); else toast.info(`Select and copy the ${label.toLowerCase()} manually.`); };
@@ -1148,8 +1155,7 @@ function ReceiptPage() {
   return (
     <div className="checkout-shell">
       <div className="checkout-brand">
-        <Mark />
-        <span>druto</span>
+        <Mark full />
         <span className="checkout-test">
           <span className="live-dot" /> {receiptPreview ? "Mixed-seller preview" : "Buyer receipt"}
         </span>
@@ -1509,8 +1515,7 @@ function CheckoutPage() {
   return (
     <div className="checkout-shell">
       <div className="checkout-brand">
-        <Mark />
-        <span>druto</span>
+        <Mark full />
         <span className="checkout-test">
           <span className="live-dot" /> Arc Testnet
         </span>
