@@ -26,7 +26,24 @@ export default {
     const path = new URL(request.url).pathname;
     if (path.startsWith("/api/") || path.startsWith("/trpc/") || path.startsWith("/manus-storage/")) {
       const handler = await getApiHandler();
-      if (!env.HYPERDRIVE) return handler.fetch(request, env, context);
+      if (!env.HYPERDRIVE) {
+        if (path === "/api/health") return handler.fetch(request, env, context);
+        return new Response(JSON.stringify({ ready: false }), {
+          status: 503,
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
+      }
+      if (path !== "/api/health" && path !== "/api/ready") {
+        try {
+          assertCloudflareRuntimeConfiguration();
+          assertWebhookEncryptionConfigured();
+        } catch {
+          return new Response(JSON.stringify({ ready: false }), {
+            status: 503,
+            headers: { "content-type": "application/json", "cache-control": "no-store" },
+          });
+        }
+      }
       return withHyperdrive(env.HYPERDRIVE, () => handler.fetch(request, env, context));
     }
     return env.ASSETS.fetch(request);

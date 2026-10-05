@@ -29,7 +29,9 @@ database migration. No mainnet USDC or fiat feature is enabled.
   pinning. The existing pinned transport remains for Node.
 - Cloudflare readiness requires an explicit public URL, strong JWT secret,
   Privy server credentials, webhook encryption key, and healthy TiDB session.
-  Missing settings fail closed.
+  Missing settings fail closed. Without a Hyperdrive binding the Worker serves
+  `/api/health` but responds 503 to all other API routes; payment APIs also
+  respond 503 if the required runtime secrets are missing.
 - The Worker has a scheduled outbox handler, but no Cron Trigger is configured.
   The older Vercel-calling Cron Worker is only a fallback during transition.
 - A Cloudflare-only `iconv-lite` alias avoids a runtime startup error in the
@@ -47,6 +49,10 @@ database migration. No mainnet USDC or fiat feature is enabled.
 
 ## Deployment gates
 
+- [ ] Inspect the pre-existing Cloudflare `druto-final` Worker and its GitHub
+      Workers Builds failure. The migration preview uses the separate
+      `druto-testnet-preview` name; do not overwrite the existing Worker or
+      change its production route as part of initial testing.
 - [ ] Confirm migration scope: Druto only or Druto plus Luvre Franc; confirm
       Testnet Preview versus real customer launch.
 - [ ] Create a dedicated Hyperdrive configuration from the existing restricted
