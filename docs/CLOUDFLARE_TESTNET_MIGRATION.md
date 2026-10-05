@@ -62,7 +62,9 @@ database migration. No mainnet USDC or fiat feature is enabled.
       absent; the older production build tried Wrangler auto-configuration
       without a root config. Build `99ff350` succeeded as a branch Preview.
       Cloudflare's Preview URLs are enabled and its Production Worker URL is
-      disabled. Do not deploy to its
+      disabled. Wrangler explicitly keeps `workers_dev` false while allowing
+      Preview URLs, so a later build does not enable the Production URL by
+      accident. Do not deploy to its
       Production environment or change its production route as part of
       initial testing.
 - [ ] Confirm migration scope: Druto only or Druto plus Luvre Franc; confirm
