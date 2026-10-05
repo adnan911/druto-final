@@ -1,37 +1,34 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const connections: Array<{ end: ReturnType<typeof vi.fn>; user: string }> = [];
-vi.mock("mysql2/promise", () => ({
-  default: {
-    createConnection: vi.fn(async ({ user }: { user: string }) => {
-      const connection = { user, end: vi.fn(async () => {}), query: vi.fn() };
-      connections.push(connection);
-      return connection;
-    }),
-    createPool: vi.fn(),
-  },
+const clients: Array<{ url: string; execute: ReturnType<typeof vi.fn> }> = [];
+vi.mock("@tidbcloud/serverless", () => ({
+  connect: vi.fn(({ url }: { url: string }) => {
+    const client = { url, execute: vi.fn(async () => []) };
+    clients.push(client);
+    return client;
+  }),
 }));
 
-import { getDb, withHyperdrive } from "./db";
+import { getDb, withTiDbHttp } from "./db";
 
-const credentials = (user: string) => ({
-  host: "hyperdrive.local", user, password: "fixture-password", database: "druto_testnet", port: 3306,
-});
+const url = (user: string) =>
+  `mysql://${user}:fixture-password@gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/druto_testnet`;
 
-afterEach(() => { connections.length = 0; });
+afterEach(() => { clients.length = 0; });
 
-describe("Cloudflare request-scoped database", () => {
-  it("rejects a nonrestricted identity before any connection", async () => {
-    await expect(withHyperdrive(credentials("root"), async () => {})).rejects.toThrow("restricted");
-    expect(connections).toHaveLength(0);
+describe("Cloudflare request-scoped TiDB HTTP database", () => {
+  it("rejects a nonrestricted identity before connecting", async () => {
+    await expect(withTiDbHttp(url("root"), async () => {})).rejects.toThrow("restricted");
+    expect(clients).toHaveLength(0);
   });
 
-  it("reuses only within one invocation and closes every connection", async () => {
+  it("reuses a client within one invocation and isolates parallel requests", async () => {
     await Promise.all([
-      withHyperdrive(credentials("seller_a.druto_app"), async () => { await getDb(); await getDb(); }),
-      withHyperdrive(credentials("seller_b.druto_app"), async () => { await getDb(); }),
+      withTiDbHttp(url("seller_a.druto_app"), async () => { await getDb(); await getDb(); }),
+      withTiDbHttp(url("seller_b.druto_app"), async () => { await getDb(); }),
     ]);
-    expect(connections.map(connection => connection.user).sort()).toEqual(["seller_a.druto_app", "seller_b.druto_app"]);
-    expect(connections.every(connection => connection.end.mock.calls.length === 1)).toBe(true);
+    expect(clients.map(client => new URL(client.url).username).sort()).toEqual([
+      "seller_a.druto_app", "seller_b.druto_app",
+    ]);
   });
 });

@@ -1,5 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle as drizzleTiDb } from "drizzle-orm/tidb-serverless";
+import { connect } from "@tidbcloud/serverless";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -10,52 +12,35 @@ import { assertDatabaseTarget } from "./db-target";
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: ReturnType<typeof mysql.createPool> | null = null;
 
-export type HyperdriveCredentials = {
-  host: string;
-  user: string;
-  password: string;
-  database: string;
-  port: number;
-};
 type WorkerDbContext = {
-  credentials: HyperdriveCredentials;
-  connection?: mysql.Connection;
-  dbPromise?: Promise<ReturnType<typeof drizzle>>;
+  url: string;
+  client?: ReturnType<typeof connect>;
+  db?: ReturnType<typeof drizzle>;
 };
 const workerDbContext = new AsyncLocalStorage<WorkerDbContext>();
 
-function assertHyperdriveTarget(credentials: HyperdriveCredentials): void {
-  if (credentials.database !== "druto_testnet" ||
-      !credentials.user.endsWith(".druto_app") ||
-      !credentials.password || !credentials.host || !Number.isInteger(credentials.port)) {
-    throw new Error("Cloudflare Hyperdrive must use the restricted druto_testnet app identity");
+function assertTiDbHttpTarget(connectionUrl: string): void {
+  let url: URL;
+  try { url = new URL(connectionUrl); }
+  catch { throw new Error("Cloudflare TiDB URL is invalid"); }
+  if (url.protocol !== "mysql:" || url.pathname !== "/druto_testnet" ||
+      url.port !== "4000" || !url.hostname.toLowerCase().endsWith(".tidbcloud.com") ||
+      !decodeURIComponent(url.username).endsWith(".druto_app") || !url.password ||
+      url.search || url.hash) {
+    throw new Error("Cloudflare TiDB HTTP driver must use the restricted druto_testnet app identity");
   }
 }
 
-/** One MySQL connection per Worker invocation; Hyperdrive owns the underlying pool. */
-export async function withHyperdrive<T>(credentials: HyperdriveCredentials, work: () => Promise<T>): Promise<T> {
-  assertHyperdriveTarget(credentials);
-  const context: WorkerDbContext = { credentials };
-  return workerDbContext.run(context, async () => {
-    try { return await work(); }
-    finally { if (context.connection) await context.connection.end(); }
-  });
+/** TiDB's HTTPS driver is scoped to one Worker invocation. */
+export async function withTiDbHttp<T>(connectionUrl: string, work: () => Promise<T>): Promise<T> {
+  assertTiDbHttpTarget(connectionUrl);
+  return workerDbContext.run({ url: connectionUrl }, work);
 }
 
-async function getWorkerDb(context: WorkerDbContext): Promise<ReturnType<typeof drizzle>> {
-  context.dbPromise ??= (async () => {
-    const connection = await mysql.createConnection({
-      host: context.credentials.host,
-      user: context.credentials.user,
-      password: context.credentials.password,
-      database: context.credentials.database,
-      port: context.credentials.port,
-      disableEval: true,
-    });
-    context.connection = connection;
-    return drizzle(connection as any);
-  })();
-  return context.dbPromise;
+function getWorkerDb(context: WorkerDbContext): ReturnType<typeof drizzle> {
+  context.client ??= connect({ url: context.url });
+  context.db ??= drizzleTiDb({ client: context.client }) as unknown as ReturnType<typeof drizzle>;
+  return context.db;
 }
 
 // Operational auth and payment state must always use the configured SQL database.
@@ -88,21 +73,35 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
 export async function checkDatabaseReadiness(): Promise<void> {
   const workerContext = workerDbContext.getStore();
   await getDb();
+  const tables = ["apiKeys", "merchantAccounts", "ownershipChallenges", "paymentIntents", "paymentTransactions", "users", "walletLoginChallenges", "webhookDeliveries", "webhookEndpoints"];
+  if (workerContext) {
+    const client = workerContext.client!;
+    const identity = await client.execute("SELECT DATABASE() AS databaseName, CURRENT_USER() AS currentUser") as unknown as Array<{
+      databaseName?: string;
+      currentUser?: string;
+    }>;
+    if (identity[0]?.databaseName !== "druto_testnet" ||
+        !String(identity[0]?.currentUser ?? "").split("@")[0].endsWith(".druto_app")) {
+      throw new Error("Database identity verification failed");
+    }
+    for (const table of tables) await client.execute(`SELECT 1 FROM \`${table}\` LIMIT 0`);
+    return;
+  }
   if (!workerContext && !_pool) throw new Error("Database pool unavailable");
-  const connection = workerContext ? workerContext.connection! : await _pool!.getConnection();
+  const connection = await _pool!.getConnection();
   try {
     const [identity] = await connection.query<mysql.RowDataPacket[]>("SELECT DATABASE() AS databaseName, CURRENT_USER() AS currentUser");
     const [tls] = await connection.query<mysql.RowDataPacket[]>("SHOW SESSION STATUS LIKE 'Ssl_cipher'");
-    if ((workerContext || process.env.NODE_ENV === "production") && (
+    if (process.env.NODE_ENV === "production" && (
       identity[0]?.databaseName !== "druto_testnet" ||
       !String(identity[0]?.currentUser ?? "").split("@")[0].endsWith(".druto_app") ||
       !tls[0]?.Value
     )) throw new Error("Database identity or TLS verification failed");
-    for (const table of ["apiKeys", "merchantAccounts", "ownershipChallenges", "paymentIntents", "paymentTransactions", "users", "walletLoginChallenges", "webhookDeliveries", "webhookEndpoints"]) {
+    for (const table of tables) {
       await connection.query(`SELECT 1 FROM \`${table}\` LIMIT 0`);
     }
   } finally {
-    if (!workerContext) (connection as mysql.PoolConnection).release();
+    (connection as mysql.PoolConnection).release();
   }
 }
 

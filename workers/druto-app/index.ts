@@ -1,14 +1,14 @@
 import { createServer } from "node:http";
 import { httpServerHandler } from "cloudflare:node";
 import { createApp } from "../../api/index.src";
-import { checkDatabaseReadiness, getDb, withHyperdrive } from "../../server/db";
+import { checkDatabaseReadiness, getDb, withTiDbHttp } from "../../server/db";
 import { assertWebhookEncryptionConfigured } from "../../server/webhooks";
 import { drainWebhookOutbox } from "../../server/webhook-delivery";
 import { assertCloudflareRuntimeConfiguration } from "../../server/public-origin";
 
 type WorkerEnv = {
   ASSETS: Fetcher;
-  HYPERDRIVE?: Hyperdrive;
+  TIDB_DATABASE_URL?: string;
 };
 
 let apiHandler: ReturnType<typeof httpServerHandler> | undefined;
@@ -26,7 +26,7 @@ export default {
     const path = new URL(request.url).pathname;
     if (path.startsWith("/api/") || path.startsWith("/trpc/") || path.startsWith("/manus-storage/")) {
       const handler = await getApiHandler();
-      if (!env.HYPERDRIVE) {
+      if (!env.TIDB_DATABASE_URL) {
         if (path === "/api/health") return handler.fetch(request, env, context);
         return new Response(JSON.stringify({ ready: false }), {
           status: 503,
@@ -44,14 +44,14 @@ export default {
           });
         }
       }
-      return withHyperdrive(env.HYPERDRIVE, () => handler.fetch(request, env, context));
+      return withTiDbHttp(env.TIDB_DATABASE_URL, () => handler.fetch(request, env, context));
     }
     return env.ASSETS.fetch(request);
   },
 
   async scheduled(_event, env) {
-    if (!env.HYPERDRIVE) throw new Error("Druto Hyperdrive binding is not configured");
-    await withHyperdrive(env.HYPERDRIVE, async () => {
+    if (!env.TIDB_DATABASE_URL) throw new Error("Druto TiDB HTTP credential is not configured");
+    await withTiDbHttp(env.TIDB_DATABASE_URL, async () => {
       await checkDatabaseReadiness();
       assertWebhookEncryptionConfigured();
       assertCloudflareRuntimeConfiguration();

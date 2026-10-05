@@ -4,14 +4,6 @@ interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
 
-interface Hyperdrive {
-  host: string;
-  user: string;
-  password: string;
-  database: string;
-  port: number;
-}
-
 interface ExportedHandler<Env> {
   fetch?(request: Request, env: Env, context: unknown): Promise<Response> | Response;
   scheduled?(event: unknown, env: Env, context: unknown): Promise<void> | void;
