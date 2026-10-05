@@ -4,8 +4,8 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { drainWebhookOutbox } from "../server/webhook-delivery";
 
 async function main() {
-  if (!process.env.DATABASE_URL || !process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || !process.env.DRUTO_WEBHOOK_ALLOWED_ORIGINS) {
-    throw new Error("Set an explicit app DATABASE_URL, existing JWT_SECRET and trusted DRUTO_WEBHOOK_ALLOWED_ORIGINS");
+  if (!process.env.DATABASE_URL || !/^[a-fA-F0-9]{64}$/.test(process.env.DRUTO_WEBHOOK_ENCRYPTION_KEY ?? "") || !process.env.DRUTO_WEBHOOK_ALLOWED_ORIGINS) {
+    throw new Error("Set an explicit app DATABASE_URL, dedicated DRUTO_WEBHOOK_ENCRYPTION_KEY and trusted DRUTO_WEBHOOK_ALLOWED_ORIGINS");
   }
   const url = new URL(process.env.DATABASE_URL);
   if (url.protocol !== "mysql:" || url.pathname !== "/druto_testnet" || !url.hostname.endsWith(".tidbcloud.com") || !decodeURIComponent(url.username).endsWith(".druto_app")) throw new Error("Worker requires the limited druto_testnet app identity");
