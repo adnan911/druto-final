@@ -338,7 +338,7 @@ export default function Landing() {
               </h1>
 
               <p className="text-base sm:text-lg lg:text-xl text-[var(--muted-foreground)] mb-8 leading-relaxed max-w-xl font-normal font-sans">
-                Druto empowers marketplaces and commerce platforms with server-signed payment intents, instant checkout, and cryptographic Arc finality.
+                 Arc Testnet checkout for marketplaces: server-created payment intents, buyer-signed wallet transfers, and onchain payment verification.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 sm:items-center items-start font-sans">
@@ -400,27 +400,27 @@ export default function Landing() {
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <div className="w-2 h-2 rounded-full bg-[var(--primary)] shadow-[0_0_10px_rgba(45,74,70,0.4)]" />
-                            <span className="text-[11px] uppercase tracking-wider text-[var(--muted-foreground)] font-medium font-mono">Verified Rail</span>
+                            <span className="text-[11px] uppercase tracking-wider text-[var(--muted-foreground)] font-medium font-mono">Illustrative Testnet dashboard</span>
                           </div>
                           <h2 className="text-xl sm:text-2xl font-light text-[var(--foreground)] tracking-tight font-serif">
                             Settlement Overview
                           </h2>
                         </div>
                         <div className="text-right">
-                          <p className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-medium font-mono mb-0.5">Arc Native Volume</p>
-                          <p className="text-lg sm:text-xl font-light tracking-tight text-[var(--foreground)] font-serif">$84,250.00 <small className="text-[10px] font-mono text-[var(--muted-foreground)]">USDC</small></p>
+                           <p className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-medium font-mono mb-0.5">Data shown</p>
+                           <p className="text-lg sm:text-xl font-light tracking-tight text-[var(--foreground)] font-serif">Sample only</p>
                         </div>
                       </div>
 
                       {/* Top Metric Strip */}
                       <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mb-4">
                         <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2.5 shadow-xs">
-                          <p className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-mono mb-0.5">Finality Speed</p>
-                          <p className="text-sm font-semibold text-[var(--foreground)] font-mono tracking-tight">&lt; 850ms</p>
+                           <p className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-mono mb-0.5">Payment status</p>
+                           <p className="text-sm font-semibold text-[var(--foreground)] font-mono tracking-tight">Receipt verified</p>
                         </div>
                         <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2.5 shadow-xs">
-                          <p className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-mono mb-0.5">Custody Model</p>
-                          <p className="text-sm font-semibold text-[var(--primary)] font-mono tracking-tight">0% Non-Custodial</p>
+                           <p className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-mono mb-0.5">Payment route</p>
+                           <p className="text-sm font-semibold text-[var(--primary)] font-mono tracking-tight">Direct to seller</p>
                         </div>
                         <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2.5 shadow-xs">
                           <p className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-mono mb-0.5">Settlement Chain</p>
@@ -487,9 +487,9 @@ export default function Landing() {
                   }}
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="text-xs font-medium tracking-tight text-[var(--foreground)]">Payment Receipt</h3>
-                      <p className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-mono">ArcScan Confirmed</p>
+                     <div>
+                       <h3 className="text-xs font-medium tracking-tight text-[var(--foreground)]">Sample Payment Receipt</h3>
+                       <p className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-mono">Illustrative data</p>
                     </div>
                     <div className="w-5 h-5 rounded-full bg-[var(--background)] flex items-center justify-center text-[var(--primary)] border border-[var(--border)]">
                       <Check size={10} strokeWidth={3} />
@@ -500,7 +500,7 @@ export default function Landing() {
                     <p className="text-xl font-light tracking-tight text-[var(--foreground)] font-serif leading-none">$12,450.00 <small className="text-[10px] font-mono text-[var(--muted-foreground)]">USDC</small></p>
                     <div className="flex items-center gap-1.5 mt-1.5">
                       <span className="text-[10px] font-medium text-[var(--primary)] bg-[var(--background)] px-1.5 py-0.5 rounded border border-[var(--border)] flex items-center gap-1 font-mono">
-                        <Zap size={10} /> Instant Finality
+                         <Zap size={10} /> Sample receipt
                       </span>
                     </div>
                   </div>
@@ -535,7 +535,7 @@ export default function Landing() {
             </h2>
 
             <p className="text-base sm:text-lg text-[var(--muted-foreground)] font-normal leading-relaxed max-w-2xl mx-auto font-sans">
-              Druto guarantees zero client-side price tampering and zero private-key exposure through an auditable 4-phase transaction lifecycle.
+               The merchant server sets the payment amount and seller wallet. The buyer signs the transfer in their wallet; Druto verifies the onchain receipt before marking the intent paid.
             </p>
           </div>
 
@@ -581,7 +581,7 @@ export default function Landing() {
                       Idempotent Keys
                     </strong>
                     <span className="text-[11px] text-[var(--muted-foreground)] leading-relaxed block font-sans">
-                      Deterministic SHA-256 keys prevent double charges on network retries.
+                       Seller-scoped idempotency keys prevent duplicate payment intents on API retries.
                     </span>
                   </div>
                 </button>
@@ -602,10 +602,10 @@ export default function Landing() {
                   </div>
                   <div>
                     <strong className="text-xs font-semibold text-[var(--foreground)] block font-sans mb-1">
-                      Multi-Seller Splits
+                       Direct Seller Payment
                     </strong>
                     <span className="text-[11px] text-[var(--muted-foreground)] leading-relaxed block font-sans">
-                      Direct atomic settlement routes funds to multiple merchant wallets.
+                       Each checkout pays one verified seller wallet directly. Multi-seller splitting is outside this pilot.
                     </span>
                   </div>
                 </button>
@@ -629,7 +629,7 @@ export default function Landing() {
                       Arc Finality Proof
                     </strong>
                     <span className="text-[11px] text-[var(--muted-foreground)] leading-relaxed block font-sans">
-                      Instant on-chain verification confirmed under 400ms on Arc Testnet.
+                       The payment is marked paid only after Druto checks the Arc Testnet transaction receipt.
                     </span>
                   </div>
                 </button>
@@ -650,10 +650,10 @@ export default function Landing() {
                   </div>
                   <div>
                     <strong className="text-xs font-semibold text-[var(--foreground)] block font-sans mb-1">
-                      Signed Webhooks
+                       Webhook Outbox
                     </strong>
                     <span className="text-[11px] text-[var(--muted-foreground)] leading-relaxed block font-sans">
-                      HMAC-SHA256 authenticated events with 300s replay tolerance.
+                       Verified payments queue signed events; hosted dispatch is pending for the pilot.
                     </span>
                   </div>
                 </button>
@@ -684,7 +684,7 @@ export default function Landing() {
                 <div className="flex items-center justify-between px-4 py-2.5 mb-2 bg-[var(--background)]/80 backdrop-blur-md rounded-2xl border border-[var(--border)] text-xs font-mono">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    <span className="font-semibold text-[var(--foreground)]">Druto workflow</span>
+                     <span className="font-semibold text-[var(--foreground)]">Illustrative Druto workflow</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -832,10 +832,10 @@ export default function Landing() {
                         <div className={`text-[10px] leading-tight p-1.5 rounded-lg border transition-colors ${activeFlowStep === 2 ? "bg-white/80 border-[var(--primary)]/20 text-[#2d4a46]" : "bg-[var(--background)] text-[var(--muted-foreground)] border-[var(--border)]/60"}`}>
                           <div className="flex items-center gap-1 text-[9px] font-semibold text-[var(--foreground)]">
                             <CheckCircle2 size={10} className="text-emerald-600" />
-                            <span>EIP-712 Domain Bound</span>
+                             <span>Buyer signs wallet transfer</span>
                           </div>
                           <div className="text-[9px] mt-0.5 text-[var(--muted-foreground)]">
-                            Gas: 0 · Direct Transfer
+                             Network gas may apply
                           </div>
                         </div>
                       </div>
@@ -866,7 +866,7 @@ export default function Landing() {
                           </div>
                           <div className="flex justify-between mt-0.5 text-[9px]">
                             <span>Receipt Proof:</span>
-                            <span className="text-emerald-700 font-bold">18ms latency</span>
+                             <span className="text-emerald-700 font-bold">Verified onchain</span>
                           </div>
                         </div>
                       </div>
@@ -884,7 +884,7 @@ export default function Landing() {
                       >
                         <div className="flex items-center justify-between">
                           <span className={`text-[10px] uppercase font-bold tracking-wider ${activeFlowStep === 4 ? "text-[var(--primary)]" : "text-[var(--primary)]"}`}>
-                            4. Webhook
+                             4. Webhook Queue
                           </span>
                           <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors ${activeFlowStep === 4 ? "bg-[var(--accent)] text-[var(--primary)] border-[var(--accent)] shadow-sm" : "bg-[var(--accent)] text-[var(--primary)] border-[var(--accent)]"}`}>
                             <Webhook size={12} />
@@ -892,12 +892,12 @@ export default function Landing() {
                         </div>
                         <div className={`text-[10px] leading-tight p-1.5 rounded-lg border transition-colors ${activeFlowStep === 4 ? "bg-white/80 border-[var(--primary)]/20 text-[#2d4a46]" : "bg-[var(--background)] text-[var(--muted-foreground)] border-[var(--border)]/60"}`}>
                           <div className="flex justify-between text-[9px]">
-                            <span>Dispatch:</span>
-                            <span className="text-emerald-700 font-bold">200 OK</span>
+                             <span>Event:</span>
+                             <span className="text-emerald-700 font-bold">Queued</span>
                           </div>
                           <div className="flex justify-between mt-0.5 text-[9px]">
-                            <span>HMAC Signature:</span>
-                            <span className="text-[var(--foreground)] font-mono">Verified</span>
+                             <span>Delivery:</span>
+                             <span className="text-[var(--foreground)] font-mono">Worker pending</span>
                           </div>
                         </div>
                       </div>
@@ -910,7 +910,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Network Signals & Live Verification Telemetry Section */}
+      {/* Testnet workflow illustration; these cards are not live telemetry. */}
       <section className="antialiased min-h-screen flex flex-col overflow-hidden text-[var(--foreground)] font-sans border-t border-[var(--border)] bg-[var(--background)]">
         <div className="max-w-6xl mx-auto w-full flex-grow flex flex-col border-x border-[var(--border)] relative bg-[var(--card)]/40 backdrop-blur-[2px]">
           {/* Corner points */}
@@ -920,11 +920,11 @@ export default function Landing() {
           {/* Header */}
           <header className="pt-20 pb-14 px-6 text-center border-b border-[var(--border)] relative z-10 font-sans">
             <h2 className="text-4xl md:text-5xl font-light tracking-tight text-[var(--foreground)] max-w-3xl mx-auto font-serif leading-tight">
-              Real-time onchain <span className="italic text-[var(--primary)] font-serif">verification</span>
+               Arc Testnet <span className="italic text-[var(--primary)] font-serif">payment flow</span>
             </h2>
 
             <p className="mt-4 max-w-xl mx-auto text-base sm:text-lg text-[var(--muted-foreground)] leading-relaxed font-normal font-sans">
-              Watch live Arc Network transaction verification, gasless multi-seller cart batching, and sub-second settlement dispatch.
+               An illustration of one buyer paying one verified seller wallet. Example transactions and status cards below are sample data, not live network telemetry.
             </p>
           </header>
 
@@ -934,19 +934,19 @@ export default function Landing() {
             <div className="border-r border-[var(--border)] bg-[var(--card)]/30 backdrop-blur-sm grid grid-rows-2 divide-y divide-[var(--border)]">
               <div className="flex flex-col items-center justify-center text-center p-8 transition-colors hover:bg-[var(--card)]/60">
                 <div className="text-4xl font-light text-[var(--foreground)] font-serif tracking-tight">
-                  &lt; 850ms
+                   Variable
                 </div>
                 <div className="mt-2 text-xs text-[var(--muted-foreground)] max-w-[200px] leading-relaxed font-mono uppercase tracking-wider">
-                  average block latency
+                   Testnet confirmation time
                 </div>
               </div>
 
               <div className="flex flex-col items-center justify-center text-center p-8 transition-colors hover:bg-[var(--card)]/60">
                 <div className="text-4xl font-light text-[var(--primary)] font-serif tracking-tight">
-                  100%
+                   EIP-712
                 </div>
                 <div className="mt-2 text-xs text-[var(--muted-foreground)] max-w-[200px] leading-relaxed font-mono uppercase tracking-wider">
-                  EIP-712 challenge accuracy
+                   wallet ownership proof
                 </div>
               </div>
             </div>
@@ -964,14 +964,14 @@ export default function Landing() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-[var(--foreground)]">Payment Verified</span>
-                        <span className="text-[11px] font-mono text-[var(--primary)] bg-[var(--background)] px-1.5 py-0.5 rounded border border-[var(--border)]">Arc 5042002</span>
+                         <span className="text-sm font-medium text-[var(--foreground)]">Example payment</span>
+                         <span className="text-[11px] font-mono text-[var(--primary)] bg-[var(--background)] px-1.5 py-0.5 rounded border border-[var(--border)]">Testnet sample</span>
                       </div>
                       <p className="text-xs text-[var(--muted-foreground)] font-mono mt-0.5">TX: 0x7f0a91...3b21 · 45.00 USDC</p>
                     </div>
                   </div>
                   <span className="text-xs font-bold text-[var(--primary)] bg-[var(--background)] px-2 py-1 rounded border border-[var(--border)] font-mono">
-                    21ms
+                     Sample
                   </span>
                 </div>
 
@@ -981,8 +981,8 @@ export default function Landing() {
                       ⇄
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-[var(--foreground)]">Multi-Seller Split (2 Merchants)</span>
-                      <p className="text-xs text-[var(--muted-foreground)] font-mono">DR-8921-ARC · Parallel Settlement</p>
+                       <span className="text-sm font-medium text-[var(--foreground)]">Direct to seller wallet</span>
+                       <p className="text-xs text-[var(--muted-foreground)] font-mono">One seller per checkout</p>
                     </div>
                   </div>
                   <span className="text-xs font-medium text-[var(--primary)] font-mono">Settled</span>
@@ -993,7 +993,7 @@ export default function Landing() {
               <div className="relative z-10 bg-[var(--card)]/90 backdrop-blur-md border border-[var(--border)] rounded-2xl px-6 py-3 flex items-center justify-between text-xs text-[var(--muted-foreground)] shadow-sm max-w-md mx-auto w-full mb-2 font-sans">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-[var(--primary)] animate-ping" />
-                  <span className="font-semibold text-[var(--foreground)]">Arc Testnet Node RPC</span>
+                   <span className="font-semibold text-[var(--foreground)]">Configured Arc Testnet RPC</span>
                 </div>
                 <span className="font-mono text-xs text-[var(--muted-foreground)]">rpc.testnet.arc.network</span>
               </div>
@@ -1003,19 +1003,19 @@ export default function Landing() {
             <div className="border-l border-[var(--border)] bg-[var(--card)]/30 backdrop-blur-sm grid grid-rows-2 divide-y divide-[var(--border)]">
               <div className="flex flex-col items-center justify-center text-center p-8 transition-colors hover:bg-[var(--card)]/60">
                 <div className="text-4xl font-light text-[var(--primary)] font-serif tracking-tight">
-                  0 bps
+                   0% fee
                 </div>
                 <div className="mt-2 text-xs text-[var(--muted-foreground)] max-w-[200px] leading-relaxed font-mono uppercase tracking-wider">
-                  funds holding risk
+                   platform fee for direct payment
                 </div>
               </div>
 
               <div className="flex flex-col items-center justify-center text-center p-8 transition-colors hover:bg-[var(--card)]/60">
                 <div className="text-4xl font-light text-[var(--foreground)] font-serif tracking-tight">
-                  24 / 7
+                   Pilot
                 </div>
                 <div className="mt-2 text-xs text-[var(--muted-foreground)] max-w-[200px] leading-relaxed font-mono uppercase tracking-wider">
-                  automated webhook dispatch
+                   hosted webhook worker pending
                 </div>
               </div>
             </div>
