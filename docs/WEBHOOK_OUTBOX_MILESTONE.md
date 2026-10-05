@@ -11,7 +11,7 @@ Official documentation checked on 29 September 2026:
 
 Assessment: daily scheduling cannot provide prompt marketplace recovery. Do not describe a daily cron as a reliable low-latency payment worker. Non-commercial eligibility must also be established; using testnet does not automatically establish it. Commercial launch requires hosting whose terms allow the intended use. No paid upgrade or external scheduler has been selected.
 
-The worker is portable Node code, so development can proceed without buying hosting. Running it locally is useful for testing; it is not an always-on service. No cron was added to `vercel.json`, and no public worker endpoint was exposed.
+The worker is portable Node code, so development can proceed without buying hosting. Running it locally is useful for testing; it is not an always-on service. No cron was added to `vercel.json`. The later review branch contains a disabled-by-default, token-protected HTTP drain route for an external scheduler; it is not activated in Production.
 
 ## What changed
 
@@ -22,6 +22,21 @@ The worker is portable Node code, so development can proceed without buying host
 5. `drainWebhookOutbox` selects at most three eligible rows per invocation. An independent scheduler or supervisor must invoke it repeatedly. Retry deadlines are eligibility times, not a delivery latency guarantee.
 6. The sender signs the unchanged payload with a fresh timestamp each attempt. The legacy `signature` column is left empty for new queued rows; it is not used as the wire signature. Event identity is stable across attempts.
 7. Sending fails closed unless the destination HTTPS origin is present in operator-controlled `DRUTO_WEBHOOK_ALLOWED_ORIGINS`. Embedded URL credentials and redirects are rejected. Later draft-branch work adds DNS/IP-pinned HTTPS delivery with public-address classification; endpoint-domain ownership and hosted validation remain open.
+
+## Draft-branch Cloudflare Cron adapter — 5 October 2026
+
+The draft branch adds `POST /api/internal/webhook-outbox/drain`. It is unavailable without a separate 32-byte random `DRUTO_OUTBOX_DRAIN_TOKEN` encoded as 64 hex characters. The handler compares Bearer credentials with `timingSafeEqual` before database work, checks database/key/origin readiness, and drains at most two deliveries per call to leave time within the configured 60-second Vercel function duration. It returns aggregate counts only; a failed delivery stays in the existing retry state. The endpoint is intended for a scheduler, not a marketplace or browser SDK.
+
+`workers/webhook-cron` is a minimal Cloudflare scheduled handler. Its public HTTP handler always returns 404. Each UTC-minute cron invocation sends one authenticated HTTPS POST to an exact configured Druto URL, rejects redirects, stops waiting after 45 seconds, and fails its own invocation on HTTP or delivery errors so the operator can inspect Cron Events/Logs. It holds no TiDB or webhook-encryption credentials. Cloudflare's Workers Free limits and Cron behavior must be evaluated against measured usage and availability; a free tier does not promise a payment SLA. [Cloudflare Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/), [Workers Free limits](https://developers.cloudflare.com/workers/platform/limits/).
+
+Activation sequence for an isolated **Preview test only**:
+
+1. Generate one new random 32-byte token locally. Save it as a Secret in both the Druto Vercel Preview branch (`DRUTO_OUTBOX_DRAIN_TOKEN`) and the Cloudflare Worker (`DRUTO_OUTBOX_DRAIN_TOKEN`); never add it to source, a query string, or chat.
+2. Set Cloudflare `DRUTO_DRAIN_URL` to the exact branch Preview HTTPS URL ending in `/api/internal/webhook-outbox/drain`. If Vercel Deployment Protection blocks the request, use a separate project-level Automation Bypass secret in the Cloudflare secret `VERCEL_AUTOMATION_BYPASS_SECRET`; that bypass grants access to protected deployments and must be treated as sensitive. Do not turn off Preview protection to make the cron work. [Vercel Protection Bypass for Automation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation).
+3. Deploy the Worker only after both secrets and URL are checked, then inspect at least two Cron invocations and Vercel request logs. Verify `selected=0` while the queue is empty, then use a controlled receiver failure/recovery fixture and confirm one signed delivery plus retry. Confirm no Production URL or database is reached.
+4. Add backlog age, exhausted-attempt and cron-failure alerts before calling this operational. A one-minute scheduled trigger is a polling interval, not a one-minute delivery guarantee. Clock skew, Vercel outages, Cloudflare limits, database outages and endpoint backoff still affect latency.
+
+No Cloudflare Worker or drain token was deployed/configured in this code milestone. Commercial-use eligibility of the current Vercel Hobby hosting still needs an explicit product decision before a real customer/payment launch. The Preview branch and existing Production database must remain isolated.
 
 No schema migration or database grants were required. Existing app permissions (SELECT/INSERT/UPDATE) suffice. A queue index and a more explicit event/attempt history schema should be designed before scaling. Clock synchronization between worker hosts is assumed for lease deadlines.
 
@@ -62,10 +77,10 @@ Do not put credentials on the command line or send them in chat. The CLI validat
 
 ## Remaining acceptance work
 
-- Choose and configure an eligible scheduler/worker host, including restart supervision, availability expectations and budget limits. No free-host reliability or commercial permission has been assumed.
+- Configure and verify an eligible scheduler/worker host, including Cron Events/log monitoring, availability expectations and budget limits. The draft Cloudflare adapter is code only; no free-host reliability or commercial permission has been assumed.
 - Configure trusted test receiver origins and consistent encryption configuration in a staging environment; deploy API and worker together. Deploying only the API now queues notifications without sending them automatically.
 - Add backlog/oldest-event/exhausted-attempt monitoring, a delivery-review UI and audit records for manual attempts.
-- Implement DNS/IP-pinned SSRF defenses and origin ownership validation before allowing arbitrary marketplace destinations. HTTPS, credential-free URLs with DNS hostnames now require an exact operator allowlist entry at registration and dispatch; that is still only a pilot gate.
+- Implement origin ownership validation before allowing arbitrary marketplace destinations. Draft-branch DNS/IP-pinned delivery is unit-tested, but hosted validation is outstanding; exact operator allowlisting is still only a pilot gate.
 - Design key rotation and per-endpoint key identifiers before rotating `DRUTO_WEBHOOK_ENCRYPTION_KEY`; replacing it without re-encrypting records will stop delivery.
 - Validate receiver deduplication using the actual Luvrefranc source and database. Test acknowledgement loss, DB outage and fulfillment retries end to end.
 - Review historical successful payments with missing delivery records separately; no automated backfill or silent reassignment was added.

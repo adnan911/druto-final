@@ -9,18 +9,22 @@ This branch is a review candidate, not approval to deploy or to handle real fund
 - This review branch adds a production startup guard that requires the exact `druto_testnet` TiDB target and restricted app username. `/api/ready` checks a real SQL session, TLS, database identity and table access; a missing or wrong configuration returns generic 503 without exposing credentials. A direct read-only probe against the restricted target returned ready.
 - Production intent creation now requires seller routing and a seller-scoped API key. The old shared-wallet demo fallback remains available only outside production; it cannot create a hosted production intent.
 - The legacy `db:push` command now fails deliberately. `db:verify:testnet` is read-only. New forward migrations still require a reviewed runner and a backup/restore exercise.
-- Isolated branch validation after the pinned webhook transport: 182 tests passed, one skipped; TypeScript passed. The production frontend and both serverless bundles were rebuilt after the dependency upgrade. Earlier rebuilt API smoke passed. Local Node 22.11.0 is below Vite's stated 22.12 minimum and emitted a warning, so a supported pinned runtime remains a release gate.
+- Isolated branch validation after the Cloudflare scheduler adapter: 190 tests passed, one skipped; TypeScript and production build passed. The Vercel handler regression test now imports source directly, so it does not depend on stale checked-in generated bundles. Deployment rebuilds the bundles; local build output is not included in this draft change. Local Node 22.11.0 is below Vite's stated 22.12 minimum and emitted a warning, so a supported pinned runtime remains a release gate.
 
 ## Open release gates
 
 1. Preserve and inventory the old `test` database, deployed revision, sessions, operator roles, seller destinations and webhook endpoints before any cutover. Do not copy old credentials or historical paid flags into `druto_testnet`.
-2. Finish operator and cross-tenant authorization review, webhook origin ownership and key rotation, plus hosted worker scheduling. DNS/IP-pinned transport is implemented and unit-tested on this draft branch, but no hosted worker delivery has been validated. The local worker is not currently running on Vercel.
+2. Finish operator and cross-tenant authorization review, webhook origin ownership and key rotation, plus hosted worker scheduling. DNS/IP-pinned transport and a disabled-by-default Cloudflare Cron adapter are implemented and unit-tested on this draft branch, but no hosted worker delivery has been validated. The local worker is not currently running on Vercel or Cloudflare.
 3. Establish a reviewed migration/rollback path and backup for every supported existing database. The new testnet baseline is not a migration of `test`.
 4. Configure the Druto Vercel Production environment with the restricted `druto_testnet` account as a Secret only during a coordinated deployment. Verify `/api/ready`, login, seller ownership and API-key scopes on that exact deployment. Do not point the old live revision at the new database.
 5. Create a seller-scoped API key and signed webhook endpoint for verified account `ma_4uguzltzDSiU`. Configure the matching Luvre server secrets and database, then deploy reviewed Luvre PR #2.
 6. Run one buyer-signed Arc Testnet direct 0% payment and verify chain receipt, exact wallet/amount, Druto settlement, signed webhook, Luvre `PAID`, one fulfillment-outbox row and duplicate/recovery behavior. A Vercel Ready badge or old dashboard transaction is insufficient.
 
 This review branch must remain draft until the open gates are addressed. Preview has branch-scoped secrets; there has been no Druto **Production** Vercel setting change, production deployment, main-branch merge or buyer-signed payment in this review milestone.
+
+## Scheduler adapter, not yet activated
+
+The branch now includes a separate token-protected `/api/internal/webhook-outbox/drain` route and a Cloudflare Cron adapter under `workers/webhook-cron`. The route is disabled without `DRUTO_OUTBOX_DRAIN_TOKEN`; it checks authentication before touching TiDB, returns aggregate counts, and drains no more than two deliveries per call. The Cloudflare code has no database credentials and has no public HTTP trigger. It has not been deployed or configured in either provider. A protected Preview will also need a reviewed Vercel Automation Bypass secret for Cloudflare to reach it. See `WEBHOOK_OUTBOX_MILESTONE.md` for setup, monitoring and failure tests. Cloudflare Free's 10 ms Cron CPU cap and Vercel Hobby's non-commercial limit still need a measured/approved fit for the selected launch scope.
 
 ## Webhook configuration follow-up
 

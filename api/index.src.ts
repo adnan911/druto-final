@@ -6,6 +6,7 @@ import { registerOAuthRoutes } from "../server/_core/oauth.js";
 import { registerStorageProxy } from "../server/_core/storageProxy.js";
 import { checkDatabaseReadiness } from "../server/db.js";
 import { assertWebhookEncryptionConfigured } from "../server/webhooks.js";
+import { registerWebhookDrainRoute } from "../server/webhook-drain-route.js";
 
 type VercelRequest = Request;
 type VercelResponse = Response;
@@ -31,6 +32,7 @@ async function createApp(): Promise<Express> {
   });
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  registerWebhookDrainRoute(app);
 
   app.get("/api/health", (_req, res) => {
     res.status(200).json({ ok: true, service: "druto" });

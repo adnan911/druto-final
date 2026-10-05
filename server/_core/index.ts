@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { checkDatabaseReadiness } from "../db";
 import { assertWebhookEncryptionConfigured } from "../webhooks";
+import { registerWebhookDrainRoute } from "../webhook-drain-route";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -51,6 +52,7 @@ async function startServer() {
   });
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  registerWebhookDrainRoute(app);
   app.get("/api/ready", async (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     try {
