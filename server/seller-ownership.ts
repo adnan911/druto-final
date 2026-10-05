@@ -6,6 +6,7 @@ import { getAddress, verifyMessage } from 'viem';
 import { z } from 'zod';
 import { merchantAccounts, ownershipChallenges } from '../drizzle/schema';
 import { getDb } from './db';
+import { drutoPublicOrigin } from './public-origin';
 import { protectedProcedure, router } from './_core/trpc';
 
 const accountInput = z.object({ merchantAccountId: z.string().min(1).max(32) });
@@ -23,7 +24,7 @@ export const sellerOwnershipRouter = router({
     const id = `own_${nanoid(12)}`;
     const nonce = nanoid(32);
     const expiresAt = new Date(Date.now() + 5 * 60_000);
-    const origin = new URL(process.env.DRUTO_API_URL || 'https://druto-final.vercel.app').origin;
+    const origin = drutoPublicOrigin();
     const message = `Druto seller receiving-wallet verification\nOrigin: ${origin}\nChain ID: 5042002\nAccount: ${account.id}\nOwner: ${ctx.user.id}\nMarketplace: ${account.marketplaceId}\nSeller: ${account.externalSellerId}\nWallet: ${getAddress(account.receivingAddress)}\nNonce: ${nonce}\nExpires: ${expiresAt.toISOString()}\nThis signature verifies the receiving wallet; it does not transfer funds.`;
     try {
       await db.insert(ownershipChallenges).values({ id, merchantAccountId: account.id, marketplaceId: account.marketplaceId, sellerId: account.externalSellerId, walletAddress: getAddress(account.receivingAddress), message, nonceHash: createHash('sha256').update(nonce).digest('hex'), expiresAt });

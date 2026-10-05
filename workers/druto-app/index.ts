@@ -1,0 +1,49 @@
+import { createServer } from "node:http";
+import { httpServerHandler } from "cloudflare:node";
+import { createApp } from "../../api/index.src";
+import { checkDatabaseReadiness, getDb, withHyperdrive } from "../../server/db";
+import { assertWebhookEncryptionConfigured } from "../../server/webhooks";
+import { drainWebhookOutbox } from "../../server/webhook-delivery";
+import { assertCloudflareRuntimeConfiguration } from "../../server/public-origin";
+
+type WorkerEnv = {
+  ASSETS: Fetcher;
+  HYPERDRIVE?: Hyperdrive;
+};
+
+let apiHandler: ReturnType<typeof httpServerHandler> | undefined;
+
+async function getApiHandler() {
+  if (!apiHandler) {
+    const app = await createApp();
+    apiHandler = httpServerHandler(createServer(app));
+  }
+  return apiHandler;
+}
+
+export default {
+  async fetch(request, env, context) {
+    const path = new URL(request.url).pathname;
+    if (path.startsWith("/api/") || path.startsWith("/trpc/") || path.startsWith("/manus-storage/")) {
+      const handler = await getApiHandler();
+      if (!env.HYPERDRIVE) return handler.fetch(request, env, context);
+      return withHyperdrive(env.HYPERDRIVE, () => handler.fetch(request, env, context));
+    }
+    return env.ASSETS.fetch(request);
+  },
+
+  async scheduled(_event, env) {
+    if (!env.HYPERDRIVE) throw new Error("Druto Hyperdrive binding is not configured");
+    await withHyperdrive(env.HYPERDRIVE, async () => {
+      await checkDatabaseReadiness();
+      assertWebhookEncryptionConfigured();
+      assertCloudflareRuntimeConfiguration();
+      if (!process.env.DRUTO_WEBHOOK_ALLOWED_ORIGINS) throw new Error("Webhook origins are not configured");
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      const { selected, delivered } = await drainWebhookOutbox(db, 2);
+      console.info("[webhook outbox drain]", { selected, delivered, failedOrSkipped: selected - delivered });
+      if (selected !== delivered) throw new Error("One or more webhook deliveries failed or were skipped");
+    });
+  },
+} satisfies ExportedHandler<WorkerEnv>;

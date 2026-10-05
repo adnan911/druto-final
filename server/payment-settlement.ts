@@ -4,8 +4,9 @@ import { paymentIntents, paymentTransactions } from '../drizzle/schema';
 import { getDb } from './db';
 import { ARC_CHAIN_ID, ARC_USDC_ADDRESS, verifyArcUsdcTransfer } from './arc';
 import { enqueuePaymentVerified } from './webhook-delivery';
+import { drutoPublicOrigin } from './public-origin';
 
-export const paymentVerificationOrigin = () => new URL(process.env.DRUTO_API_URL || 'https://druto-final.vercel.app').origin;
+export const paymentVerificationOrigin = drutoPublicOrigin;
 function success(intentId: string, tx: typeof paymentTransactions.$inferSelect) {
   return { paymentIntentId: intentId, transactionHash: tx.transactionHash, fromAddress: tx.fromAddress, toAddress: tx.toAddress, amountAtomic: tx.amountAtomic, status: 'succeeded' as const };
 }

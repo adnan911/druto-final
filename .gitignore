@@ -17,6 +17,8 @@ build/
 .env.tidb.local
 .env.tidb-app.local
 .env.luvre-app.local
+.dev.vars*
+.wrangler/
 
 # IDE and editor files
 .vscode/
