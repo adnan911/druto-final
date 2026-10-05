@@ -1,4 +1,5 @@
 import { int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Core user table backing auth flow.
@@ -96,11 +97,12 @@ export const webhookEndpoints = mysqlTable("webhookEndpoints", {
   merchantAccountId: varchar("merchantAccountId", { length: 32 }),
   ownerUserId: int("ownerUserId").notNull(),
   url: varchar("url", { length: 2048 }).notNull(),
+  urlHash: varchar("urlHash", { length: 64 }).generatedAlwaysAs(sql`sha2(\`url\`, 256)`, { mode: "virtual" }),
   secretCiphertext: text("secretCiphertext").notNull(),
   active: int("active").notNull().default(1),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, table => ({ endpointOwnerIndex: uniqueIndex("webhookEndpoints_marketplace_url_unique").on(table.marketplaceId, table.url) }));
+}, table => ({ endpointOwnerIndex: uniqueIndex("webhookEndpoints_marketplace_url_hash_unique").on(table.marketplaceId, table.urlHash) }));
 
 export const webhookDeliveries = mysqlTable("webhookDeliveries", {
   id: varchar("id", { length: 32 }).primaryKey(),
@@ -130,12 +132,17 @@ export const paymentIntents = mysqlTable("paymentIntents", {
   marketplaceId: varchar("marketplaceId", { length: 128 }),
   sellerId: varchar("sellerId", { length: 128 }),
   merchantAccountId: varchar("merchantAccountId", { length: 32 }),
+  // New writes store the scoped v2 digest; legacy raw keys are read-only replay compatibility.
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).unique(),
   itemName: varchar("itemName", { length: 255 }).notNull(),
   buyerLabel: varchar("buyerLabel", { length: 255 }),
   returnUrl: varchar("returnUrl", { length: 2048 }),
   orderContext: text("orderContext"),
   amountAtomic: varchar("amountAtomic", { length: 64 }).notNull(),
+  platformFeeBps: int("platformFeeBps").default(200),
+  platformFeeAmount: varchar("platformFeeAmount", { length: 64 }),
+  merchantPayoutAmount: varchar("merchantPayoutAmount", { length: 64 }),
+  splitContractAddress: varchar("splitContractAddress", { length: 42 }),
   asset: varchar("asset", { length: 16 }).notNull().default("USDC"),
   network: varchar("network", { length: 32 }).notNull().default("arc-testnet"),
   merchantAddress: varchar("merchantAddress", { length: 42 }).notNull(),
@@ -153,8 +160,11 @@ export const paymentTransactions = mysqlTable("paymentTransactions", {
   transactionHash: varchar("transactionHash", { length: 66 }).notNull().unique(),
   fromAddress: varchar("fromAddress", { length: 42 }).notNull(),
   toAddress: varchar("toAddress", { length: 42 }).notNull(),
+  treasuryAddress: varchar("treasuryAddress", { length: 42 }),
   tokenAddress: varchar("tokenAddress", { length: 42 }).notNull(),
   amountAtomic: varchar("amountAtomic", { length: 64 }).notNull(),
+  platformFeeAmount: varchar("platformFeeAmount", { length: 64 }),
+  merchantPayoutAmount: varchar("merchantPayoutAmount", { length: 64 }),
   chainId: int("chainId").notNull(),
   finalizedAt: timestamp("finalizedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

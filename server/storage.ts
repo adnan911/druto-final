@@ -1,21 +1,7 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uploads via Forge Server presigned URL to S3 (PUT direct).
-// Downloads return /manus-storage/{key} paths served via 307 redirect.
+// Preconfigured storage helpers supporting Pinata IPFS & Forge storage
+// Uploads via Pinata IPFS API or Forge presigned URL.
 
 import { ENV } from "./_core/env";
-
-function getForgeConfig() {
-  const forgeUrl = ENV.forgeApiUrl;
-  const forgeKey = ENV.forgeApiKey;
-
-  if (!forgeUrl || !forgeKey) {
-    throw new Error(
-      "Storage config missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY",
-    );
-  }
-
-  return { forgeUrl: forgeUrl.replace(/\/+$/, ""), forgeKey };
-}
 
 function normalizeKey(relKey: string): string {
   return relKey.replace(/^\/+/, "");
@@ -28,70 +14,110 @@ function appendHashSuffix(relKey: string): string {
   return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
 }
 
-export async function storagePut(
-  relKey: string,
+/**
+ * Upload a file/buffer to Pinata IPFS
+ */
+export async function uploadToPinata(
+  filename: string,
   data: Buffer | Uint8Array | string,
-  contentType = "application/octet-stream",
-): Promise<{ key: string; url: string }> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
-  const key = appendHashSuffix(normalizeKey(relKey));
-
-  // 1. Get presigned PUT URL from Forge
-  const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
-  presignUrl.searchParams.set("path", key);
-
-  const presignResp = await fetch(presignUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` },
-  });
-
-  if (!presignResp.ok) {
-    const msg = await presignResp.text().catch(() => presignResp.statusText);
-    throw new Error(`Storage presign failed (${presignResp.status}): ${msg}`);
+  contentType = "application/octet-stream"
+): Promise<{ cid: string; url: string }> {
+  if (!ENV.pinataJwt) {
+    throw new Error("PINATA_JWT is not configured in environment variables");
   }
 
-  const { url: s3Url } = (await presignResp.json()) as { url: string };
-  if (!s3Url) throw new Error("Forge returned empty presign URL");
-
-  // 2. PUT file directly to S3
   const blob =
     typeof data === "string"
       ? new Blob([data], { type: contentType })
       : new Blob([data as any], { type: contentType });
 
-  const uploadResp = await fetch(s3Url, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: blob,
+  const formData = new FormData();
+  formData.append("file", blob, filename);
+
+  const pinataMetadata = JSON.stringify({
+    name: filename,
+    keyvalues: {
+      platform: "druto-platform",
+      uploadedAt: new Date().toISOString(),
+    },
+  });
+  formData.append("pinataMetadata", pinataMetadata);
+
+  const res = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ENV.pinataJwt}`,
+    },
+    body: formData,
   });
 
-  if (!uploadResp.ok) {
-    throw new Error(`Storage upload to S3 failed (${uploadResp.status})`);
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => res.statusText);
+    throw new Error(`Pinata upload failed (${res.status}): ${errorText}`);
   }
 
-  return { key, url: `/manus-storage/${key}` };
+  const result = (await res.json()) as { IpfsHash: string; PinSize: number; Timestamp: string };
+  const gateway = (ENV.pinataGateway || "https://gateway.pinata.cloud").replace(/\/+$/, "");
+  const url = `${gateway}/ipfs/${result.IpfsHash}`;
+
+  return {
+    cid: result.IpfsHash,
+    url,
+  };
+}
+
+export async function storagePut(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType = "application/octet-stream"
+): Promise<{ key: string; url: string }> {
+  const filename = appendHashSuffix(normalizeKey(relKey));
+
+  // 1. If Pinata JWT is available, upload to Pinata IPFS
+  if (ENV.pinataJwt) {
+    try {
+      const pinataRes = await uploadToPinata(filename, data, contentType);
+      return { key: pinataRes.cid, url: pinataRes.url };
+    } catch (err) {
+      console.warn("[Storage] Pinata upload fallback to proxy:", err);
+    }
+  }
+
+  // 2. If Forge is available
+  if (ENV.forgeApiUrl && ENV.forgeApiKey) {
+    const forgeUrl = ENV.forgeApiUrl.replace(/\/+$/, "");
+    const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
+    presignUrl.searchParams.set("path", filename);
+
+    const presignResp = await fetch(presignUrl, {
+      headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
+    });
+
+    if (presignResp.ok) {
+      const { url: s3Url } = (await presignResp.json()) as { url: string };
+      if (s3Url) {
+        const blob =
+          typeof data === "string"
+            ? new Blob([data], { type: contentType })
+            : new Blob([data as any], { type: contentType });
+
+        const uploadResp = await fetch(s3Url, {
+          method: "PUT",
+          headers: { "Content-Type": contentType },
+          body: blob,
+        });
+
+        if (uploadResp.ok) {
+          return { key: filename, url: `/manus-storage/${filename}` };
+        }
+      }
+    }
+  }
+
+  throw new Error("Storage upload failed: no backend successfully persisted the file");
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
   return { key, url: `/manus-storage/${key}` };
-}
-
-export async function storageGetSignedUrl(relKey: string): Promise<string> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
-  const key = normalizeKey(relKey);
-
-  const getUrl = new URL("v1/storage/presign/get", forgeUrl + "/");
-  getUrl.searchParams.set("path", key);
-
-  const resp = await fetch(getUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` },
-  });
-
-  if (!resp.ok) {
-    const msg = await resp.text().catch(() => resp.statusText);
-    throw new Error(`Storage signed URL failed (${resp.status}): ${msg}`);
-  }
-
-  const { url } = (await resp.json()) as { url: string };
-  return url;
 }

@@ -27,9 +27,10 @@ import {
   X,
 } from "lucide-react";
 
+import { downloadDrutoSdkZip } from "@/lib/zipDownloader";
+import { toast } from "sonner";
+
 const logo = "/DRUTO_D_logo.png";
-const sdkPackageUrl = "/manus-storage/druto-sdk-0.1.0_4dbf00a5.zip";
-const sdkGuideUrl = "/manus-storage/GUIDE_60d3c182.md";
 
 // Interactive API Request/Response Sandbox Component
 function InteractiveApiSandbox() {
@@ -55,6 +56,7 @@ const intent = await druto.paymentIntents.create({
   asset: "USDC",
   network: "arc-testnet",
   externalOrderId: "ORDER_9281",
+  itemName: "Example order",
   seller: {
     marketplaceId: "market_northstar",
     sellerId: "artisan_42",
@@ -514,7 +516,7 @@ export default function DeveloperHub() {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label="Toggle menu"
+                aria-label="Toggle menu" aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation"
                 className="lg:hidden flex items-center justify-center w-11 h-11 rounded-full border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--card)] transition-colors active:scale-95"
               >
                 {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -524,7 +526,7 @@ export default function DeveloperHub() {
 
           {/* Mobile Menu */}
           {mobileMenuOpen && (
-            <div className="lg:hidden pb-5 pt-2">
+            <div id="mobile-navigation" className="lg:hidden pb-5 pt-2">
               <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-xl shadow-lg p-3 flex flex-col gap-1">
                 <a href="#sandbox" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--sidebar-accent)] rounded-2xl transition-colors">
                   API Sandbox
@@ -534,6 +536,9 @@ export default function DeveloperHub() {
                 </a>
                 <a href="#multi-seller" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--sidebar-accent)] rounded-2xl transition-colors">
                   Multi-Seller Routing
+                </a>
+                <a href="#smart-contracts" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--sidebar-accent)] rounded-2xl transition-colors">
+                  Smart Contracts & Splitter
                 </a>
                 <a href="#webhooks" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--sidebar-accent)] rounded-2xl transition-colors">
                   Webhooks & Replays
@@ -577,12 +582,21 @@ export default function DeveloperHub() {
               >
                 Start Integration Guide <ArrowRight size={16} />
               </Link>
-              <a
-                href={sdkPackageUrl}
-                className="px-8 py-3.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] text-sm font-medium hover:bg-[var(--sidebar-accent)] transition-all shadow-sm flex items-center gap-2"
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    toast.info("Packaging Druto SDK...");
+                    await downloadDrutoSdkZip();
+                    toast.success("Druto SDK downloaded!");
+                  } catch (e: any) {
+                    toast.error(e?.message || "Download failed");
+                  }
+                }}
+                className="px-8 py-3.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] text-sm font-medium hover:bg-[var(--sidebar-accent)] transition-all shadow-sm flex items-center gap-2 cursor-pointer"
               >
                 <Download size={16} /> Download SDK (.zip)
-              </a>
+              </button>
             </div>
           </div>
 
@@ -1188,6 +1202,179 @@ app.post("/webhooks/druto", (req, res) => {
         </div>
       </section>
 
+      {/* On-Chain Payment Splitter Smart Contract */}
+      <section className="max-w-7xl mx-auto px-6 py-24" id="smart-contracts">
+        <div className="max-w-3xl mb-14">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 text-xs text-[var(--primary)] bg-[var(--primary)]/10 border border-[var(--primary)]/20">
+            <ShieldCheck size={13} />
+            <span className="font-semibold uppercase tracking-wider font-mono">Future split mode · not in MVP</span>
+          </div>
+          <h2 className="text-3xl sm:text-4xl lg:text-[42px] font-serif font-normal text-[var(--foreground)] mt-2 mb-4 tracking-tight leading-[1.2]">
+            Proposed Payment Splitter Contract
+          </h2>
+          <p className="text-base sm:text-lg text-[var(--muted-foreground)] leading-relaxed font-sans max-w-2xl">
+            The current Arc Testnet MVP sends USDC directly to the seller with a 0% Druto platform fee. The <code className="font-mono text-xs bg-[var(--sidebar-accent)] px-1.5 py-0.5 rounded text-[var(--foreground)]">DrutoPaymentSplitter.sol</code> material below is an experimental future design. Current Payment Intents do not return a split contract address; do not integrate this example into the MVP checkout.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Contract Info & Spec */}
+          <div className="lg:col-span-6 space-y-6">
+            <div className="bg-[var(--card)] border border-[var(--border)] rounded-[2rem] p-6 sm:p-8 space-y-6 shadow-sm">
+              <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
+                <div>
+                  <span className="text-xs font-mono text-[var(--muted-foreground)] uppercase tracking-wider block">Contract Spec</span>
+                  <h3 className="font-mono text-lg font-bold text-[var(--foreground)]">DrutoPaymentSplitter</h3>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-mono font-semibold">
+                  Experimental · not active
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-[var(--background)] border border-[var(--border)]">
+                  <span className="text-[11px] text-[var(--muted-foreground)] font-mono block mb-1">Contract Address</span>
+                  <code className="text-xs font-mono font-bold text-[var(--primary)] break-all block">
+                    0xBefE5eb904E4b1eEc684C359E1C9b3D878e522F5
+                  </code>
+                </div>
+                <div className="p-4 rounded-xl bg-[var(--background)] border border-[var(--border)]">
+                  <span className="text-[11px] text-[var(--muted-foreground)] font-mono block mb-1">Arc Network USDC</span>
+                  <code className="text-xs font-mono font-bold text-[var(--foreground)] break-all block">
+                    0x3600000000000000000000000000000000000000
+                  </code>
+                </div>
+              </div>
+
+              <div className="space-y-3 font-sans text-xs">
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)]">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={16} />
+                  </div>
+                  <div>
+                    <strong className="text-[var(--foreground)] block mb-0.5">Atomic Split & Non-Custodial</strong>
+                    <p className="text-[var(--muted-foreground)] m-0 leading-relaxed">
+                      The contract forwards funds to the seller and treasury within one transaction; a failed transfer reverts the payment.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)]">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={16} />
+                  </div>
+                  <div>
+                    <strong className="text-[var(--foreground)] block mb-0.5">On-Chain Event Indexing</strong>
+                    <p className="text-[var(--muted-foreground)] m-0 leading-relaxed">
+                      Emits <code className="font-mono text-[11px] text-[var(--primary)]">PaymentSplit(paymentIntentId, token, payer, seller, treasury, ...)</code> for backend verification after transaction confirmation.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)]">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={16} />
+                  </div>
+                  <div>
+                    <strong className="text-[var(--foreground)] block mb-0.5">Configurable Fee Basis Points</strong>
+                    <p className="text-[var(--muted-foreground)] m-0 leading-relaxed">
+                      Supports dynamic basis point fee overrides (e.g. 200 bps = 2.0%) capped by contract safety limits (max 20%).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <a
+                  href="https://testnet.arcscan.app/address/0xBefE5eb904E4b1eEc684C359E1C9b3D878e522F5"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--primary)] hover:underline font-mono"
+                >
+                  View Contract on ArcScan <ExternalLink size={13} />
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Code Samples (Solidity & Client Interaction) */}
+          <div className="lg:col-span-6 space-y-4">
+            <div className="bg-[var(--card)] border border-[var(--border)] rounded-[2rem] p-6 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                <span className="text-xs font-mono font-semibold text-[var(--foreground)]">
+                  Future prototype: payAndSplit
+                </span>
+                <span className="text-[11px] font-mono text-[var(--muted-foreground)]">Solidity ^0.8.20</span>
+              </div>
+              <CodeBlock
+                language="typescript"
+                code={`// Atomic split implementation in Solidity
+function payAndSplit(
+    address token,
+    address seller,
+    uint256 totalAmount,
+    uint256 feeBps,
+    string calldata paymentIntentId
+) external {
+    uint256 actualFeeBps = feeBps > 0 ? feeBps : defaultFeeBps;
+    uint256 feeAmount = (totalAmount * actualFeeBps) / 10000;
+    uint256 sellerAmount = totalAmount - feeAmount;
+
+    // 1. Pull total USDC from buyer
+    IERC20(token).transferFrom(msg.sender, address(this), totalAmount);
+
+    // 2. Direct transfer to seller (98%)
+    IERC20(token).transfer(seller, sellerAmount);
+
+    // 3. Direct transfer to Druto Treasury (2%)
+    IERC20(token).transfer(drutoTreasury, feeAmount);
+
+    // 4. Emit on-chain event with PaymentIntent ID
+    emit PaymentSplit(
+        paymentIntentId, token, msg.sender, seller,
+        drutoTreasury, sellerAmount, feeAmount, totalAmount
+    );
+}`}
+              />
+            </div>
+
+            <div className="bg-[var(--card)] border border-[var(--border)] rounded-[2rem] p-6 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                <span className="text-xs font-mono font-semibold text-[var(--foreground)]">
+                  Future client example · do not use for MVP
+                </span>
+                <span className="text-[11px] font-mono text-[var(--muted-foreground)]">TypeScript</span>
+              </div>
+              <CodeBlock
+                language="typescript"
+                code={`// Future split mode only. Current intents have splitContractAddress = null.
+import { parseUnits } from "viem";
+
+// Configure usdcContract and splitterContract with Viem,
+// using the USDC ABI and the deployed splitter contract ABI.
+const DRUTO_SPLITTER_ADDRESS = intent.splitContractAddress;
+
+// 1. Approve DrutoPaymentSplitter to spend USDC
+const approvalHash = await usdcContract.write.approve([
+  DRUTO_SPLITTER_ADDRESS,
+  parseUnits("10.00", 6)
+]);
+await publicClient.waitForTransactionReceipt({ hash: approvalHash });
+
+// 2. Call payAndSplit
+const txHash = await splitterContract.write.payAndSplit([
+  ARC_USDC_ADDRESS,
+  sellerAddress,
+  parseUnits("10.00", 6),
+  200, // 2.0% fee
+  intent.id
+]);`}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Webhooks & Replay Safety */}
       <section className="bg-[var(--card)]/40 border-y border-[var(--border)] py-24 px-6" id="webhooks">
         <div className="max-w-7xl mx-auto">
@@ -1207,18 +1394,20 @@ app.post("/webhooks/druto", (req, res) => {
             <div className="lg:col-span-6 flex flex-col">
               <div className="h-full interactive-luxury-card flex flex-col">
                 <CodeBlock
-                  code={`import { verifyDrutoWebhook } from "@druto/sdk";
+                  code={`import { verifyDrutoWebhook, parsePaymentVerifiedEvent } from "@druto/sdk";
 
 export async function handleWebhook(request: Request) {
   const rawBody = await request.text();
-  const signature = request.headers.get("druto-signature");
+  const signature = request.headers.get("druto-signature") ?? "";
 
-  const event = verifyDrutoWebhook({
-    rawBody,
+  const valid = await verifyDrutoWebhook({
+    payload: rawBody,
     signature,
-    secret: process.env.DRUTO_WEBHOOK_SECRET,
-    toleranceSeconds: 300
+    secret: process.env.DRUTO_WEBHOOK_SECRET!
   });
+  if (!valid) return new Response("Invalid signature", { status: 401 });
+  const event = parsePaymentVerifiedEvent(rawBody);
+  if (!event) return new Response("Invalid event", { status: 400 });
 
   if (event.type === "payment.verified" && !await isAlreadyFulfilled(event.id)) {
     await markOrderFulfilled(event.data.externalOrderId);

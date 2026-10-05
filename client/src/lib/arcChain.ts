@@ -58,10 +58,30 @@ export const erc20Abi = [
   },
   {
     type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "remaining", type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "decimals",
     stateMutability: "view",
     inputs: [],
     outputs: [{ name: "", type: "uint8" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ name: "success", type: "bool" }],
   },
   {
     type: "function",
@@ -143,11 +163,73 @@ export async function fetchArcUsdcBalance(address: `0x${string}`): Promise<strin
 
 import { encodeFunctionData } from "viem";
 
+export const DRUTO_SPLITTER_ADDRESS = getAddress(
+  (import.meta as any).env?.VITE_DRUTO_SPLITTER_ADDRESS ?? "0xBefE5eb904E4b1eEc684C359E1C9b3D878e522F5"
+);
+
+export const drutoSplitterAbi = [
+  {
+    type: "function",
+    name: "payAndSplit",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "seller", type: "address" },
+      { name: "totalAmount", type: "uint256" },
+      { name: "feeBps", type: "uint256" },
+      { name: "paymentIntentId", type: "string" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "event",
+    name: "PaymentSplit",
+    inputs: [
+      { indexed: true, name: "paymentIntentId", type: "string" },
+      { indexed: true, name: "token", type: "address" },
+      { indexed: true, name: "payer", type: "address" },
+      { indexed: false, name: "seller", type: "address" },
+      { indexed: false, name: "treasury", type: "address" },
+      { indexed: false, name: "sellerAmount", type: "uint256" },
+      { indexed: false, name: "feeAmount", type: "uint256" },
+      { indexed: false, name: "totalAmount", type: "uint256" },
+    ],
+  },
+] as const;
+
+export function encodeArcUsdcApprove(spender: `0x${string}`, amountAtomic: string): `0x${string}` {
+  return encodeFunctionData({
+    abi: erc20Abi,
+    functionName: "approve",
+    args: [getAddress(spender), BigInt(amountAtomic)],
+  });
+}
+
 export function encodeArcUsdcTransfer(recipient: `0x${string}`, amountAtomic: string): `0x${string}` {
   return encodeFunctionData({
     abi: erc20Abi,
     functionName: "transfer",
     args: [getAddress(recipient), BigInt(amountAtomic)],
+  });
+}
+
+export function encodePayAndSplit(
+  token: `0x${string}`,
+  seller: `0x${string}`,
+  totalAmountAtomic: string,
+  feeBps: number,
+  paymentIntentId: string
+): `0x${string}` {
+  return encodeFunctionData({
+    abi: drutoSplitterAbi,
+    functionName: "payAndSplit",
+    args: [
+      getAddress(token),
+      getAddress(seller),
+      BigInt(totalAmountAtomic),
+      BigInt(feeBps),
+      paymentIntentId,
+    ],
   });
 }
 

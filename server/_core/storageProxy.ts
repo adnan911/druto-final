@@ -9,40 +9,41 @@ export function registerStorageProxy(app: Express) {
       return;
     }
 
-    if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
-      res.status(500).send("Storage proxy not configured");
+    // 1. If key is an IPFS CID or matches Pinata gateway
+    if (key.startsWith("Qm") || key.startsWith("bafy") || key.includes("ipfs/")) {
+      const cid = key.replace(/^ipfs\//, "");
+      const gateway = (ENV.pinataGateway || "https://gateway.pinata.cloud").replace(/\/+$/, "");
+      res.redirect(307, `${gateway}/ipfs/${cid}`);
       return;
     }
 
-    try {
-      const forgeUrl = new URL(
-        "v1/storage/presign/get",
-        ENV.forgeApiUrl.replace(/\/+$/, "") + "/",
-      );
-      forgeUrl.searchParams.set("path", key);
+    // 2. If Forge credentials exist
+    if (ENV.forgeApiUrl && ENV.forgeApiKey) {
+      try {
+        const forgeUrl = new URL(
+          "v1/storage/presign/get",
+          ENV.forgeApiUrl.replace(/\/+$/, "") + "/",
+        );
+        forgeUrl.searchParams.set("path", key);
 
-      const forgeResp = await fetch(forgeUrl, {
-        headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
-      });
+        const forgeResp = await fetch(forgeUrl, {
+          headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
+        });
 
-      if (!forgeResp.ok) {
-        const body = await forgeResp.text().catch(() => "");
-        console.error(`[StorageProxy] forge error: ${forgeResp.status} ${body}`);
-        res.status(502).send("Storage backend error");
-        return;
+        if (forgeResp.ok) {
+          const { url } = (await forgeResp.json()) as { url: string };
+          if (url) {
+            res.set("Cache-Control", "no-store");
+            res.redirect(307, url);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("[StorageProxy] Forge proxy attempt failed:", err);
       }
-
-      const { url } = (await forgeResp.json()) as { url: string };
-      if (!url) {
-        res.status(502).send("Empty signed URL from backend");
-        return;
-      }
-
-      res.set("Cache-Control", "no-store");
-      res.redirect(307, url);
-    } catch (err) {
-      console.error("[StorageProxy] failed:", err);
-      res.status(502).send("Storage proxy error");
     }
+
+    // 3. Static public fallback
+    res.redirect(307, `/downloads/${key}`);
   });
 }

@@ -27,16 +27,16 @@ import {
   Zap,
 } from "lucide-react";
 import { copyTextToClipboard, type CopyFeedback } from "@/lib/clipboard";
+import { downloadNextJsStarterZip, downloadDrutoSdkZip } from "@/lib/zipDownloader";
+import { toast } from "sonner";
 
 const logo = "/DRUTO_D_logo.png";
-const starterZipUrl = "/manus-storage/druto-nextjs-starter-0.1.0_b97da8c9.zip";
-const sdkPackageUrl = "/manus-storage/druto-sdk-0.1.0_4dbf00a5.zip";
 
 const installSnippet = `# Install Druto SDK for Node.js / TypeScript
-npm install @druto/sdk
+npm install ./path/to/druto-sdk
 
 # Or using pnpm
-pnpm add @druto/sdk`;
+pnpm add ./path/to/druto-sdk`;
 
 const serverSnippet = `import { Druto } from "@druto/sdk";
 
@@ -53,10 +53,10 @@ export async function createCheckoutSession(order: Order) {
     asset: "USDC",
     network: "arc-testnet",
     externalOrderId: order.id,
+    itemName: order.itemName,
     seller: {
       marketplaceId: "market_northstar",
-      sellerId: order.sellerId,
-      walletAddress: order.sellerWalletAddress
+      sellerId: order.sellerId
     },
     returnUrl: \`https://yourshop.example/orders/\${order.id}\`
   });
@@ -64,21 +64,23 @@ export async function createCheckoutSession(order: Order) {
   return { checkoutUrl: intent.checkoutUrl };
 }`;
 
-const webhookSnippet = `import { verifyDrutoWebhook } from "@druto/sdk";
+const webhookSnippet = `import { verifyDrutoWebhook, parsePaymentVerifiedEvent } from "@druto/sdk";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
-  const signature = req.headers.get("druto-signature");
+  const signature = req.headers.get("druto-signature") ?? "";
 
-  const event = verifyDrutoWebhook({
-    rawBody,
+  const valid = await verifyDrutoWebhook({
+    payload: rawBody,
     signature,
-    secret: process.env.DRUTO_WEBHOOK_SECRET!,
-    toleranceSeconds: 300
+    secret: process.env.DRUTO_WEBHOOK_SECRET!
   });
+  if (!valid) return new Response("Invalid signature", { status: 401 });
+  const event = parsePaymentVerifiedEvent(rawBody);
+  if (!event) return new Response("Invalid event", { status: 400 });
 
   if (event.type === "payment.verified") {
-    // Fulfill order in your database
+    // Deduplicate event.id in a database transaction before fulfillment.
     await db.orders.update({
       where: { id: event.data.externalOrderId },
       data: { status: "PAID", txHash: event.data.transactionHash }
@@ -196,7 +198,7 @@ export default function StartWithDruto() {
                 href="/dashboard"
                 className="group inline-flex items-center justify-center gap-2 transition-all duration-300 hover:opacity-90 sm:px-6 text-sm font-medium text-[var(--primary-foreground)] bg-[var(--primary)] h-11 rounded-full pr-5 pl-5 shadow-sm"
               >
-                <span>Launch App</span>
+                <span className="hidden sm:inline">Launch App</span><span className="sm:hidden">Launch</span>
                 <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
               </Link>
 
@@ -204,7 +206,7 @@ export default function StartWithDruto() {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label="Toggle menu"
+                aria-label="Toggle menu" aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation"
                 className="lg:hidden flex items-center justify-center w-11 h-11 rounded-full border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--card)] transition-colors active:scale-95"
               >
                 {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -214,7 +216,7 @@ export default function StartWithDruto() {
 
           {/* Mobile Menu */}
           {mobileMenuOpen && (
-            <div className="lg:hidden pb-5 pt-2">
+            <div id="mobile-navigation" className="lg:hidden pb-5 pt-2">
               <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-xl shadow-lg p-3 flex flex-col gap-1">
                 <Link href="/developers" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--sidebar-accent)] rounded-2xl transition-colors">
                   Developer Hub
@@ -538,6 +540,12 @@ export default function StartWithDruto() {
         </div>
       </section>
 
+      <section id="webhooks" className="max-w-7xl mx-auto px-6 py-24 scroll-mt-24">
+        <h2 className="text-3xl sm:text-4xl font-serif mb-5">Verify before fulfillment</h2>
+        <p className="text-[var(--muted-foreground)] mb-8">Validate the raw request body and signed timestamp. Deduplicate the event in your database before marking an order paid.</p>
+        <CopyBlock code={webhookSnippet} />
+      </section>
+
       {/* Call to Action Box */}
       <section className="max-w-7xl mx-auto px-6 py-24">
         <div className="bg-[#1c302c] text-[#e1f0e9] rounded-[2.5rem] p-10 md:p-16 relative overflow-hidden shadow-2xl border border-[#2d4a46]">
@@ -559,13 +567,21 @@ export default function StartWithDruto() {
               >
                 Open Workspace Dashboard <ArrowRight size={16} />
               </Link>
-              <a
-                href={starterZipUrl}
-                download
-                className="px-8 py-4 rounded-full bg-[#12201d] hover:bg-[#1a2d29] text-[#e1f0e9] text-sm font-medium transition-all flex items-center justify-center gap-2 border border-[#2a4740]"
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    toast.info("Packaging Next.js Starter...");
+                    await downloadNextJsStarterZip();
+                    toast.success("Next.js Starter downloaded!");
+                  } catch (e: any) {
+                    toast.error(e?.message || "Download failed");
+                  }
+                }}
+                className="px-8 py-4 rounded-full bg-[#12201d] hover:bg-[#1a2d29] text-[#e1f0e9] text-sm font-medium transition-all flex items-center justify-center gap-2 border border-[#2a4740] cursor-pointer"
               >
                 <Download size={16} /> Download Next.js Starter
-              </a>
+              </button>
             </div>
           </div>
         </div>
