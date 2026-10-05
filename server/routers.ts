@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getAddress, verifyMessage } from "viem";
 import { apiKeys, merchantAccounts, paymentIntents, paymentTransactions, users, walletLoginChallenges, webhookDeliveries, webhookEndpoints } from "../drizzle/schema";
 import { getDb } from "./db";
+import { drutoPublicOrigin } from "./public-origin";
 import { amountToAtomicUsdc } from "./arc";
 
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -48,7 +49,7 @@ export const paymentInput = z.object({
 const LEGACY_DEMO_SELLERS: Record<string, string> = { "druto-labs": "Druto Labs", "mosaic-works": "Mosaic Works", "dawn-studio": "Dawn Studio", "atlas-compute": "Atlas Compute", "meridian-ops": "Meridian Ops" };
 
 function resolveLegacyDemoMerchantAccount(seller: z.infer<typeof sellerRoutingInput>) {
-  if (process.env.NODE_ENV === "production") return null;
+  if (process.env.NODE_ENV === "production" || process.env.DRUTO_RUNTIME === "cloudflare") return null;
   if (seller.marketplaceId !== "druto-demo-marketplace" || !LEGACY_DEMO_SELLERS[seller.sellerId]) return null;
   // Compatibility only: catalog sellers share the configured demo wallet until each seller completes real onboarding.
   return { id: `legacy-demo-${seller.sellerId}`, marketplaceId: seller.marketplaceId, externalSellerId: seller.sellerId, displayName: LEGACY_DEMO_SELLERS[seller.sellerId], receivingAddress: process.env.ARC_MERCHANT_WALLET_ADDRESS!, ownerUserId: undefined, status: "active" as const };
@@ -394,10 +395,10 @@ export const appRouter = router({
       const returnUrl = normalizeMarketplaceReturnUrl(input.returnUrl);
       const authorization = ctx.req?.headers?.authorization;
       const hasApiKey = typeof authorization === "string" && authorization.startsWith("Bearer ");
-      if (process.env.NODE_ENV === "production" && !input.seller) {
+      if ((process.env.NODE_ENV === "production" || process.env.DRUTO_RUNTIME === "cloudflare") && !input.seller) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "A verified seller is required" });
       }
-      if (process.env.NODE_ENV === "production" || hasApiKey || (input.seller && !resolveLegacyDemoMerchantAccount(input.seller))) {
+      if (process.env.NODE_ENV === "production" || process.env.DRUTO_RUNTIME === "cloudflare" || hasApiKey || (input.seller && !resolveLegacyDemoMerchantAccount(input.seller))) {
         const key = await requireSellerApiKey(db, ctx.req, input.seller);
         input.seller = { ...input.seller!, merchantAccountId: key.merchantAccountId! };
       }
@@ -439,7 +440,7 @@ export const appRouter = router({
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      const baseUrl = process.env.DRUTO_API_URL || "https://druto-final.vercel.app";
+      const baseUrl = drutoPublicOrigin();
       return createdPaymentSession(saved, baseUrl);
     }),
 

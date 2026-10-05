@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { RequestOptions } from "node:https";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isPublicWebhookIp, postPinnedWebhook, resolvePublicWebhookAddress } from "./webhook-transport";
+import { isPublicWebhookIp, postPinnedWebhook, postWorkerWebhook, resolvePublicWebhookAddress } from "./webhook-transport";
 import { verifyWebhookSignature } from "./webhooks";
 
 beforeEach(() => vi.stubEnv("DRUTO_WEBHOOK_ALLOWED_ORIGINS", "https://market.example"));
@@ -77,5 +77,28 @@ describe("pinned webhook transport", () => {
     });
     expect(result).toEqual({ ok: false, status: 302, error: "Receiver returned HTTP 302" });
     expect(requestHttps).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Cloudflare webhook transport", () => {
+  it("signs an allowlisted request and refuses redirects", async () => {
+    const requestFetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(null, { status: 302 }));
+    const payload = '{"order":1}';
+    const result = await postWorkerWebhook("https://market.example/hooks", "secret", "evt_cf", payload, requestFetch as typeof fetch);
+    expect(result).toEqual({ ok: false, status: 302, error: "Receiver returned HTTP 302" });
+    expect(requestFetch).toHaveBeenCalledOnce();
+    const [url, init] = requestFetch.mock.calls[0];
+    expect(url).toBe("https://market.example/hooks");
+    expect(init.redirect).toBe("manual");
+    expect(init.method).toBe("POST");
+    expect(verifyWebhookSignature("secret", payload, (init.headers as Record<string, string>)["druto-signature"])).toBe(true);
+  });
+
+  it("never fetches unapproved origins or IP literals", async () => {
+    const requestFetch = vi.fn();
+    for (const url of ["https://other.example/hooks", "https://169.254.169.254/hooks", "http://market.example/hooks"]) {
+      expect((await postWorkerWebhook(url, "secret", "evt_cf", "{}", requestFetch as typeof fetch)).ok).toBe(false);
+    }
+    expect(requestFetch).not.toHaveBeenCalled();
   });
 });

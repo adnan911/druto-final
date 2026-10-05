@@ -10,6 +10,9 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "cf:check": "tsc --noEmit -p tsconfig.cloudflare.json",
+    "cf:dev": "wrangler dev",
+    "cf:dry-run": "wrangler deploy --dry-run",
     "db:push": "node scripts/block-legacy-migrate.mjs",
     "db:verify:testnet": "node scripts/setup-tidb-testnet.mjs"
   },
@@ -46,6 +49,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.90.2",
+    "@tidbcloud/serverless": "0.3.0",
     "@trpc/client": "^11.6.0",
     "@trpc/react-query": "^11.6.0",
     "@trpc/server": "^11.6.0",
@@ -61,6 +65,7 @@
     "express": "^4.21.2",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.23.22",
+    "iconv-lite": "0.7.3",
     "input-otp": "^1.4.2",
     "ipaddr.js": "2.5.0",
     "jose": "6.1.0",
@@ -112,7 +117,8 @@
     "typescript": "5.9.3",
     "vite": "^7.1.7",
     "vite-plugin-manus-runtime": "0.0.59",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "wrangler": "^4.147.0"
   },
   "packageManager": "pnpm@10.4.1+sha512.c753b6c3ad7afa13af388fa6d808035a008e30ea9993f58c6663e2bc5ff21679aa834db094987129aa4d488b86df57f7b634981b2f827cdcacc698cc0cfb88af",
   "pnpm": {

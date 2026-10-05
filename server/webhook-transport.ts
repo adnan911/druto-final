@@ -8,6 +8,31 @@ import { buildWebhookHeaders, isAllowedWebhookOrigin, signWebhookPayload, type W
 type ResolveDns = (hostname: string, options: { all: true; verbatim: true }) => Promise<LookupAddress[]>;
 type WebhookTransportDependencies = { resolveDns?: ResolveDns; requestHttps?: typeof httpsRequest };
 
+/** Workers fetch is restricted by Cloudflare to public HTTP destinations. Keep
+ * the exact operator origin allowlist and reject redirects at this boundary. */
+export async function postWorkerWebhook(
+  url: string, secret: string, eventId: string, payload: string,
+  requestFetch: typeof fetch = fetch,
+): Promise<WebhookDeliveryResult> {
+  if (!isAllowedWebhookOrigin(url)) return { ok: false, status: 0, error: "Webhook origin is not enabled by the operator" };
+  try {
+    const signed = signWebhookPayload(secret, payload);
+    const response = await requestFetch(url, {
+      method: "POST",
+      headers: buildWebhookHeaders(eventId, signed),
+      body: payload,
+      redirect: "manual",
+      signal: AbortSignal.timeout(10_000),
+    });
+    await response.body?.cancel();
+    return response.status >= 200 && response.status < 300
+      ? { ok: true, status: response.status }
+      : { ok: false, status: response.status, error: `Receiver returned HTTP ${response.status}` };
+  } catch {
+    return { ok: false, status: 0, error: "Webhook request failed or timed out" };
+  }
+}
+
 // DNS answers must be globally routable. ipaddr.js classifies most special-use
 // ranges; add 198.18/15 (benchmarking) and require IPv6 global unicast space.
 export function isPublicWebhookIp(address: string): boolean {
@@ -38,6 +63,9 @@ export async function postPinnedWebhook(
   url: string, secret: string, eventId: string, payload: string,
   dependencies: WebhookTransportDependencies = {},
 ): Promise<WebhookDeliveryResult> {
+  if (process.env.DRUTO_RUNTIME === "cloudflare") {
+    return postWorkerWebhook(url, secret, eventId, payload);
+  }
   if (!isAllowedWebhookOrigin(url)) return { ok: false, status: 0, error: "Webhook origin is not enabled by the operator" };
   const target = new URL(url);
   let address: LookupAddress;

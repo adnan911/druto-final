@@ -26,7 +26,7 @@ function secretKey() {
     if (!/^[a-fA-F0-9]{64}$/.test(configured)) throw new Error("DRUTO_WEBHOOK_ENCRYPTION_KEY must be 32 bytes encoded as 64 hex characters");
     return Buffer.from(configured, "hex");
   }
-  if (process.env.NODE_ENV === "production") throw new Error("DRUTO_WEBHOOK_ENCRYPTION_KEY is required in production");
+  if (process.env.NODE_ENV === "production" || process.env.DRUTO_RUNTIME === "cloudflare") throw new Error("DRUTO_WEBHOOK_ENCRYPTION_KEY is required in production");
   return createHash("sha256").update("druto-local-webhook-encryption-only").digest();
 }
 export function assertWebhookEncryptionConfigured() { secretKey(); }
