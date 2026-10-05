@@ -286,7 +286,7 @@ export default function Landing() {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label="Toggle menu"
+                aria-label="Toggle menu" aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation"
                 className="lg:hidden flex items-center justify-center w-11 h-11 rounded-full border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--card)] transition-colors active:scale-95"
               >
                 {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -296,7 +296,7 @@ export default function Landing() {
 
           {/* Mobile Menu */}
           {mobileMenuOpen && (
-            <div className="lg:hidden pb-5 pt-2">
+            <div id="mobile-navigation" className="lg:hidden pb-5 pt-2">
               <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-xl shadow-lg p-3 flex flex-col gap-1 font-sans">
                 <a href="#features" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--sidebar-accent)] rounded-2xl transition-colors">
                   Infrastructure

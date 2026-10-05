@@ -9,4 +9,6 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   privyAppId: process.env.PRIVY_APP_ID ?? "",
   privyAppSecret: process.env.PRIVY_APP_SECRET ?? "",
+  pinataJwt: process.env.PINATA_JWT ?? "",
+  pinataGateway: process.env.PINATA_GATEWAY ?? "https://gateway.pinata.cloud",
 };

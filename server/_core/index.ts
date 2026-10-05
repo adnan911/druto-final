@@ -8,6 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { checkDatabaseReadiness } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -49,6 +50,15 @@ async function startServer() {
   });
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  app.get("/api/ready", async (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      await checkDatabaseReadiness();
+      res.status(200).json({ ready: true });
+    } catch {
+      res.status(503).json({ ready: false });
+    }
+  });
   // tRPC API
   app.use(
     "/api/trpc",
@@ -65,14 +75,17 @@ async function startServer() {
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  const localOnly = process.env.DRUTO_LOCAL_ONLY === "1";
+  const port = localOnly ? preferredPort : await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  // Local seller onboarding may use a real testnet DB; keep that server on loopback.
+  const listenHost = localOnly ? "127.0.0.1" : undefined;
+  server.listen(port, listenHost, () => {
+    console.log(`Server running on http://${listenHost ?? "localhost"}:${port}/`);
   });
 }
 

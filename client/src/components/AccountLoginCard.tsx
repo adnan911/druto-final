@@ -7,7 +7,7 @@ import {
   ExternalLink,
   KeyRound,
   Lock,
-  Mail,
+
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -19,11 +19,11 @@ import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { toast } from "sonner";
 
 export default function AccountLoginCard() {
-  const [email, setEmail] = useState("");
+
   const [isWalletSigning, setIsWalletSigning] = useState(false);
   const auraCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const directLogin = trpc.auth.directAccountLogin.useMutation();
+
   const privyAccountLogin = trpc.auth.privyLogin.useMutation();
   const createChallenge = trpc.auth.createWalletChallenge.useMutation();
   const verifyWallet = trpc.auth.verifyWalletLogin.useMutation();
@@ -183,27 +183,8 @@ export default function AccountLoginCard() {
     }
   };
 
-  const handleDirectSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !email.includes("@")) {
-      toast.error("Please enter a valid operator email");
-      return;
-    }
-
-    try {
-      await directLogin.mutateAsync({
-        email: email.trim().toLowerCase(),
-        name: email.split("@")[0],
-      });
-      toast.success("Signed in to operator workspace");
-      await utils.auth.me.invalidate();
-    } catch (err: any) {
-      toast.error(err?.message || "Sign in failed");
-    }
-  };
-
   const isPending =
-    directLogin.isPending ||
+
     privyAccountLogin.isPending ||
     isWalletSigning ||
     createChallenge.isPending ||
@@ -250,7 +231,7 @@ export default function AccountLoginCard() {
             <div className="bg-[var(--card)]/90 backdrop-blur-md p-4 rounded-2xl border border-[var(--border)] shadow-sm flex items-start gap-3">
               <ShieldCheck size={20} className="text-[var(--primary)] shrink-0 mt-0.5" />
               <div>
-                <strong className="text-xs font-semibold text-[var(--foreground)] block font-sans">EIP-712 Signature Auth</strong>
+                <strong className="text-xs font-semibold text-[var(--foreground)] block font-sans">Wallet Signature Auth</strong>
                 <span className="text-[11px] text-[var(--muted-foreground)] leading-tight block mt-0.5 font-sans">Non-custodial login. Your private keys never leave your device.</span>
               </div>
             </div>
@@ -276,7 +257,7 @@ export default function AccountLoginCard() {
               </span>
               <h2 className="text-2xl font-serif font-light text-[var(--foreground)]">Sign in to Druto</h2>
               <p className="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed font-sans">
-                Connect your EVM wallet or use direct operator credentials.
+                Verify your EVM wallet or sign in with Privy.
               </p>
             </div>
 
@@ -315,42 +296,7 @@ export default function AccountLoginCard() {
               )}
             </div>
 
-            {/* Divider */}
-            <div className="relative text-center my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[var(--border)]" />
-              </div>
-              <span className="relative bg-[var(--card)] px-3 text-[11px] font-mono uppercase text-[var(--muted-foreground)]">
-                or email access
-              </span>
-            </div>
 
-            {/* Email Direct Operator Form */}
-            <form onSubmit={handleDirectSignIn} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-[var(--foreground)] mb-1.5 font-sans">
-                  Operator Email Address
-                </label>
-                <div className="relative">
-                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
-                  <input
-                    type="email"
-                    placeholder="merchant@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[var(--border)] text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--primary)] transition-all bg-[var(--background)] font-sans"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isPending}
-                className="w-full py-2.5 px-4 rounded-xl bg-[var(--sidebar-accent)] hover:bg-[var(--sidebar-accent)]/80 text-[var(--foreground)] text-xs font-medium transition-all flex items-center justify-center gap-2"
-              >
-                <span>{email ? "Continue with Email" : "Direct Operator Sign-in"}</span>
-              </button>
-            </form>
 
             <div className="mt-6 pt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--muted-foreground)] font-sans">
               <div className="flex items-center gap-1.5">

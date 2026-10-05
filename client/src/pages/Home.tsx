@@ -10,8 +10,10 @@ import SellerOnboarding from "@/components/SellerOnboarding";
 import WalletConnectButton from "@/components/WalletConnectButton";
 import { buildReceiptSummary, copyReceiptValue, truncateHash } from "@/lib/receipt";
 import { dashboardAccessState } from "@/lib/access";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ARC_CHAIN_ID, ARC_CHAIN_ID_HEX, ARC_RPC_URL, ARC_USDC_ADDRESS, CIRCLE_FAUCET_URL, fetchArcUsdcBalance, encodeArcUsdcTransfer } from "@/lib/arcChain";
 import { toast } from "sonner";
+import { signPaymentConfirmation } from "@/lib/paymentProof";
 import { usePrivy } from "@privy-io/react-auth";
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import {
@@ -108,27 +110,26 @@ function ProfileEditModal({ user, onClose }: { user: { name?: string | null; pro
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div className="card" onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: "400px", padding: "20px" }}>
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent aria-describedby={undefined} className="max-h-[90dvh] overflow-y-auto sm:max-w-[400px]">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          <h3 style={{ margin: 0 }}>Edit Profile</h3>
-          <button className="icon-button" onClick={onClose}><X size={16} /></button>
+          <DialogTitle>Edit Profile</DialogTitle>
         </div>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <div>
-            <label style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }}>Name</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
+            <label htmlFor="profile-name" style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }}>Name</label>
+            <input id="profile-name" type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
           </div>
           <div>
-            <label style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }}>Profile Image URL</label>
-            <input type="text" value={profileImage} onChange={e => setProfileImage(e.target.value)} placeholder="https://example.com/avatar.png" style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
+            <label style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }} htmlFor="profile-image">Profile Image URL</label>
+            <input id="profile-image" type="url" value={profileImage} onChange={e => setProfileImage(e.target.value)} placeholder="https://example.com/avatar.png" style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
           </div>
           <button type="submit" className="button button-primary" disabled={updateProfile.isPending} style={{ marginTop: "8px", justifyContent: "center" }}>
             {updateProfile.isPending ? "Saving..." : "Save Changes"}
           </button>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -279,9 +280,9 @@ function Topbar({ title, onCreate }: { title: string; onCreate: () => void }) {
       await utils.payments.summary.invalidate();
       await utils.payments.verifiedPayments.invalidate();
       if (res.newlySynced > 0) {
-        toast.success(`Synced ${res.newlySynced} new payment${res.newlySynced === 1 ? "" : "s"} from ArcScan!`);
+        toast.success(`Synced ${res.newlySynced} new payment${res.newlySynced === 1 ? "" : "s"} after receipt verification!`);
       } else {
-        toast.info(`ArcScan sync complete (${res.scannedCount} recent transfers scanned, all up-to-date)`);
+        toast.info(`Checked ${res.scannedCount} linked payments; ${res.needsReview} need payer confirmation or review`);
       }
     } catch (err: any) {
       toast.error(err?.message || "ArcScan sync failed");
@@ -1053,7 +1054,7 @@ function CustomersPage() {
   return <div className="page-content"><PageHeader title="Customers" action="Refresh buyers" onAction={() => void verified.refetch()} /><div className="filter-bar"><div className="search-field wide"><Search size={15} /><input placeholder="Search verified buyers" aria-label="Search verified buyers" /></div><button className="filter-button" onClick={() => toast.info("Buyer filters are coming with the reporting API.")}><ListFilter size={15} /> Filters</button></div>{!customers.length ? <div className="card empty-feature"><h3>No verified buyers yet</h3><p>Complete an Arc Testnet USDC payment from a customer wallet to populate this workspace.</p></div> : <div className="card table-card full-table"><table><thead><tr><th>Buyer</th><th>Contact</th><th>Payment volume</th><th>Payments</th><th>Status</th></tr></thead><tbody>{customers.map(customer => <tr key={customer.name}><td><div className="customer-cell"><div className="avatar small">{customer.name.slice(0, 2).toUpperCase()}</div><strong>{customer.name}</strong></div></td><td className="muted-cell">{customer.email}</td><td className="amount-cell">${customer.volume.toFixed(2)}<small>USDC</small></td><td>{customer.payments}</td><td><StatusPill status="Verified" tone="success" /></td></tr>)}</tbody></table></div>}</div>;
 }
 function DetailDrawer({ id, close }: { id: string; close: () => void }) {
-  const intentQuery = trpc.payments.getIntent.useQuery({ id });
+  const intentQuery = trpc.payments.getPrivateIntent.useQuery({ id });
   const intent = intentQuery.data;
   const amountUsdc = intent ? (Number(intent.amountAtomic) / 1_000_000).toFixed(2) : "—";
   return (
@@ -1104,6 +1105,13 @@ function DetailLine({ label, value, displayValue, mono, copy }: { label: string;
   );
 }
 
+function PaymentLoadState({ error, retry, receipt = false }: { error?: { message: string } | null; retry: () => void; receipt?: boolean }) {
+  return <div className="checkout-shell"><div className="checkout-brand"><Mark full /></div><main className="checkout-main"><div className="checkout-card" role={error ? "alert" : "status"}>
+    <h1>{error ? "Payment unavailable" : receipt ? "Loading buyer receipt…" : "Loading checkout…"}</h1>
+    {error && <><p>{error.message}</p><button className="button button-primary" onClick={retry}>Try again</button><Link href="/" className="button button-quiet">Back to home</Link></>}
+  </div></main></div>;
+}
+
 function ReceiptPage() {
   const [location] = useLocation();
   const pathname = typeof window !== "undefined" ? window.location.pathname : location.split("?")[0];
@@ -1112,7 +1120,7 @@ function ReceiptPage() {
   const utils = trpc.useUtils();
   const query = trpc.payments.getIntent.useQuery(
     { id: intentId },
-    { enabled: Boolean(intentId) && !receiptPreview, refetchInterval: (query) => (query.state.data?.status === "succeeded" ? false : 3000) }
+    { enabled: Boolean(intentId) && !receiptPreview, retry: false, refetchInterval: (query) => (query.state.error || query.state.data?.status === "succeeded" ? false : 3000) }
   );
   const verifyTransfer = trpc.payments.verifyTransfer.useMutation();
   const [manualHash, setManualHash] = useState("");
@@ -1121,7 +1129,7 @@ function ReceiptPage() {
   const [paymentQueue] = useState<MarketplacePaymentQueue | null>(() => { try { if (receiptPreview) return { orderId: "DR-MULTI-PREVIEW", intentIds: ["preview-intent-a", "preview-intent-b"], checkoutUrls: ["/receipt/preview-intent-a?demo=mixed-receipt", "/receipt/preview-intent-b?demo=mixed-receipt"], sellerNames: ["Druto Labs", "Mosaic Works"] }; const saved = window.localStorage.getItem(MARKETPLACE_PAYMENT_QUEUE_KEY); return saved ? JSON.parse(saved) as MarketplacePaymentQueue : null; } catch { return null; } });
   const previewSeller = intentId === "preview-intent-b" ? { name: "Mosaic Works", productId: "ledger-kit", itemName: "Ledger Operations Kit", amountAtomic: "2500000", sellerId: "mosaic-works" } : { name: "Druto Labs", productId: "api-pro", itemName: "Arc API Pro", amountAtomic: "1000000", sellerId: "druto-labs" };
   const previewOrderContext = JSON.stringify({ items: [{ productId: previewSeller.productId, name: previewSeller.itemName, seller: previewSeller.name, unitPrice: Number(previewSeller.amountAtomic) / 1_000_000, quantity: 1 }], delivery: "Digital delivery", shippingAddress: { name: "Alex Rivera", line1: "1 Main St", city: "Arc City", postalCode: "10001", country: "United States" }, buyerEmail: "buyer@example.com" });
-  const previewIntent = { id: intentId, externalOrderId: `DR-MULTI-PREVIEW-${previewSeller.sellerId}`, marketplaceId: "druto-demo-marketplace", sellerId: previewSeller.sellerId, merchantAccountId: `legacy-demo-${previewSeller.sellerId}`, idempotencyKey: `preview-${previewSeller.sellerId}`, itemName: previewSeller.itemName, buyerLabel: "buyer@example.com", returnUrl: "/marketplace", orderContext: previewOrderContext, amountAtomic: previewSeller.amountAtomic, asset: "USDC", network: "arc-testnet", merchantAddress: "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217", buyerAddress: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e", status: "succeeded", transactionHash: "0x3f7a18b9c6f2e8319e7a8f94cb44d32e185c7210e3954f9a0c3b84a9235d72f1", expiresAt: new Date(), createdAt: new Date(), updatedAt: new Date() } as NonNullable<typeof query.data>;
+  const previewIntent = { id: intentId, itemName: previewSeller.itemName, buyerLabel: "buyer@example.com", returnUrl: "/marketplace", orderContext: previewOrderContext, amountAtomic: previewSeller.amountAtomic, asset: "USDC", network: "arc-testnet", merchantAddress: "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217", status: "succeeded", transactionHash: "0x3f7a18b9c6f2e8319e7a8f94cb44d32e185c7210e3954f9a0c3b84a9235d72f1", expiresAt: new Date(), platformFeeBps: 0, platformFeeAmount: "0", merchantPayoutAmount: previewSeller.amountAtomic, splitContractAddress: null, verificationOrigin: "https://druto-final.vercel.app" } as NonNullable<typeof query.data>;
   const intent = query.data ?? (receiptPreview ? previewIntent : undefined);
   const nextCheckout = paymentQueue ? getNextMarketplaceCheckout(paymentQueue, intentId) : null;
 
@@ -1135,6 +1143,7 @@ function ReceiptPage() {
       await verifyTransfer.mutateAsync({
         paymentIntentId: intent.id,
         transactionHash: manualHash.trim(),
+        payerSignature: await signPaymentConfirmation(intent, manualHash.trim()),
       });
       await query.refetch();
       await utils.payments.summary.invalidate();
@@ -1147,7 +1156,7 @@ function ReceiptPage() {
     }
   };
 
-  if (!intent) return <div className="checkout-shell"><div className="checkout-brand"><Mark full /></div><main className="checkout-main"><div className="checkout-card"><strong>Loading buyer receipt…</strong></div></main></div>;
+  if (!intent) return <PaymentLoadState error={query.error} retry={() => { void query.refetch(); }} receipt />;
   const { amount, isSucceeded, orderContext, lineItems, buyerEmail, shipping } = buildReceiptSummary(intent);
   const statusLabel = isSucceeded ? "Payment Receipt" : "Verification in progress";
   const copyValue = async (value: string, label: string) => { const copied = await copyReceiptValue(value); if (copied) toast.success(`${label} copied`); else toast.info(`Select and copy the ${label.toLowerCase()} manually.`); };
@@ -1168,7 +1177,7 @@ function ReceiptPage() {
           <div className="checkout-trust">
             <span><ShieldCheck size={14} /> Verified payment state</span>
             <span><LockKeyhole size={14} /> Non-custodial checkout</span>
-            <span><ReceiptText size={14} /> Order context preserved</span>
+            <span><ReceiptText size={14} /> Payment reference available</span>
           </div>
           <div className="receipt-side-actions">
             <button className="button button-quiet receipt-print" onClick={() => window.print()}>
@@ -1209,8 +1218,8 @@ function ReceiptPage() {
 
           <div className="receipt-order-banner">
             <div>
-              <span className="eyebrow">Order</span>
-              <strong>{intent.externalOrderId}</strong>
+              <span className="eyebrow">Payment reference</span>
+              <strong>{intent.id}</strong>
             </div>
             <div className="receipt-order-badge">
               <Box size={14} /> {lineItems.length} {lineItems.length === 1 ? "item" : "items"}
@@ -1239,7 +1248,7 @@ function ReceiptPage() {
             </div>
           </section>
 
-          <section className="receipt-section receipt-meta-grid">
+          {receiptPreview ? <section className="receipt-section receipt-meta-grid">
             <div>
               <span className="receipt-meta-label"><RefreshCw size={13} /> Delivery</span>
               <strong>{orderContext?.delivery ?? "Digital delivery"}</strong>
@@ -1255,7 +1264,7 @@ function ReceiptPage() {
                 <small>{shipping.line1}, {shipping.city}, {shipping.postalCode}, {shipping.country}</small>
               </div>
             )}
-          </section>
+          </section> : <section className="receipt-section"><p>Buyer contact, shipping and delivery details are available from the marketplace through its authorized order access.</p></section>}
 
           <section className="receipt-section proof-section">
             <div className="receipt-section-heading">
@@ -1340,10 +1349,10 @@ function CheckoutPage() {
   const [location] = useLocation();
   const pathname = typeof window !== "undefined" ? window.location.pathname : location.split("?")[0];
   const intentId = pathname.split("/").filter(Boolean).pop() || "";
-  const intentQuery = trpc.payments.getIntent.useQuery({ id: intentId }, { enabled: Boolean(intentId) });
+  const intentQuery = trpc.payments.getIntent.useQuery({ id: intentId }, { enabled: Boolean(intentId), retry: false });
   const verifyTransfer = trpc.payments.verifyTransfer.useMutation();
   const intent = intentQuery.data;
-  const amountDisplay = intent ? (Number(intent.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00";
+  const amountDisplay = intent ? (Number(intent.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) : "0.00";
 
   const [address, setAddress] = useState<`0x${string}` | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
@@ -1351,7 +1360,7 @@ function CheckoutPage() {
   const [connecting, setConnecting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [txHash, setTxHash] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(() => { try { return window.localStorage.getItem(`druto:payment:${intentId}`); } catch { return null; } });
 
   const isArc = chainId === ARC_CHAIN_ID;
   const isSucceeded = intent?.status === "succeeded";
@@ -1469,7 +1478,15 @@ function CheckoutPage() {
   };
 
   const handlePay = async () => {
-    if (!intent) return;
+    if (!intent || paying || verifying || isSucceeded) return;
+    if (intent.platformFeeBps !== 0 || intent.splitContractAddress) {
+      toast.error("This payment link uses older fee terms. Ask the marketplace for a new link; contact support if you already paid.");
+      return;
+    }
+    if (!txHash && new Date(intent.expiresAt).getTime() <= Date.now()) {
+      toast.error("This checkout has expired. Ask the merchant for a new payment link.");
+      return;
+    }
     if (!address) {
       await connectWallet();
       return;
@@ -1481,8 +1498,10 @@ function CheckoutPage() {
 
     setPaying(true);
     try {
-      const data = encodeArcUsdcTransfer(intent.merchantAddress as `0x${string}`, intent.amountAtomic);
-      const hash = await window.ethereum.request({
+      let hash = txHash;
+      if (!hash) {
+        const data = encodeArcUsdcTransfer(intent.merchantAddress as `0x${string}`, intent.amountAtomic);
+        hash = await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [
           {
@@ -1491,16 +1510,20 @@ function CheckoutPage() {
             data,
           },
         ],
-      });
+        });
+      }
+      if (!hash) throw new Error("The wallet did not return a transaction hash");
 
       setTxHash(hash);
+      try { window.localStorage.setItem(`druto:payment:${intent.id}`, hash); } catch { /* in-memory hash still prevents a second send */ }
       setPaying(false);
       setVerifying(true);
-      toast.info("Transaction broadcast. Verifying on Arc Testnet…");
+      toast.info("Transaction sent. Sign the confirmation to link it to this order. Retrying will not send another payment.");
 
       const result = await verifyTransfer.mutateAsync({
         paymentIntentId: intent.id,
         transactionHash: hash,
+        payerSignature: await signPaymentConfirmation(intent, hash),
       });
 
       toast.success("Payment verified onchain!");
@@ -1511,6 +1534,9 @@ function CheckoutPage() {
       toast.error(err?.message || "Payment transaction failed or was rejected");
     }
   };
+
+  if (!intent) return <PaymentLoadState error={intentQuery.error} retry={() => { void intentQuery.refetch(); }} />;
+  const requiresNewPaymentLink = intent.platformFeeBps !== 0 || Boolean(intent.splitContractAddress);
 
   return (
     <div className="checkout-shell">
@@ -1541,7 +1567,7 @@ function CheckoutPage() {
 
         <div className="checkout-card">
           <div className="checkout-card-head">
-            <span>Order #{(intent?.externalOrderId ?? intentId) || "pending"}</span>
+            <span>Payment #{(intent?.id ?? intentId) || "pending"}</span>
             <span className="checkout-expiry">
               <Timer size={14} /> {intent ? "Item: " + intent.itemName : "Intent unavailable"}
             </span>
@@ -1551,6 +1577,12 @@ function CheckoutPage() {
             <span>Total due</span>
             <strong>{"$" + amountDisplay} <small>USDC</small></strong>
           </div>
+
+          {requiresNewPaymentLink && !isSucceeded && (
+            <div role="alert" className="checkout-note" style={{ margin: "14px 0" }}>
+              This payment link has older fee terms. Ask the marketplace for a new link. If you already sent a payment, contact support with its transaction hash.
+            </div>
+          )}
 
           <div className="checkout-network">
             <span className="network-symbol">A</span>
@@ -1609,7 +1641,7 @@ function CheckoutPage() {
                 <button
                   className="button button-primary full-width"
                   onClick={connectWallet}
-                  disabled={connecting}
+                  disabled={connecting || requiresNewPaymentLink}
                 >
                   <Wallet size={16} /> {connecting ? "Connecting Wallet…" : "Connect EVM Wallet"}
                 </button>
@@ -1617,12 +1649,16 @@ function CheckoutPage() {
                 <button
                   className="button button-primary full-width"
                   onClick={handlePay}
-                  disabled={paying || verifying || !isArc}
+                  disabled={paying || verifying || !isArc || requiresNewPaymentLink}
                 >
-                  {paying ? (
+                  {requiresNewPaymentLink ? (
+                    <>Request a new payment link</>
+                  ) : paying ? (
                     <>Confirm in wallet…</>
                   ) : verifying ? (
                     <><RefreshCw size={14} className="animate-spin" /> Verifying on Arc Testnet…</>
+                  ) : txHash ? (
+                    <>Retry verification</>
                   ) : (
                     <>Pay ${amountDisplay} USDC with Wallet</>
                   )}
@@ -2093,7 +2129,7 @@ function DashboardAccess() {
   const session = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const privyLogin = trpc.auth.privyLogin.useMutation();
   const utils = trpc.useUtils();
-  const [privyExchangeState, setPrivyExchangeState] = useState<"idle" | "loading" | "error">("idle");
+  const [privyExchangeState, setPrivyExchangeState] = useState<"idle" | "loading" | "success" | "error">("idle");
 
   let privy: any = null;
   try {
@@ -2109,28 +2145,22 @@ function DashboardAccess() {
 
   useEffect(() => {
     if (!privyReady || !privyAuthenticated || session.data || privyExchangeState !== "idle" || !getAccessToken) return;
-    let active = true;
     setPrivyExchangeState("loading");
-    void getAccessToken().then(async (accessToken: string | null) => {
-      if (!active) return;
-      if (!accessToken) {
-        setPrivyExchangeState("error");
-        return;
-      }
+    void (async () => {
       try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) throw new Error("Privy did not return an access token. Please sign in again.");
         await privyLogin.mutateAsync({ accessToken });
         await utils.auth.me.invalidate();
+        setPrivyExchangeState("success");
       } catch (error) {
-        if (active) {
-          setPrivyExchangeState("error");
-          toast.error(error instanceof Error ? error.message : "Privy session could not be established");
-        }
+        setPrivyExchangeState("error");
+        toast.error(error instanceof Error ? error.message : "Privy session could not be established");
       }
-    });
-    return () => { active = false; };
+    })();
   }, [getAccessToken, privyAuthenticated, privyReady, privyExchangeState, session.data, utils.auth.me, privyLogin]);
 
-  const waitingForPrivy = privyAuthenticated && !session.data && privyExchangeState !== "error";
+  const waitingForPrivy = privyAuthenticated && !session.data && privyExchangeState === "idle";
   if (session.isLoading || privyExchangeState === "loading" || waitingForPrivy) {
     return (
       <div className="dashboard-loading">
@@ -2152,7 +2182,7 @@ function DashboardAccess() {
 export default function Home() { const [location] = useLocation(); if (location.startsWith("/receipt")) return <ReceiptPage />; if (location.startsWith("/checkout")) return <CheckoutPage />; return <DashboardAccess />; }
 function CreatePayment({ close }: { close: () => void }) {
   const [amount, setAmount] = useState("1.00");
-  const [orderId, setOrderId] = useState("DR-1842");
+  const [orderId, setOrderId] = useState(() => `DR-${crypto.randomUUID()}`);
   const [itemName, setItemName] = useState("Arc API Pro — annual access");
   const createIntent = trpc.payments.createIntent.useMutation();
   const submit = async () => {

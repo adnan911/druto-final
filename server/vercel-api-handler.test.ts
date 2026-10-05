@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import handler from "../api/index";
 import trpcHandler from "../api/trpc/[...path]";
 
@@ -14,6 +14,7 @@ afterEach(async () => {
       }),
     ),
   );
+  vi.unstubAllEnvs();
 });
 
 function listen(handlerFn: (req: any, res: any) => unknown) {
@@ -37,6 +38,15 @@ describe("Vercel API handlers", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(await response.json()).toEqual({ ok: true, service: "druto" });
+  });
+
+  it("reports not ready when the durable database is not configured", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const { port } = await listen(handler);
+    const response = await fetch(`http://127.0.0.1:${port}/api/ready`);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ ready: false });
   });
 
   it("serves the wallet tRPC catch-all as JSON without requiring a wallet signature", async () => {

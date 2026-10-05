@@ -4,6 +4,7 @@ import { appRouter } from "../server/routers.js";
 import { createContext } from "../server/_core/context.js";
 import { registerOAuthRoutes } from "../server/_core/oauth.js";
 import { registerStorageProxy } from "../server/_core/storageProxy.js";
+import { checkDatabaseReadiness } from "../server/db.js";
 
 type VercelRequest = Request;
 type VercelResponse = Response;
@@ -32,6 +33,16 @@ async function createApp(): Promise<Express> {
 
   app.get("/api/health", (_req, res) => {
     res.status(200).json({ ok: true, service: "druto" });
+  });
+
+  app.get("/api/ready", async (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      await checkDatabaseReadiness();
+      res.status(200).json({ ready: true });
+    } catch {
+      res.status(503).json({ ready: false });
+    }
   });
 
   const trpcMiddleware = createExpressMiddleware({
