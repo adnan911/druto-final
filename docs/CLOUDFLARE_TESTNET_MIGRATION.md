@@ -1,8 +1,11 @@
 # Druto Cloudflare migration — Arc Testnet only
 
-Status: local compatibility spike. No Cloudflare Worker, Hyperdrive configuration,
-secret, Cron Trigger, custom domain, or production route has been deployed by this
-branch. The Vercel production project and its `test` database remain untouched.
+Status: the `codex/druto-cloudflare-migration` branch has a successful isolated
+Cloudflare Preview deployment at
+`https://codex-druto-cloudflare-migration-druto-final.robobq.workers.dev/`.
+No Hyperdrive configuration, secret, Cron Trigger, custom domain, or production
+route has been deployed by this branch. The Vercel production project and its
+`test` database remain untouched.
 
 ## Target
 
@@ -44,18 +47,24 @@ database migration. No mainnet USDC or fiat feature is enabled.
   the public `VITE_PRIVY_APP_ID` at build time.
 - `pnpm cf:dev` starts the Worker locally. `/` and `/api/health` return 200;
   `/api/ready` returns 503 until Hyperdrive and required secrets are bound.
+- Hosted branch Preview smoke test: `/` loads, `/api/health` returns 200,
+  `/api/ready` returns 503, and `/api/v1/payment-intents` returns 503. These
+  responses confirm that payment APIs fail closed without a database binding.
 - These checks do **not** establish TiDB-through-Hyperdrive compatibility,
   production CPU headroom, seller login, payment settlement, or webhook delivery.
 
 ## Deployment gates
 
-- [ ] Use the pre-existing `druto-final` Worker only through its isolated
+- [x] Use the pre-existing `druto-final` Worker only through its isolated
       GitHub branch Preview. Its Workers Builds pipeline runs Wrangler from the
       repository root, so `wrangler.jsonc` lives there and contains a
       `previews` block. The earlier Preview failed because that block was
       absent; the older production build tried Wrangler auto-configuration
-      without a root config. Do not deploy to its Production environment or
-      change its production route as part of initial testing.
+      without a root config. Build `99ff350` succeeded as a branch Preview.
+      Cloudflare's Preview URLs are enabled and its Production Worker URL is
+      disabled. Do not deploy to its
+      Production environment or change its production route as part of
+      initial testing.
 - [ ] Confirm migration scope: Druto only or Druto plus Luvre Franc; confirm
       Testnet Preview versus real customer launch.
 - [ ] Create a dedicated Hyperdrive configuration from the existing restricted

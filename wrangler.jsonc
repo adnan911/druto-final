@@ -6,6 +6,7 @@
   "compatibility_flags": ["nodejs_compat", "enable_nodejs_http_server_modules"],
   "alias": { "iconv-lite": "./node_modules/iconv-lite" },
   "workers_dev": true,
+  "preview_urls": true,
   "vars": { "DRUTO_RUNTIME": "cloudflare" },
   "assets": {
     "directory": "./dist/public",
