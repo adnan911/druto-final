@@ -11,8 +11,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "cf:check": "tsc --noEmit -p tsconfig.cloudflare.json",
-    "cf:dev": "wrangler dev --config workers/druto-app/wrangler.jsonc",
-    "cf:dry-run": "wrangler deploy --dry-run --config workers/druto-app/wrangler.jsonc",
+    "cf:dev": "wrangler dev",
+    "cf:dry-run": "wrangler deploy --dry-run",
     "db:push": "node scripts/block-legacy-migrate.mjs",
     "db:verify:testnet": "node scripts/setup-tidb-testnet.mjs"
   },

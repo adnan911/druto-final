@@ -49,16 +49,20 @@ database migration. No mainnet USDC or fiat feature is enabled.
 
 ## Deployment gates
 
-- [ ] Inspect the pre-existing Cloudflare `druto-final` Worker and its GitHub
-      Workers Builds failure. The migration preview uses the separate
-      `druto-testnet-preview` name; do not overwrite the existing Worker or
+- [ ] Use the pre-existing `druto-final` Worker only through its isolated
+      GitHub branch Preview. Its Workers Builds pipeline runs Wrangler from the
+      repository root, so `wrangler.jsonc` lives there and contains a
+      `previews` block. The earlier Preview failed because that block was
+      absent; the older production build tried Wrangler auto-configuration
+      without a root config. Do not deploy to its Production environment or
       change its production route as part of initial testing.
 - [ ] Confirm migration scope: Druto only or Druto plus Luvre Franc; confirm
       Testnet Preview versus real customer launch.
 - [ ] Create a dedicated Hyperdrive configuration from the existing restricted
       `.druto_app` credential for `druto_testnet`, with MySQL TLS
       `VERIFY_IDENTITY` and query caching disabled. Record the ID in
-      `workers/druto-app/wrangler.jsonc`; never commit the connection string.
+      `wrangler.jsonc`; never commit the connection string. Put the binding in
+      `previews` first; add it to the top level only for a later cutover.
       TiDB Cloud is not on Cloudflare's named tested-provider list, so verify it
       against a real hosted Worker.
 - [ ] Configure Cloudflare secrets (`JWT_SECRET`, `PRIVY_APP_ID`,
