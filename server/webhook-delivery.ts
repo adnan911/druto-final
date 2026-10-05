@@ -1,7 +1,8 @@
 import { and, asc, eq, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { webhookDeliveries, webhookEndpoints, type PaymentIntent, type PaymentTransaction } from "../drizzle/schema";
-import { buildPaymentVerifiedEvent, buildWebhookHeaders, decryptWebhookSecret, hashEventPayload, isAllowedWebhookOrigin, nextRetryAt, serializeWebhookEvent, signWebhookPayload, type WebhookDeliveryResult } from "./webhooks";
+import { buildPaymentVerifiedEvent, decryptWebhookSecret, hashEventPayload, nextRetryAt, serializeWebhookEvent, type WebhookDeliveryResult } from "./webhooks";
+import { postPinnedWebhook } from "./webhook-transport";
 
 export const MAX_WEBHOOK_ATTEMPTS = 10;
 export const WEBHOOK_LEASE_MS = 60_000;
@@ -28,17 +29,7 @@ export async function enqueuePaymentVerified(tx: any, intent: PaymentIntent, tra
 }
 
 export async function postWebhook(url: string, secret: string, eventId: string, payload: string): Promise<WebhookDeliveryResult> {
-  // Fail-closed pilot gate; not a substitute for DNS/IP-pinned SSRF protection.
-  if (!isAllowedWebhookOrigin(url)) {
-    return { ok: false, status: 0, error: "Webhook origin is not enabled by the operator" };
-  }
-  const signed = signWebhookPayload(secret, payload);
-  try {
-    const response = await fetch(url, { method: "POST", headers: buildWebhookHeaders(eventId, signed), body: payload,
-      redirect: "error", signal: AbortSignal.timeout(10_000) });
-    await response.body?.cancel();
-    return response.ok ? { ok: true, status: response.status } : { ok: false, status: response.status, error: `Receiver returned HTTP ${response.status}` };
-  } catch { return { ok: false, status: 0, error: "Webhook request failed or timed out" }; }
+  return postPinnedWebhook(url, secret, eventId, payload);
 }
 
 // attempts is a monotonically increasing fencing token. nextAttemptAt is both

@@ -14,7 +14,7 @@ The initial checklist review inspected local source and prior evidence without r
 | --- | --- | --- |
 | Druto identity and EOA receiving-wallet proof | Local auth bypass removal, ordinary-user defaults, owner-scoped EOA challenge/verification | Deployed identity/session audit, all-tenant coverage, Circle/smart accounts, destination changes |
 | Druto settlement | Local immutable success, SQL locking/unique hash and atomic endpoint outbox; prior real TiDB scenarios | Explicit fee/payment-mode policy, attempts/indexer/exceptions, current deployment and actual-wallet E2E |
-| Druto webhook delivery | Local bounded worker, leases/fencing/retries; prior real SQL with mocked HTTP | Hosted scheduling, queue visibility/alerts, full SSRF protection and historical missing-event recovery |
+| Druto webhook delivery | Local bounded worker, leases/fencing/retries, DNS/IP-pinned HTTPS transport with unit tests; prior real SQL with mocked HTTP | Hosted scheduling/delivery validation, endpoint-domain ownership, queue visibility/alerts and historical missing-event recovery |
 | Luvre marketplace | Local persisted catalog-priced orders, durable intent binding, strict event checks, transactional event/payment/fulfillment record | Persistence release/cutover, buyer recovery, actual fulfillment worker and hosted crash recovery |
 | Downloadable starter/SDK | Separate source and distribution paths | Port/validate durable consumer and trusted pricing; Luvre fixes do not fix the starter automatically |
 | Databases and release | Separate druto_testnet/luvre_testnet and restricted app identities verified in earlier work | Deployment identity, guarded forward migrations, rollback/restore and deterministic build entry points |
@@ -113,7 +113,8 @@ Privacy/amount/idempotency fixes are implemented locally; see API_BOUNDARIES_MIL
 - [x] Persist webhook events for active seller endpoints in the same transaction as payment success.
 - [x] Implement an independent bounded worker with leases, fenced updates, capped retries and authenticated manual retry.
 - [ ] Configure eligible worker hosting/scheduling and add delivery monitoring/review UI.
-- [ ] Block webhook SSRF/private IPs/DNS rebinding; handle redirects safely.
+- [x] Block private/special-use DNS answers and pin each HTTPS webhook connection to a vetted IP, preserve hostname TLS checks, and refuse redirects (local draft branch; hosted validation pending).
+- [ ] Verify seller control of each webhook endpoint domain before enabling dispatch.
 - [x] Use a dedicated webhook encryption key, independent of JWT/session rotation, and fail Production readiness when it is missing (local draft branch).
 - [ ] Add reviewed webhook key rotation and legacy ciphertext migration before rotating the dedicated key.
 - [ ] Replace starter client-supplied pricing with authorized order lookup and server-calculated amounts.
