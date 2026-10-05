@@ -15,7 +15,7 @@ describe("durable webhook delivery boundaries", () => {
     expect(headers["x-druto-event-id"]).toBe("evt_1");
     expect(verifyWebhookSignature("secret", String(request[1].body), headers["druto-signature"])).toBe(true);
   });
-  it.each(["http://localhost/hooks", "https://private.example/hooks", "https://user:pass@market.example/hooks", "bad-url"])("blocks an unapproved destination: %s", async url => {
+  it.each(["http://localhost/hooks", "https://private.example/hooks", "https://user:pass@market.example/hooks", "https://127.0.0.1/hooks", "https://market.example/hooks#fragment", "bad-url"])("blocks an unapproved destination: %s", async url => {
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
     expect((await postWebhook(url, "secret", "evt_1", "{}")).ok).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();

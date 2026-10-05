@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { webhookDeliveries, webhookEndpoints, type PaymentIntent, type PaymentTransaction } from "../drizzle/schema";
-import { buildPaymentVerifiedEvent, buildWebhookHeaders, decryptWebhookSecret, hashEventPayload, nextRetryAt, serializeWebhookEvent, signWebhookPayload, type WebhookDeliveryResult } from "./webhooks";
+import { buildPaymentVerifiedEvent, buildWebhookHeaders, decryptWebhookSecret, hashEventPayload, isAllowedWebhookOrigin, nextRetryAt, serializeWebhookEvent, signWebhookPayload, type WebhookDeliveryResult } from "./webhooks";
 
 export const MAX_WEBHOOK_ATTEMPTS = 10;
 export const WEBHOOK_LEASE_MS = 60_000;
@@ -29,10 +29,7 @@ export async function enqueuePaymentVerified(tx: any, intent: PaymentIntent, tra
 
 export async function postWebhook(url: string, secret: string, eventId: string, payload: string): Promise<WebhookDeliveryResult> {
   // Fail-closed pilot gate; not a substitute for DNS/IP-pinned SSRF protection.
-  const allowed = (process.env.DRUTO_WEBHOOK_ALLOWED_ORIGINS ?? "").split(",").map(v => v.trim()).filter(Boolean);
-  let destination: URL;
-  try { destination = new URL(url); } catch { return { ok: false, status: 0, error: "Invalid webhook destination" }; }
-  if (destination.protocol !== "https:" || destination.username || destination.password || !allowed.includes(destination.origin)) {
+  if (!isAllowedWebhookOrigin(url)) {
     return { ok: false, status: 0, error: "Webhook origin is not enabled by the operator" };
   }
   const signed = signWebhookPayload(secret, payload);

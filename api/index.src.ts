@@ -5,6 +5,7 @@ import { createContext } from "../server/_core/context.js";
 import { registerOAuthRoutes } from "../server/_core/oauth.js";
 import { registerStorageProxy } from "../server/_core/storageProxy.js";
 import { checkDatabaseReadiness } from "../server/db.js";
+import { assertWebhookEncryptionConfigured } from "../server/webhooks.js";
 
 type VercelRequest = Request;
 type VercelResponse = Response;
@@ -39,6 +40,7 @@ async function createApp(): Promise<Express> {
     res.setHeader("Cache-Control", "no-store");
     try {
       await checkDatabaseReadiness();
+      assertWebhookEncryptionConfigured();
       res.status(200).json({ ready: true });
     } catch {
       res.status(503).json({ ready: false });

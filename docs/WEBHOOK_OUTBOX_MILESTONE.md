@@ -40,7 +40,7 @@ Release follow-up: marketplace containment PR #1 was subsequently merged and its
 Use a Git-ignored local environment file such as `.env.webhook-worker.local`. Configure:
 
 - `DATABASE_URL`: the limited `druto_app` identity for `druto_testnet`, never root.
-- `JWT_SECRET`: the existing value used to encrypt these endpoint secrets; do not generate a different value for the worker. A separate versioned webhook encryption key remains future work.
+- `DRUTO_WEBHOOK_ENCRYPTION_KEY`: a dedicated 32-byte random key encoded as 64 hex characters, identical on the API and worker. Production readiness fails without it. Newly registered secrets use `v1` ciphertext; old unversioned records encrypted with `JWT_SECRET` are not automatically readable. Re-register or explicitly migrate any retained endpoint after a reviewed cutover. Keep the old database intact.
 - `DRUTO_WEBHOOK_ALLOWED_ORIGINS`: comma-separated, exact, operator-reviewed HTTPS origins. An origin approval trusts all paths on that origin.
 
 With the project's installed dependencies, run one bounded batch using:
@@ -65,7 +65,8 @@ Do not put credentials on the command line or send them in chat. The CLI validat
 - Choose and configure an eligible scheduler/worker host, including restart supervision, availability expectations and budget limits. No free-host reliability or commercial permission has been assumed.
 - Configure trusted test receiver origins and consistent encryption configuration in a staging environment; deploy API and worker together. Deploying only the API now queues notifications without sending them automatically.
 - Add backlog/oldest-event/exhausted-attempt monitoring, a delivery-review UI and audit records for manual attempts.
-- Implement DNS/IP-pinned SSRF defenses and origin ownership validation before allowing arbitrary marketplace destinations.
+- Implement DNS/IP-pinned SSRF defenses and origin ownership validation before allowing arbitrary marketplace destinations. HTTPS, credential-free URLs with DNS hostnames now require an exact operator allowlist entry at registration and dispatch; that is still only a pilot gate.
+- Design key rotation and per-endpoint key identifiers before rotating `DRUTO_WEBHOOK_ENCRYPTION_KEY`; replacing it without re-encrypting records will stop delivery.
 - Validate receiver deduplication using the actual Luvrefranc source and database. Test acknowledgement loss, DB outage and fulfillment retries end to end.
 - Review historical successful payments with missing delivery records separately; no automated backfill or silent reassignment was added.
 - Run real browser-to-Arc-to-Druto-to-marketplace acceptance before release. This milestone sent no live payments or webhooks.

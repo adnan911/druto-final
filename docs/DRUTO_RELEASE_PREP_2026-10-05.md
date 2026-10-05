@@ -22,6 +22,10 @@ This branch is a review candidate, not approval to deploy or to handle real fund
 
 This review branch must remain draft until the open gates are addressed. There has been no Druto Vercel setting change, production deployment, main-branch merge or buyer-signed payment in this review milestone.
 
+## Webhook configuration follow-up
+
+Webhook endpoint secrets now use a dedicated `DRUTO_WEBHOOK_ENCRYPTION_KEY` (32 random bytes, 64 hex characters) rather than `JWT_SECRET`; Production readiness fails without a valid dedicated key. Both the API and outbox worker need the same secret. New ciphertext is versioned `v1`; legacy unversioned endpoint records are not silently decrypted. Exact operator-approved HTTPS origin is required at registration and dispatch; URL credentials, fragments, IP literals and local hostnames are rejected. These checks do not prevent DNS rebinding, so arbitrary third-party webhook destinations remain blocked pending IP-pinned delivery and origin ownership proof. Key rotation also remains a release gate.
+
 ## Follow-up: Preview runtime and legacy inventory
 
 - Preview `f5200d4` built as Ready, but `/api/ready` returned `500 FUNCTION_INVOCATION_FAILED`. Vercel runtime logs identified an unresolved `./index.src` import from the API catch-all. Draft-branch commits `70575d3` and `8f5dafc` switch to the build-produced `./index.js` and add its TypeScript declaration. The fixed Preview build still needs an authenticated runtime probe; build status alone is not proof of API health.

@@ -114,7 +114,8 @@ Privacy/amount/idempotency fixes are implemented locally; see API_BOUNDARIES_MIL
 - [x] Implement an independent bounded worker with leases, fenced updates, capped retries and authenticated manual retry.
 - [ ] Configure eligible worker hosting/scheduling and add delivery monitoring/review UI.
 - [ ] Block webhook SSRF/private IPs/DNS rebinding; handle redirects safely.
-- [ ] Separate webhook encryption key rotation from JWT/session rotation.
+- [x] Use a dedicated webhook encryption key, independent of JWT/session rotation, and fail Production readiness when it is missing (local draft branch).
+- [ ] Add reviewed webhook key rotation and legacy ciphertext migration before rotating the dedicated key.
 - [ ] Replace starter client-supplied pricing with authorized order lookup and server-calculated amounts.
 - [ ] Implement starter event deduplication and order settlement transaction in a real sample database.
 - [x] Implement Luvre server-catalog pricing and immutable SQL orders before provider calls; bind expected intent before redirect (local, separate marketplace repo).

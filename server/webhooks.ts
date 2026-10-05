@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { isIP } from "node:net";
 import type { PaymentIntent, PaymentTransaction } from "../drizzle/schema";
 
 export const WEBHOOK_EVENT_VERSION = "2026-08-23";
@@ -19,17 +20,26 @@ export type PaymentVerifiedEvent = {
   };
 };
 
-function secretKey() { return createHash("sha256").update(process.env.JWT_SECRET ?? "druto-development-secret").digest(); }
+function secretKey() {
+  const configured = process.env.DRUTO_WEBHOOK_ENCRYPTION_KEY;
+  if (configured) {
+    if (!/^[a-fA-F0-9]{64}$/.test(configured)) throw new Error("DRUTO_WEBHOOK_ENCRYPTION_KEY must be 32 bytes encoded as 64 hex characters");
+    return Buffer.from(configured, "hex");
+  }
+  if (process.env.NODE_ENV === "production") throw new Error("DRUTO_WEBHOOK_ENCRYPTION_KEY is required in production");
+  return createHash("sha256").update("druto-local-webhook-encryption-only").digest();
+}
+export function assertWebhookEncryptionConfigured() { secretKey(); }
 
 export function encryptWebhookSecret(secret: string) {
   const iv = randomBytes(12); const cipher = createCipheriv("aes-256-gcm", secretKey(), iv);
   const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
-  return `${iv.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${encrypted.toString("base64url")}`;
+  return `v1.${iv.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${encrypted.toString("base64url")}`;
 }
 
 export function decryptWebhookSecret(ciphertext: string) {
-  const [ivValue, tagValue, encryptedValue] = ciphertext.split(".");
-  if (!ivValue || !tagValue || !encryptedValue) throw new Error("Invalid webhook secret ciphertext");
+  const [version, ivValue, tagValue, encryptedValue, extra] = ciphertext.split(".");
+  if (version !== "v1" || !ivValue || !tagValue || !encryptedValue || extra) throw new Error("Invalid webhook secret ciphertext");
   const decipher = createDecipheriv("aes-256-gcm", secretKey(), Buffer.from(ivValue, "base64url"));
   decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encryptedValue, "base64url")), decipher.final()]).toString("utf8");
@@ -67,6 +77,18 @@ export function serializeWebhookEvent(event: PaymentVerifiedEvent) { return JSON
 export function nextRetryAt(attempts: number, now = new Date()) { return new Date(now.getTime() + Math.min(60 * 60 * 1000, 2 ** Math.min(attempts, 8) * 1000)); }
 export function isReplaySafe(eventId: string, seenEventIds: Set<string>) { if (seenEventIds.has(eventId)) return false; seenEventIds.add(eventId); return true; }
 export function buildWebhookHeaders(eventId: string, signed: ReturnType<typeof signWebhookPayload>) { return { "content-type": "application/json", "user-agent": "druto-webhooks/1.0", "x-druto-event-id": eventId, "druto-signature": signed.header }; }
-export function isValidWebhookUrl(value: string) { try { const url = new URL(value); return url.protocol === "https:" || (url.protocol === "http:" && url.hostname === "localhost"); } catch { return false; } }
+export function isValidWebhookUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    return url.protocol === "https:" && !url.username && !url.password && !url.hash &&
+      !isIP(host) && host !== "localhost" && !host.endsWith(".localhost") && !host.endsWith(".local");
+  } catch { return false; }
+}
+export function isAllowedWebhookOrigin(value: string) {
+  if (!isValidWebhookUrl(value)) return false;
+  const allowed = (process.env.DRUTO_WEBHOOK_ALLOWED_ORIGINS ?? "").split(",").map(v => v.trim()).filter(Boolean);
+  return allowed.includes(new URL(value).origin);
+}
 export function hashEventPayload(payload: string) { return createHash("sha256").update(payload).digest("hex"); }
 export type WebhookDeliveryResult = { ok: boolean; status: number; error?: string };

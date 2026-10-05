@@ -31,7 +31,7 @@ function createDbMock(initialRows: any[] = [], queryRows: any[][] = []) {
 }
 
 describe("marketplace Payment Intent router contract", () => {
-  beforeEach(() => { vi.restoreAllMocks(); vi.stubEnv('ARC_MERCHANT_WALLET_ADDRESS', '0x1111111111111111111111111111111111111111'); });
+  beforeEach(() => { vi.restoreAllMocks(); vi.stubEnv('ARC_MERCHANT_WALLET_ADDRESS', '0x1111111111111111111111111111111111111111'); vi.stubEnv('DRUTO_WEBHOOK_ALLOWED_ORIGINS', 'https://dashda.example'); });
   afterEach(() => vi.unstubAllEnvs());
 
   it("stores buyer context without exposing it through public checkout or create response", async () => {

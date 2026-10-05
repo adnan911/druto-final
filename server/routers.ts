@@ -17,7 +17,7 @@ import { parsePaymentAmount } from '../shared/usdc-amount';
 import { publicPaymentIntent, privatePaymentIntent, createdPaymentSession } from './payment-intent-view';
 import { insertIdempotentIntent } from './payment-idempotency';
 import { summarizeVerifiedRows } from "./payment-summary";
-import { createWebhookSecret, encryptWebhookSecret, isValidWebhookUrl } from "./webhooks";
+import { createWebhookSecret, encryptWebhookSecret, isAllowedWebhookOrigin, isValidWebhookUrl } from "./webhooks";
 import { retryWebhookDelivery } from "./webhook-delivery";
 import { createApiKeyMaterial, hashApiKey } from "./api-keys";
 import { privyOpenId, verifyPrivyToken } from "./privy-auth";
@@ -345,7 +345,8 @@ export const appRouter = router({
       return account;
     }),
     registerWebhook: protectedProcedure.input(z.object({ seller: sellerRoutingInput, url: z.string().min(1).max(2048) })).mutation(async ({ input, ctx }) => {
-      if (!isValidWebhookUrl(input.url)) throw new TRPCError({ code: "BAD_REQUEST", message: "Webhook URL must use HTTPS (or localhost HTTP for development)" });
+      if (!isValidWebhookUrl(input.url)) throw new TRPCError({ code: "BAD_REQUEST", message: "Webhook URL must use HTTPS with a DNS hostname and no credentials or fragment" });
+      if (!isAllowedWebhookOrigin(input.url)) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Webhook origin is not enabled by the operator" });
       const db = await getDb();
       const account = await resolveMerchantAccountForOperator(db, input.seller, ctx.user, { allowPending: true });
       if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });

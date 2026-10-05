@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { checkDatabaseReadiness } from "../db";
+import { assertWebhookEncryptionConfigured } from "../webhooks";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -54,6 +55,7 @@ async function startServer() {
     res.setHeader("Cache-Control", "no-store");
     try {
       await checkDatabaseReadiness();
+      assertWebhookEncryptionConfigured();
       res.status(200).json({ ready: true });
     } catch {
       res.status(503).json({ ready: false });
