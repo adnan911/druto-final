@@ -21,3 +21,8 @@ This branch is a review candidate, not approval to deploy or to handle real fund
 6. Run one buyer-signed Arc Testnet direct 0% payment and verify chain receipt, exact wallet/amount, Druto settlement, signed webhook, Luvre `PAID`, one fulfillment-outbox row and duplicate/recovery behavior. A Vercel Ready badge or old dashboard transaction is insufficient.
 
 This review branch must remain draft until the open gates are addressed. There has been no Druto Vercel setting change, production deployment, main-branch merge or buyer-signed payment in this review milestone.
+
+## Follow-up: Preview runtime and legacy inventory
+
+- Preview `f5200d4` built as Ready, but `/api/ready` returned `500 FUNCTION_INVOCATION_FAILED`. Vercel runtime logs identified an unresolved `./index.src` import from the API catch-all. Draft-branch commits `70575d3` and `8f5dafc` switch to the build-produced `./index.js` and add its TypeScript declaration. The fixed Preview build still needs an authenticated runtime probe; build status alone is not proof of API health.
+- A read-only TLS inventory of the old `test` database found 8 users, 10 merchant accounts, 4 API keys, 4 webhook endpoints, 16 payment intents, and 10 finalized Arc Testnet transactions. Ten intents are marked `succeeded`, six `requires_payment`; all 16 store a 200 bps fee policy. Preserve and reconcile this history before any `druto_testnet` cutover. Do not treat old paid flags or 2% metadata as the new direct 0% accounting model.
