@@ -1,4 +1,4 @@
-import { commitDirectPaymentAndOutbox, consumeVerifiedSellerChallenge } from "../../server/d1-atomic";
+import { commitDirectPaymentAndOutbox, consumeVerifiedSellerChallenge, consumeVerifiedWalletLoginChallenge } from "../../server/d1-atomic";
 import { claimD1Webhook, finishD1Webhook } from "../../server/d1-webhook-lease";
 
 // Local Wrangler proof only. This Worker has no public route or remote DB.
@@ -94,6 +94,18 @@ export default {
     const sellerState = await env.DB.prepare("SELECT status FROM merchantAccounts WHERE id = ?")
       .bind(accountId).first<{ status: string }>();
 
+    const loginChallengeId = `wch_${suffix}`;
+    const loginMessage = `Sign in to Druto Platform: ${suffix}`;
+    await env.DB.prepare("INSERT INTO walletLoginChallenges (id,walletAddress,message,nonceHash,expiresAt) VALUES (?, ?, ?, ?, ?)")
+      .bind(loginChallengeId, seller, loginMessage, `login-${suffix}`, Date.now() + 300_000).run();
+    const loginInput = { challengeId: loginChallengeId, walletAddress: seller,
+      message: loginMessage, usedAt: new Date() };
+    const wrongWalletRejected = !await consumeVerifiedWalletLoginChallenge(env.DB, {
+      ...loginInput, walletAddress: buyer,
+    });
+    const walletLoginConsumed = await consumeVerifiedWalletLoginChallenge(env.DB, loginInput);
+    const walletLoginReplayRejected = !await consumeVerifiedWalletLoginChallenge(env.DB, loginInput);
+
     const queuedRow = await env.DB.prepare("SELECT id FROM webhookDeliveries WHERE paymentIntentId = ?")
       .bind(intentId).first<{ id: string }>();
     const claim = queuedRow ? await claimD1Webhook(env.DB, queuedRow.id) : null;
@@ -108,12 +120,14 @@ export default {
       outboxConflictRejected && rollbackIntent?.status === "requires_payment" &&
       rollbackRecorded?.count === 0 && wrongOwnerRejected && sellerActivated &&
       challengeReplayRejected && sellerState?.status === "active" &&
+      wrongWalletRejected && walletLoginConsumed && walletLoginReplayRejected &&
       parallelClaimBlocked && leaseFinished && staleFinishBlocked &&
       deliveryState?.status === "succeeded" && deliveryState.attempts === 1;
     return Response.json({ passed, settled: intent?.status, recorded: recorded?.count,
       queued: queued?.count, replayRejected, outboxConflictRejected,
       rollbackStatus: rollbackIntent?.status, rollbackRecorded: rollbackRecorded?.count,
       wrongOwnerRejected, sellerActivated, challengeReplayRejected,
+      wrongWalletRejected, walletLoginConsumed, walletLoginReplayRejected,
       parallelClaimBlocked, leaseFinished, staleFinishBlocked },
       { status: passed ? 200 : 500 });
   },

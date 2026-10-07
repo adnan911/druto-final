@@ -135,3 +135,29 @@ export async function consumeVerifiedSellerChallenge<
   ).first<{ id: string }>();
   return updated?.id === input.challengeId;
 }
+
+/** Call only after verifying a wallet signature over this exact stored message. */
+export async function consumeVerifiedWalletLoginChallenge<
+  TStatement extends D1StatementWithFirst<TStatement>,
+>(db: { prepare(sql: string): TStatement }, input: {
+  challengeId: string;
+  walletAddress: string;
+  message: string;
+  usedAt: Date;
+}): Promise<boolean> {
+  if (!/^wch_[A-Za-z0-9_-]{1,28}$/.test(input.challengeId) ||
+      !/^0x[a-fA-F0-9]{40}$/.test(input.walletAddress) ||
+      !input.message || input.message.length > 2048 ||
+      !Number.isFinite(input.usedAt.getTime())) {
+    throw new Error("Invalid verified wallet login challenge");
+  }
+  const usedAtMs = input.usedAt.getTime();
+  const updated = await db.prepare(`
+    UPDATE walletLoginChallenges SET usedAt = ?
+    WHERE id = ? AND lower(walletAddress) = lower(?) AND message = ?
+      AND usedAt IS NULL AND expiresAt > ?
+    RETURNING id
+  `).bind(usedAtMs, input.challengeId, input.walletAddress,
+    input.message, usedAtMs).first<{ id: string }>();
+  return updated?.id === input.challengeId;
+}

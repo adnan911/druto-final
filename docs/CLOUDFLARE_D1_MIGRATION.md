@@ -105,6 +105,9 @@ challenge with one conditional update; the trigger activates the seller in
 the same state transition. These helpers are not yet connected to the live API.
 `server/d1-webhook-lease.ts` uses conditional updates and an attempt counter
 to claim and finish a webhook delivery without an interactive transaction.
+`server/d1-atomic.ts` also conditionally consumes a wallet-login challenge
+after the caller has verified the signature over its exact stored message;
+concurrent reuse fails. This helper is not yet wired into the live auth route.
 
 The SQL executed against local SQLite and against Wrangler's local D1 engine
 (23 schema/index/trigger commands; no remote resource). A local Worker proof
@@ -114,6 +117,8 @@ rollback when an outbox uniqueness conflict follows the transaction insert.
 The same local Worker rejected a wrong owner, activated a matching seller,
 and rejected replay of the consumed challenge. It also blocked a competing
 webhook claim and rejected a stale completion after the first completion.
+The expanded local Worker proof also rejected a wrong-wallet login claim,
+consumed the correct challenge once, and blocked a replay.
 Other local probes confirmed all nine tables,
 zero-fee default, duplicate-hash and duplicate-intent rejection, wrong
 recipient rejection, seller activation, and rollback of settlement when a
