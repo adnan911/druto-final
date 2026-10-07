@@ -35,10 +35,13 @@ real customer traffic at a partial D1 implementation.
 | `webhookEndpoints` | 0 |
 | `webhookDeliveries` | 0 |
 
-These counts are an inventory, not a migration. The Vercel Production `test`
-database has not been inventoried here and must not be silently replaced.
-Preserve seller and user linkage, public wallet addresses, and immutable
-payment history if later inventory finds payment records.
+These counts are an inventory, not a migration. A separate read-only inventory
+of the Vercel Production `test` database found legacy payment, API-key,
+webhook, and seller records. It must not be silently replaced. Its historical
+fee quotes and seller-verification state differ from this direct zero-fee
+Testnet MVP. Preserve seller and user linkage, public wallet addresses, and
+immutable payment history; audit on-chain receipts and operator ownership
+before any later Production import.
 
 ## Isolated D1 Testnet state (2026-10-08)
 
@@ -62,8 +65,8 @@ import payment history or webhook secrets without a separately reviewed path.
 
 This is a point-in-time copy. Any later TiDB write is not automatically
 replicated, so a final source freeze/delta reconciliation is required before
-switching the Testnet API. Vercel Production's separate `test` database remains
-unexamined and untouched.
+switching the Testnet API. Vercel Production's separate `test` database was
+inventoried read-only and remains untouched.
 
 ## Required code changes
 
@@ -147,7 +150,9 @@ actual query and CPU budgets before choosing a paid plan or real-money launch.
 - [ ] Complete hosted checkout, seller ownership, idempotency, settlement,
       webhook, dashboard, quota, and rollback checks.
 - [ ] Explicitly decide a Production migration only after the Testnet cutover
-      is stable. Keep the current Vercel Production database untouched.
+      is stable. Re-verify legacy payment receipts, seller ownership, and
+      webhook/API-key security before importing its separate history. Keep
+      the current Vercel Production database untouched.
 
 ## Primary sources
 
