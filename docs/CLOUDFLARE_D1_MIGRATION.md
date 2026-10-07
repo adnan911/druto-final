@@ -1,8 +1,9 @@
 # Druto Testnet database migration: TiDB to Cloudflare D1
 
-Status: local SQLite schema and guard prototype only. No D1 database, Worker
-binding, data import, production route, or payment cutover has been created.
-The existing Cloudflare Preview has no database secret and fails closed.
+Status: isolated D1 Testnet database and preserved TiDB Testnet snapshot.
+No Worker D1 binding, production route, or payment cutover has been created.
+The existing Cloudflare Preview still uses the earlier TiDB code path without
+a database secret and fails closed.
 
 ## Decision
 
@@ -38,6 +39,31 @@ These counts are an inventory, not a migration. The Vercel Production `test`
 database has not been inventoried here and must not be silently replaced.
 Preserve seller and user linkage, public wallet addresses, and immutable
 payment history if later inventory finds payment records.
+
+## Isolated D1 Testnet state (2026-10-08)
+
+With the owner's instruction to preserve current Testnet data, a new D1
+database named `druto-d1-testnet` was created in the same Cloudflare account.
+Its ID is `d1f68dd0-c984-4b56-8167-d4ae0ee70ca2`. APAC was a location hint;
+the schema import was served by the SIN colo, which is not a Singapore-only
+data residency guarantee. The initial 23 schema/index/trigger statements
+executed remotely. The database has not been bound to the Druto Worker.
+
+The guarded one-time import in `scripts/migrate-tidb-testnet-to-d1.mjs`
+converted TiDB UTC timestamps to SQLite millisecond integers, checked the
+restricted source identity and empty D1 target, verified seller-owner and
+wallet relationships, and imported 2 users, 3 wallet-login challenges,
+1 verified seller, and 1 ownership challenge. All other application tables
+had zero rows. Each table's count and SHA-256 fingerprint matched the source
+after import; a subsequent source read also matched. The script transferred
+the rows through a temporary SQL file and removed it afterward. It does not
+export raw rows or credentials to the console or repository. It refuses to
+import payment history or webhook secrets without a separately reviewed path.
+
+This is a point-in-time copy. Any later TiDB write is not automatically
+replicated, so a final source freeze/delta reconciliation is required before
+switching the Testnet API. Vercel Production's separate `test` database remains
+unexamined and untouched.
 
 ## Required code changes
 
@@ -103,15 +129,16 @@ Queries fail after daily read/write limits are reached. These are Testnet
 prototype limits, not a production availability guarantee. Measure Druto's
 actual query and CPU budgets before choosing a paid plan or real-money launch.
 
-## Gate before any remote D1 creation
+## Remaining gates before a D1 API switch
 
-- [ ] Confirm whether all existing Testnet history must be migrated; default
-      to preserving it.
+- [x] Confirm preserving existing Testnet identity/seller records.
 - [x] Generate and locally validate the initial SQLite schema and critical
       database guards. Application-level D1 state transitions remain open.
-- [ ] Review data conversion and row-count/checksum reconciliation.
-- [ ] Create a separate `druto-d1-testnet` D1 database and bind only an isolated
-      branch Preview after local tests pass.
+- [x] Review Testnet data conversion and row-count/checksum reconciliation.
+- [x] Create a separate `druto-d1-testnet` D1 database and import the current
+      Testnet snapshot without binding any Worker.
+- [ ] Complete the D1 API adapter and bind only an isolated branch Preview.
+- [ ] Freeze TiDB writes and reconcile any final delta at Testnet cutover.
 - [ ] Complete hosted checkout, seller ownership, idempotency, settlement,
       webhook, dashboard, quota, and rollback checks.
 - [ ] Explicitly decide a Production migration only after the Testnet cutover
