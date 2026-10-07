@@ -1,5 +1,9 @@
 # Druto Cloudflare migration — Arc Testnet only
 
+The newer `codex/druto-d1-testnet` branch explores replacing TiDB with
+Cloudflare D1. See `docs/CLOUDFLARE_D1_MIGRATION.md`. The Worker described
+below still uses TiDB and has not been switched to D1.
+
 Status: the `codex/druto-cloudflare-migration` branch has a successful isolated
 Cloudflare Preview deployment at
 `https://codex-druto-cloudflare-migration-druto-final.robobq.workers.dev/`.
