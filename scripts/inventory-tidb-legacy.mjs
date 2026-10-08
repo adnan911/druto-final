@@ -56,7 +56,16 @@ try {
       (SELECT COUNT(*) FROM merchantAccounts WHERE ownerUserId IS NULL) AS unownedSellers,
       (SELECT COUNT(*) FROM merchantAccounts WHERE status = 'active' AND walletVerifiedAt IS NULL) AS activeUnverifiedSellers,
       (SELECT COUNT(*) FROM apiKeys WHERE revokedAt IS NULL) AS activeApiKeys,
-      (SELECT COUNT(*) FROM webhookEndpoints WHERE active = 1) AS activeWebhookEndpoints
+      (SELECT COUNT(*) FROM webhookEndpoints WHERE active = 1) AS activeWebhookEndpoints,
+      (SELECT COUNT(*) FROM paymentTransactions t JOIN paymentIntents p ON p.id = t.paymentIntentId WHERE t.amountAtomic <> p.amountAtomic) AS amountMismatches,
+      (SELECT COUNT(*) FROM paymentTransactions t JOIN paymentIntents p ON p.id = t.paymentIntentId WHERE LOWER(t.toAddress) <> LOWER(p.merchantAddress)) AS recipientMismatches,
+      (SELECT COUNT(*) FROM paymentTransactions t JOIN paymentIntents p ON p.id = t.paymentIntentId WHERE LOWER(t.toAddress) = LOWER(p.splitContractAddress)) AS recipientMatchesSplitContract,
+      (SELECT COUNT(*) FROM paymentTransactions WHERE LOWER(tokenAddress) <> '0x3600000000000000000000000000000000000000') AS tokenMismatches,
+      (SELECT COUNT(*) FROM paymentTransactions WHERE platformFeeAmount = '0') AS recordedZeroFee,
+      (SELECT COUNT(*) FROM paymentTransactions WHERE platformFeeAmount IS NULL) AS recordedNullFee,
+      (SELECT COUNT(*) FROM paymentTransactions t JOIN paymentIntents p ON p.id = t.paymentIntentId
+        WHERE t.platformFeeAmount IS NULL OR
+          CAST(t.platformFeeAmount AS DECIMAL(65,0)) <> FLOOR(CAST(p.amountAtomic AS DECIMAL(65,0)) * p.platformFeeBps / 10000)) AS feeQuoteMismatches
   `);
   const aggregate = Object.fromEntries(Object.entries(ledger[0]).map(([key, value]) => [key, Number(value)]));
   console.log(JSON.stringify({ database: 'test', tables: counts,

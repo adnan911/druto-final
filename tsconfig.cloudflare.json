@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["workers/druto-app/**/*.ts", "api/**/*.ts", "server/**/*.ts", "drizzle/**/*.ts", "shared/**/*.ts"],
+  "include": ["workers/druto-app/**/*.ts", "workers/druto-d1-app/**/*.ts", "api/**/*.ts", "server/**/*.ts", "drizzle/**/*.ts", "shared/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"],
   "compilerOptions": {
     "types": ["node"]

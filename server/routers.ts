@@ -14,7 +14,8 @@ import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { normalizeMarketplaceReturnUrl } from "./payment-policy";
-import { parsePaymentAmount } from '../shared/usdc-amount';
+import { paymentInput, sellerRoutingInput } from './payment-contract';
+export { paymentInput, sellerRoutingInput } from './payment-contract';
 import { publicPaymentIntent, privatePaymentIntent, createdPaymentSession } from './payment-intent-view';
 import { insertIdempotentIntent } from './payment-idempotency';
 import { summarizeVerifiedRows } from "./payment-summary";
@@ -25,26 +26,6 @@ import { privyOpenId, verifyPrivyToken } from "./privy-auth";
 import { sdk } from "./_core/sdk";
 import { sellerOwnershipRouter } from "./seller-ownership";
 import { settlePayment, paymentVerificationOrigin } from "./payment-settlement";
-
-export const sellerRoutingInput = z.object({
-  marketplaceId: z.string().min(1).max(128),
-  sellerId: z.string().min(1).max(128),
-  merchantAccountId: z.string().min(1).max(32).optional(),
-});
-
-export const paymentInput = z.object({
-  externalOrderId: z.string().min(1).max(128),
-  idempotencyKey: z.string().min(1).max(128).optional(),
-  itemName: z.string().min(1).max(255),
-  buyerLabel: z.string().max(255).optional(),
-  returnUrl: z.string().max(2048).optional(),
-  amount: z.string().max(14).superRefine((value, ctx) => {
-    try { parsePaymentAmount(value); }
-    catch (error) { ctx.addIssue({ code: z.ZodIssueCode.custom, message: error instanceof Error ? error.message : 'Invalid USDC amount' }); }
-  }),
-  orderContext: z.object({ items: z.array(z.object({ productId: z.string(), name: z.string(), seller: z.string(), unitPrice: z.number().nonnegative(), quantity: z.number().int().positive() })), delivery: z.string(), shippingAddress: z.object({ name: z.string(), line1: z.string(), city: z.string(), postalCode: z.string(), country: z.string() }), buyerEmail: z.string().email() }).optional(),
-  seller: sellerRoutingInput.optional(),
-});
 
 const LEGACY_DEMO_SELLERS: Record<string, string> = { "druto-labs": "Druto Labs", "mosaic-works": "Mosaic Works", "dawn-studio": "Dawn Studio", "atlas-compute": "Atlas Compute", "meridian-ops": "Meridian Ops" };
 

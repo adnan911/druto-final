@@ -15,6 +15,7 @@ import { ARC_CHAIN_ID, ARC_CHAIN_ID_HEX, ARC_RPC_URL, ARC_USDC_ADDRESS, CIRCLE_F
 import { toast } from "sonner";
 import { signPaymentConfirmation } from "@/lib/paymentProof";
 import { usePrivy } from "@privy-io/react-auth";
+const D1_WALLET_ONLY = import.meta.env.VITE_D1_WALLET_ONLY === "true";
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import {
   Activity, AlertCircle, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, ChevronUp, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, LogOut, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Rocket, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, Wallet, WalletCards, X, Zap
@@ -331,14 +332,14 @@ function Topbar({ title, onCreate }: { title: string; onCreate: () => void }) {
         >
           <RefreshCw size={17} className={isRefreshing ? "animate-spin" : ""} />
         </button>
-        <button
+        {!D1_WALLET_ONLY && <button
           className="button button-sync-light"
           onClick={handleSyncArcScan}
           disabled={syncMutation.isPending}
           title="Sync latest onchain ArcScan transfers"
         >
           {syncMutation.isPending ? "Syncing Arc…" : "Sync ArcScan"}
-        </button>
+        </button>}
         <button className="icon-button" title="Notifications" aria-label="Notifications">
           <Bell size={17} />
           <i className="notification-dot" />
@@ -2095,7 +2096,9 @@ function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: s
   };
 
   const title = active === "Overview" ? "Overview" : active;
-  const create = () => setShowCreate(true);
+  const create = () => D1_WALLET_ONLY
+    ? toast.info("Create a checkout from your marketplace server using a seller API key")
+    : setShowCreate(true);
   return (
     <div className="app-shell">
       <Sidebar
@@ -2144,7 +2147,7 @@ function DashboardAccess() {
   const getAccessToken = privy?.getAccessToken;
 
   useEffect(() => {
-    if (!privyReady || !privyAuthenticated || session.data || privyExchangeState !== "idle" || !getAccessToken) return;
+    if (D1_WALLET_ONLY || !privyReady || !privyAuthenticated || session.data || privyExchangeState !== "idle" || !getAccessToken) return;
     setPrivyExchangeState("loading");
     void (async () => {
       try {
@@ -2160,7 +2163,7 @@ function DashboardAccess() {
     })();
   }, [getAccessToken, privyAuthenticated, privyReady, privyExchangeState, session.data, utils.auth.me, privyLogin]);
 
-  const waitingForPrivy = privyAuthenticated && !session.data && privyExchangeState === "idle";
+  const waitingForPrivy = !D1_WALLET_ONLY && privyAuthenticated && !session.data && privyExchangeState === "idle";
   if (session.isLoading || privyExchangeState === "loading" || waitingForPrivy) {
     return (
       <div className="dashboard-loading">

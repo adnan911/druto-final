@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "druto-d1-testnet",
+  "main": "./workers/druto-d1-app/index.ts",
+  "compatibility_date": "2026-10-05",
+  "compatibility_flags": ["nodejs_compat", "enable_nodejs_http_server_modules"],
+  "alias": { "iconv-lite": "./node_modules/iconv-lite" },
+  "workers_dev": true,
+  "vars": {
+    "DRUTO_RUNTIME": "cloudflare",
+    "DRUTO_API_URL": "https://druto-d1-testnet.robobq.workers.dev"
+  },
+  "d1_databases": [{
+    "binding": "DRUTO_D1",
+    "database_name": "druto-d1-testnet",
+    "database_id": "d1f68dd0-c984-4b56-8167-d4ae0ee70ca2",
+    "migrations_dir": "drizzle-d1"
+  }],
+  "triggers": { "crons": ["*/2 * * * *"] },
+  "assets": {
+    "directory": "./dist/public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/trpc/*"]
+  },
+  "observability": { "enabled": true }
+}

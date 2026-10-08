@@ -18,6 +18,8 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { toast } from "sonner";
 
+const D1_WALLET_ONLY = import.meta.env.VITE_D1_WALLET_ONLY === "true";
+
 export default function AccountLoginCard() {
 
   const [isWalletSigning, setIsWalletSigning] = useState(false);
@@ -257,7 +259,7 @@ export default function AccountLoginCard() {
               </span>
               <h2 className="text-2xl font-serif font-light text-[var(--foreground)]">Sign in to Druto</h2>
               <p className="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed font-sans">
-                Verify your EVM wallet or sign in with Privy.
+                {D1_WALLET_ONLY ? "Verify your EVM wallet to access the Arc Testnet workspace." : "Verify your EVM wallet or sign in with Privy."}
               </p>
             </div>
 
@@ -283,7 +285,7 @@ export default function AccountLoginCard() {
                 )}
               </button>
 
-              {privy && (
+              {!D1_WALLET_ONLY && privy && (
                 <button
                   type="button"
                   onClick={handlePrivySignIn}

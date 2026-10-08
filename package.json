@@ -13,6 +13,10 @@
     "cf:check": "tsc --noEmit -p tsconfig.cloudflare.json",
     "cf:dev": "wrangler dev",
     "cf:dry-run": "wrangler deploy --dry-run",
+    "cf:d1:dev": "wrangler dev --local --config wrangler.d1.jsonc --port 8789",
+    "cf:d1:build": "vite build --mode d1",
+    "cf:d1:dry-run": "wrangler deploy --dry-run --config wrangler.d1.jsonc",
+    "cf:d1:smoke": "node scripts/smoke-d1-local.mjs",
     "db:push": "node scripts/block-legacy-migrate.mjs",
     "db:verify:testnet": "node scripts/setup-tidb-testnet.mjs"
   },
