@@ -15,7 +15,8 @@ history, API keys, and webhook credentials must not be mixed into this new
 ## Repeatable local and remote commands
 
 1. Install dependencies with the checked-in lockfile, then run
-   `pnpm cf:d1:build`. Vite's tracked `.env.d1` contains only the public
+   `pnpm cf:d1:build`. This also builds the versioned SDK archive before Vite
+   copies it into Cloudflare static assets. Vite's tracked `.env.d1` contains only the public
    wallet-only UI flag; it contains no credential.
 2. Apply the schema locally with
    `pnpm exec wrangler d1 migrations apply druto-d1-testnet --local --config wrangler.d1.jsonc`.
@@ -49,15 +50,21 @@ target, source identity checks, row-count and fingerprint reconciliation.
   retries and a lease-fenced manual retry path.
 - Dashboard cookies use `HttpOnly`, `Secure` on HTTPS, and `SameSite=Lax`;
   cross-site browser mutations with a session cookie are rejected.
+- The server-only Testnet SDK is available on the [developer page](https://druto-d1-testnet.robobq.workers.dev/developers)
+  and as a [versioned ZIP](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.2.zip)
+  with a [SHA-256 manifest](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.2.zip.sha256).
+  The package source is `sdk/druto-sdk`. It creates one seller-scoped intent,
+  validates the returned checkout details, and verifies signed webhooks. It is
+  not a browser SDK or a mainnet release.
 
 ## Remaining cutover gates
 
 - Run a hosted Arc Testnet payment through the **new** Worker and the
   marketplace, including payer signature, receipt, D1 ledger, webhook and
   exactly-once order fulfillment. Local smoke does not prove this path.
-- Move Luvre Franc hosting and its server-side Druto API URL/key/webhook
-  configuration to Cloudflare. Rotate the seller API key and webhook secret;
-  verify both sides before disabling Vercel.
+- Luvre Franc hosting and D1 are on Cloudflare. Its `/api/ready` still returns
+  503 until a fresh seller-scoped Druto API key and webhook secret are configured.
+  Verify both sides before disabling Vercel.
 - Review unused legacy UI modules and source integrations. Keep the dashboard
   honest about unavailable subscriptions, fiat payouts, and mainnet support.
 - Add operational backup/export, alerting, recovery drill, rate limiting, and

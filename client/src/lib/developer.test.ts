@@ -4,8 +4,9 @@ import { developerIntegrationSteps, developerSdkSnippet, getDeveloperContractSum
 describe("developer integration kit content", () => {
   it("documents the minimal hosted checkout flow", () => {
     expect(developerSdkSnippet).toContain("@druto/sdk");
-    expect(developerSdkSnippet).toContain('environment: "testnet"');
-    expect(developerSdkSnippet).toContain("openCheckout");
+    expect(developerSdkSnippet).toContain("process.env.DRUTO_API_KEY");
+    expect(developerSdkSnippet).toContain("idempotencyKey:");
+    expect(developerSdkSnippet).toContain("session.checkoutUrl");
     expect(developerSdkSnippet).toContain('sellerId: "seller_456"');
   });
 

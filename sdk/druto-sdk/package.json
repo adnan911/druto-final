@@ -1,0 +1,15 @@
+{
+  "name": "@druto/sdk",
+  "version": "0.2.0-testnet.2",
+  "description": "Server-side Druto Arc Testnet USDC checkout and webhook SDK",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md", "examples"],
+  "sideEffects": false,
+  "license": "MIT"
+}
