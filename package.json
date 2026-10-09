@@ -17,6 +17,8 @@
     "sdk:build": "node sdk/build-package.mjs",
     "cf:d1:build": "pnpm sdk:build && vite build --mode d1",
     "cf:d1:dry-run": "wrangler deploy --dry-run --config wrangler.d1.jsonc",
+    "cf:reconcile:dry-run": "wrangler deploy --dry-run --config wrangler.reconcile-testnet.jsonc",
+    "cf:reconcile:deploy": "wrangler deploy --config wrangler.reconcile-testnet.jsonc",
     "cf:d1:smoke": "node scripts/smoke-d1-local.mjs",
     "db:push": "node scripts/block-legacy-migrate.mjs",
     "db:verify:testnet": "node scripts/setup-tidb-testnet.mjs"

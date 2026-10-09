@@ -74,7 +74,19 @@ target, source identity checks, row-count and fingerprint reconciliation.
   from a simulated storage outage. Exercise a live receiver interruption and
   replay without creating another buyer payment. The read-only reconciliation
   script in `scripts/reconcile-cloudflare-testnet.mjs` returned `PASS` for bound
-  demo orders, but covers at most 100 orders and is not scheduled monitoring.
+  demo orders, but covers at most 100 orders.
+- `workers/testnet-reconciler/index.ts` is a separate, read-only Cloudflare
+  Worker with bindings to the two Testnet D1 databases. Its 15-minute Cron
+  checks Druto payment policy and transaction rows, Luvre paid orders and
+  outbox rows, and the corresponding Arc USDC receipt. It has no public HTTP
+  trigger, no write query, and no credential. The Worker stops with an
+  `INCOMPLETE` result if either database has more than 20 relevant rows, a
+  binding is unavailable, or Arc RPC fails. A recently settled payment gets
+  a 10-minute webhook grace window; internal ledger corruption never does.
+  The Cron logs only aggregate counts and exception codes. Deploy it with
+  `pnpm cf:reconcile:deploy` after local checks. A failed Cron is visible in
+  Cloudflare Workers Logs, but an account notification policy has not yet
+  been configured; this is not a guaranteed paging system.
 - Review unused legacy UI modules and source integrations. Keep the dashboard
   honest about unavailable subscriptions, fiat payouts, and mainnet support.
 - Add operational backup/export, alerting, recovery drill, rate limiting, and
