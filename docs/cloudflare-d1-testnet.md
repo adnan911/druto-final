@@ -57,14 +57,24 @@ target, source identity checks, row-count and fingerprint reconciliation.
   validates the returned checkout details, and verifies signed webhooks. It is
   not a browser SDK or a mainnet release.
 
-## Remaining cutover gates
+## Verified Testnet path and remaining cutover gates
 
-- Run a hosted Arc Testnet payment through the **new** Worker and the
-  marketplace, including payer signature, receipt, D1 ledger, webhook and
-  exactly-once order fulfillment. Local smoke does not prove this path.
-- Luvre Franc hosting and D1 are on Cloudflare. Its `/api/ready` still returns
-  503 until a fresh seller-scoped Druto API key and webhook secret are configured.
-  Verify both sides before disabling Vercel.
+- One hosted 2 USDC Arc Testnet payment through the new Druto and Luvre
+  Workers completed. Druto intent `pi_nXi5jBv0Bxe4` is `succeeded` and the
+  linked Luvre order `lf_4f7f0d0e50a246d20e847488bd7b1e4c` is `PAID`.
+  Arc receipt `0x4d43ddbf2a8dee4c539c827e5a81514404429940d914ee55a6c26eb74bad27cb`
+  contains one matching 2 USDC seller transfer. The signed webhook was
+  delivered once, and Luvre recorded one processed event and one fulfillment
+  outbox row. The outbox row is `PENDING`; automatic physical fulfillment has
+  not been implemented or claimed.
+- Luvre Franc hosting and D1 are on Cloudflare. A fresh seller-scoped Druto
+  API key and webhook secret are configured as Worker secrets. Both Workers'
+  `/api/ready` endpoints returned 200 after configuration.
+- Local D1 receiver tests cover duplicate signed webhook delivery and recovery
+  from a simulated storage outage. Exercise a live receiver interruption and
+  replay without creating another buyer payment. The read-only reconciliation
+  script in `scripts/reconcile-cloudflare-testnet.mjs` returned `PASS` for bound
+  demo orders, but covers at most 100 orders and is not scheduled monitoring.
 - Review unused legacy UI modules and source integrations. Keep the dashboard
   honest about unavailable subscriptions, fiat payouts, and mainnet support.
 - Add operational backup/export, alerting, recovery drill, rate limiting, and
