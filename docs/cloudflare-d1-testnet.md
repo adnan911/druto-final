@@ -92,6 +92,15 @@ target, source identity checks, row-count and fingerprint reconciliation.
   2 Druto succeeded payments, 2 Luvre paid orders, 1 pending order, 2 pending
   fulfillment records, and no exception codes. This validates the Cron path
   for the current bounded Testnet data, not alert delivery or future scale.
+- A non-destructive D1 restore drill on 2026-10-09 exported both remote Testnet
+  databases, imported each into a separate local Wrangler D1, and compared
+  aggregate live/restored counts. Druto matched at 2 users, 1 seller, 3
+  intents, 2 transactions, 2 webhook deliveries, and 1 API key. Luvre matched
+  at 9 orders, 9 attempts, 2 processed events, and 2 fulfillment rows. The
+  local SQLite copies passed `integrity_check = ok` and had 0 foreign-key
+  violations. Temporary SQL exports and local copies were removed. No remote
+  Time Travel restore was attempted. This verifies export/import mechanics,
+  not a full production recovery time objective or durable backup retention.
 - Review unused legacy UI modules and source integrations. Keep the dashboard
   honest about unavailable subscriptions, fiat payouts, and mainnet support.
 - Add operational backup/export, alerting, recovery drill, rate limiting, and

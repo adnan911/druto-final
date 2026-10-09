@@ -63,7 +63,8 @@ restore drill and cross-system reconciliation have passed. Preserve the Arc
 transaction hash and immutable logs as evidence. Escalate any unexplained
 recipient/amount mismatch rather than compensating it with a second transfer.
 
-Current release gates: verified real scheduled Cron run, owner alert delivery,
-controlled live webhook failure/replay, fulfillment ownership, backup/restore
-drill, and a documented traffic cutover/rollback. Passing one 2 USDC Testnet
-checkout does not satisfy those gates.
+The scheduled Cron path and an isolated local D1 export/import drill have now
+passed. Remaining release gates include owner alert delivery, controlled live
+webhook failure/replay, fulfillment ownership, durable backup retention and a
+timed recovery exercise, plus a documented traffic cutover/rollback. Passing
+one 2 USDC Testnet checkout does not satisfy those gates.
