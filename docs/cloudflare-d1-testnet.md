@@ -87,6 +87,11 @@ target, source identity checks, row-count and fingerprint reconciliation.
   `pnpm cf:reconcile:deploy` after local checks. A failed Cron is visible in
   Cloudflare Workers Logs and Issues. An account notification policy has not
   yet been configured; this is not a guaranteed paging system.
+- The first observed real scheduled invocation at `2026-10-09T09:30:45Z`
+  finished `PASS` on Worker version `8efc1c2b-405d-4e91-b26e-308a47a932c9`:
+  2 Druto succeeded payments, 2 Luvre paid orders, 1 pending order, 2 pending
+  fulfillment records, and no exception codes. This validates the Cron path
+  for the current bounded Testnet data, not alert delivery or future scale.
 - Review unused legacy UI modules and source integrations. Keep the dashboard
   honest about unavailable subscriptions, fiat payouts, and mainnet support.
 - Add operational backup/export, alerting, recovery drill, rate limiting, and
