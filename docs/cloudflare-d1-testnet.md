@@ -85,8 +85,8 @@ target, source identity checks, row-count and fingerprint reconciliation.
   a 10-minute webhook grace window; internal ledger corruption never does.
   The Cron logs only aggregate counts and exception codes. Deploy it with
   `pnpm cf:reconcile:deploy` after local checks. A failed Cron is visible in
-  Cloudflare Workers Logs, but an account notification policy has not yet
-  been configured; this is not a guaranteed paging system.
+  Cloudflare Workers Logs and Issues. An account notification policy has not
+  yet been configured; this is not a guaranteed paging system.
 - Review unused legacy UI modules and source integrations. Keep the dashboard
   honest about unavailable subscriptions, fiat payouts, and mainnet support.
 - Add operational backup/export, alerting, recovery drill, rate limiting, and

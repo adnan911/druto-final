@@ -11,5 +11,5 @@
     { "binding": "LUVRE_ORDERS_DB", "database_name": "luvre-d1-testnet",
       "database_id": "ee1a3142-79b4-461d-8af1-5c3a7627623b" }
   ],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true, "issues": { "enabled": true } }
 }
