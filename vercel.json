@@ -2,7 +2,7 @@
   "version": 2,
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist/public",
-  "installCommand": "pnpm install --no-frozen-lockfile",
+  "installCommand": "pnpm install --frozen-lockfile",
   "framework": "vite",
   "functions": {
     "api/index.js": {

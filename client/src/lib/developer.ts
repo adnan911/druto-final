@@ -1,24 +1,17 @@
-export const developerSdkSnippet = `import { DrutoCheckout } from "@druto/sdk";
+export const developerSdkSnippet = `import { Druto } from "@druto/sdk";
 
-const checkout = new DrutoCheckout({
-  environment: "testnet",
-  network: "arc",
-  asset: "USDC"
-});
-
-const session = await checkout.createPayment({
-  orderId: "order_123",
-  itemName: "Arc Testnet Starter × 1",
+// Server or Cloudflare Worker only; keep the API key out of browser code.
+const druto = new Druto({ apiKey: process.env.DRUTO_API_KEY! });
+const session = await druto.createPayment({
+  externalOrderId: "order_123",
+  idempotencyKey: "order_123_seller_456_v1",
+  itemName: "Arc Testnet order",
   amount: "1.00",
-  buyerEmail: "buyer@example.com",
-  seller: {
-    marketplaceId: "your-marketplace",
-    sellerId: "seller_456"
-  },
-  returnUrl: "https://shop.example/paid"
+  seller: { marketplaceId: "your-marketplace", sellerId: "seller_456" },
+  returnUrl: "https://shop.example/orders/order_123"
 });
 
-checkout.openCheckout(session);`;
+// Redirect the buyer to session.checkoutUrl from your browser.`;
 
 export const developerIntegrationSteps = ["Register the seller", "Request the ownership challenge", "Sign the message with the seller wallet", "Create a seller-routed intent", "Open Druto wallet/QR checkout", "Verify and fulfill"] as const;
 

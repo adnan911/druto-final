@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getDbMock = vi.hoisted(() => vi.fn());
 vi.mock("./db", () => ({ getDb: getDbMock }));
@@ -31,9 +31,10 @@ function createDbMock(initialRows: any[] = [], queryRows: any[][] = []) {
 }
 
 describe("marketplace Payment Intent router contract", () => {
-  beforeEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => { vi.restoreAllMocks(); vi.stubEnv('ARC_MERCHANT_WALLET_ADDRESS', '0x1111111111111111111111111111111111111111'); vi.stubEnv('DRUTO_WEBHOOK_ALLOWED_ORIGINS', 'https://dashda.example'); });
+  afterEach(() => vi.unstubAllEnvs());
 
-  it("persists and returns buyer context and the normalized return URL", async () => {
+  it("stores buyer context without exposing it through public checkout or create response", async () => {
     const { db, rows } = createDbMock();
     getDbMock.mockResolvedValue(db);
     const caller = appRouter.createCaller({ user: null, req: {}, res: {} } as never);
@@ -49,14 +50,16 @@ describe("marketplace Payment Intent router contract", () => {
     });
 
     expect(rows[0]).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/orders/paid", externalOrderId: "DR-1842", orderContext: expect.stringContaining('"quantity":2') });
-    expect(created).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/orders/paid" });
+    expect(created).toMatchObject({ returnUrl: "/orders/paid" });
+    expect(created).not.toHaveProperty('buyerLabel');
 
     const intent = await caller.payments.getIntent({ id: created.id });
-    expect(intent).toMatchObject({ buyerLabel: "Hackathon buyer", returnUrl: "/orders/paid", itemName: "Arc API Pro", orderContext: expect.stringContaining('"productId":"api-pro"') });
+    expect(intent).toMatchObject({ returnUrl: "/orders/paid", itemName: "Arc API Pro" });
+    for (const field of ['buyerLabel', 'orderContext', 'externalOrderId', 'idempotencyKey', 'merchantAccountId', 'buyerAddress']) expect(intent).not.toHaveProperty(field);
   });
 
   it("routes a seller-aware intent to the approved merchant wallet", async () => {
-    const sellerAccount = { id: "ma_seller_1", marketplaceId: "market_1", externalSellerId: "seller_1", displayName: "Seller One", receivingAddress: "0x1111111111111111111111111111111111111111", status: "active", createdAt: new Date(), updatedAt: new Date() };
+    const sellerAccount = { id: "ma_seller_1", marketplaceId: "market_1", externalSellerId: "seller_1", displayName: "Seller One", receivingAddress: "0x1111111111111111111111111111111111111111", status: "active", walletVerifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() };
     const apiSecret = "druto_test_seller_fixture";
     const apiKey = { id: "key_seller_1", ownerUserId: 1, name: "Seller integration", prefix: "druto_test_", lastFour: apiSecret.slice(-4), secretHash: hashApiKey(apiSecret), merchantAccountId: sellerAccount.id, marketplaceId: sellerAccount.marketplaceId, sellerId: sellerAccount.externalSellerId, sellerDisplayName: sellerAccount.displayName, revokedAt: null };
     const { db, rows } = createDbMock([apiKey], [[sellerAccount], []]);
@@ -68,11 +71,20 @@ describe("marketplace Payment Intent router contract", () => {
   });
 
   it("rejects a seller-scoped intent without a linked API key", async () => {
-    const sellerAccount = { id: "ma_auth_1", marketplaceId: "market_auth", externalSellerId: "seller_auth", displayName: "Auth Seller", receivingAddress: "0x1212121212121212121212121212121212121212", status: "active", createdAt: new Date(), updatedAt: new Date() };
+    const sellerAccount = { id: "ma_auth_1", marketplaceId: "market_auth", externalSellerId: "seller_auth", displayName: "Auth Seller", receivingAddress: "0x1212121212121212121212121212121212121212", status: "active", walletVerifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() };
     const { db } = createDbMock([sellerAccount]);
     getDbMock.mockResolvedValue(db);
     const caller = appRouter.createCaller({ user: null, req: { headers: {} }, res: {} } as never);
     await expect(caller.payments.createIntent({ externalOrderId: "SELLER-AUTH", itemName: "Seller item", amount: "1.00", seller: { marketplaceId: "market_auth", sellerId: "seller_auth" } })).rejects.toThrow("seller API key is required");
+  });
+
+  it("blocks anonymous and legacy demo intent creation in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const { db } = createDbMock();
+    getDbMock.mockResolvedValue(db);
+    const caller = appRouter.createCaller({ user: null, req: { headers: {} }, res: {} } as never);
+    await expect(caller.payments.createIntent({ externalOrderId: "NO-SELLER", itemName: "Item", amount: "1.00" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.payments.createIntent({ externalOrderId: "LEGACY-DEMO", itemName: "Item", amount: "1.00", seller: { marketplaceId: "druto-demo-marketplace", sellerId: "mosaic-works" } })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   it("allows self-service seller registration", async () => {
@@ -80,10 +92,10 @@ describe("marketplace Payment Intent router contract", () => {
     getDbMock.mockResolvedValue(db);
     const adminCaller = appRouter.createCaller({ user: { id: 7, openId: "admin-owner", role: "admin" }, req: {}, res: {} } as never);
     await adminCaller.merchantAccounts.register({ marketplaceId: "market_1", sellerId: "seller_new", displayName: "New Seller", receivingAddress: "0x2222222222222222222222222222222222222222" });
-    expect(rows[0]).toMatchObject({ ownerUserId: 7, status: "active", receivingAddress: "0x2222222222222222222222222222222222222222" });
+    expect(rows[0]).toMatchObject({ ownerUserId: 7, status: "pending", receivingAddress: "0x2222222222222222222222222222222222222222" });
     const userCaller = appRouter.createCaller({ user: { id: 8, openId: "regular-user", role: "user" }, req: {}, res: {} } as never);
     const selfRegistered = await userCaller.merchantAccounts.register({ marketplaceId: "market_2", sellerId: "seller_other", displayName: "Other Seller", receivingAddress: "0x5555555555555555555555555555555555555555" });
-    expect(selfRegistered).toMatchObject({ ownerUserId: 8, status: "active", marketplaceId: "market_2", externalSellerId: "seller_other" });
+    expect(selfRegistered).toMatchObject({ ownerUserId: 8, status: "pending", marketplaceId: "market_2", externalSellerId: "seller_other" });
   });
 
   it("provisions a webhook secret for an owner’s pending seller account", async () => {
@@ -108,7 +120,7 @@ describe("marketplace Payment Intent router contract", () => {
   });
 
   it("returns only the seller-scoped pending and succeeded intents", async () => {
-    const account = { id: "ma_orders", marketplaceId: "market_1", externalSellerId: "seller_orders", ownerUserId: 7, displayName: "Orders Seller", receivingAddress: "0x6666666666666666666666666666666666666666", status: "active", createdAt: new Date(), updatedAt: new Date() };
+    const account = { id: "ma_orders", marketplaceId: "market_1", externalSellerId: "seller_orders", ownerUserId: 7, displayName: "Orders Seller", receivingAddress: "0x6666666666666666666666666666666666666666", status: "active", walletVerifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() };
     const intents = [{ id: "pi_pending", status: "requires_payment", amountAtomic: "1000000", merchantAccountId: "ma_orders" }, { id: "pi_succeeded", status: "succeeded", amountAtomic: "2000000", merchantAccountId: "ma_orders" }, { id: "pi_other", status: "succeeded", amountAtomic: "9000000", merchantAccountId: "ma_other" }];
     const { db } = createDbMock([account], [intents]);
     getDbMock.mockResolvedValue(db);
@@ -119,7 +131,7 @@ describe("marketplace Payment Intent router contract", () => {
   });
 
   it("returns verified seller payments and an empty state safely", async () => {
-    const account = { id: "ma_payments", marketplaceId: "market_1", externalSellerId: "seller_payments", ownerUserId: 7, displayName: "Payments Seller", receivingAddress: "0x7777777777777777777777777777777777777777", status: "active", createdAt: new Date(), updatedAt: new Date() };
+    const account = { id: "ma_payments", marketplaceId: "market_1", externalSellerId: "seller_payments", ownerUserId: 7, displayName: "Payments Seller", receivingAddress: "0x7777777777777777777777777777777777777777", status: "active", walletVerifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() };
     const verified = [{ transactionHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", paymentIntentId: "pi_succeeded", amountAtomic: "2000000", merchantAccountId: "ma_payments" }, { transactionHash: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", paymentIntentId: "pi_other", amountAtomic: "9000000", merchantAccountId: "ma_other" }];
     const { db } = createDbMock([account], [verified]);
     getDbMock.mockResolvedValue(db);
@@ -129,7 +141,7 @@ describe("marketplace Payment Intent router contract", () => {
   });
 
   it("returns an empty list when a seller has no verified payments", async () => {
-    const account = { id: "ma_empty", marketplaceId: "market_1", externalSellerId: "seller_empty", ownerUserId: 7, displayName: "Empty Seller", receivingAddress: "0x8888888888888888888888888888888888888888", status: "active", createdAt: new Date(), updatedAt: new Date() };
+    const account = { id: "ma_empty", marketplaceId: "market_1", externalSellerId: "seller_empty", ownerUserId: 7, displayName: "Empty Seller", receivingAddress: "0x8888888888888888888888888888888888888888", status: "active", walletVerifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() };
     const { db } = createDbMock([account], [[]]);
     getDbMock.mockResolvedValue(db);
     const caller = appRouter.createCaller({ user: { id: 7, openId: "seller-owner", role: "user" }, req: {}, res: {} } as never);
@@ -137,7 +149,7 @@ describe("marketplace Payment Intent router contract", () => {
   });
 
   it("aggregates seller-scoped pending and verified activity", async () => {
-    const account = { id: "ma_metrics", marketplaceId: "market_1", externalSellerId: "seller_metrics", ownerUserId: 7, displayName: "Metrics Seller", receivingAddress: "0x4444444444444444444444444444444444444444", status: "active", createdAt: new Date(), updatedAt: new Date() };
+    const account = { id: "ma_metrics", marketplaceId: "market_1", externalSellerId: "seller_metrics", ownerUserId: 7, displayName: "Metrics Seller", receivingAddress: "0x4444444444444444444444444444444444444444", status: "active", walletVerifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() };
     const intents = [{ id: "pi_pending", amountAtomic: "1000000", status: "requires_payment" }, { id: "pi_done", amountAtomic: "2500000", status: "succeeded" }];
     const verified = [{ amountAtomic: "2500000", paymentIntentId: "pi_done", merchantAccountId: "ma_metrics" }];
     const { db } = createDbMock([account], [intents, verified]);
@@ -148,7 +160,7 @@ describe("marketplace Payment Intent router contract", () => {
   });
 
   it("blocks a different operator from seller-scoped statistics", async () => {
-    const account = { id: "ma_private", marketplaceId: "market_1", externalSellerId: "seller_private", ownerUserId: 99, displayName: "Private Seller", receivingAddress: "0x3333333333333333333333333333333333333333", status: "active", createdAt: new Date(), updatedAt: new Date() };
+    const account = { id: "ma_private", marketplaceId: "market_1", externalSellerId: "seller_private", ownerUserId: 99, displayName: "Private Seller", receivingAddress: "0x3333333333333333333333333333333333333333", status: "active", walletVerifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() };
     const { db } = createDbMock([account]);
     getDbMock.mockResolvedValue(db);
     const caller = appRouter.createCaller({ user: { id: 7, openId: "other-user", role: "user" }, req: {}, res: {} } as never);
@@ -169,6 +181,8 @@ describe("marketplace Payment Intent router contract", () => {
     const created = await caller.payments.createIntent({ externalOrderId: "DR-default", itemName: "Demo item", amount: "1.00" });
     expect(rows[0]?.returnUrl).toBe("/");
     expect(created.returnUrl).toBe("/");
+    expect(rows[0]).toMatchObject({ platformFeeBps: 0, platformFeeAmount: "0", merchantPayoutAmount: "1000000", splitContractAddress: null });
+    expect(created).toMatchObject({ platformFeeBps: 0, platformFeeAmount: "0", merchantPayoutAmount: "1000000", splitContractAddress: null });
   });
 
   it("rejects an invalid returnUrl at the router boundary", async () => {
@@ -176,5 +190,29 @@ describe("marketplace Payment Intent router contract", () => {
     getDbMock.mockResolvedValue(db);
     const caller = appRouter.createCaller({ user: null, req: {}, res: {} } as never);
     await expect(caller.payments.createIntent({ externalOrderId: "DR-invalid", itemName: "Demo item", amount: "1.00", returnUrl: "javascript:alert(1)" })).rejects.toThrow("Return URL");
+  });
+});
+
+describe("seller registration security boundaries", () => {
+  const address = "0x1111111111111111111111111111111111111111";
+  const input = { marketplaceId: "secure_market", sellerId: "seller", displayName: "Seller", receivingAddress: address };
+  it.each([
+    { label: "disabled seller", row: { ownerUserId: 7, status: "disabled" }, message: "Disabled seller" },
+    { label: "unowned legacy seller", row: { ownerUserId: null, status: "active" }, message: "already registered" },
+    { label: "another owner's seller", row: { ownerUserId: 99, status: "active" }, message: "already registered" },
+    { label: "wallet replacement", row: { ownerUserId: 7, status: "active", receivingAddress: "0x2222222222222222222222222222222222222222" }, message: "separate verified change" },
+  ])("rejects $label without mutation", async ({ row, message }) => {
+    const { db } = createDbMock([{ id: "ma_secure", receivingAddress: address, ...row }]);
+    getDbMock.mockResolvedValue(db);
+    const caller = appRouter.createCaller({ user: { id: 7, role: "admin" }, req: {}, res: {} } as never);
+    await expect(caller.merchantAccounts.register(input)).rejects.toThrow(message);
+    expect(db.update).not.toHaveBeenCalled();
+  });
+  it("does not let operator approval bypass receiving-wallet proof", async () => {
+    const { db } = createDbMock([{ id: "ma_secure", receivingAddress: address, walletVerifiedAt: null }]);
+    getDbMock.mockResolvedValue(db);
+    const caller = appRouter.createCaller({ user: { id: 7, role: "admin" }, req: {}, res: {} } as never);
+    await expect(caller.merchantAccounts.approve({ merchantAccountId: "ma_secure" })).rejects.toThrow("must be verified");
+    expect(db.update).not.toHaveBeenCalled();
   });
 });

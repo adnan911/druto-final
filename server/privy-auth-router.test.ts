@@ -24,7 +24,7 @@ describe("Privy login router contract", () => {
     const result = await caller.auth.privyLogin({ accessToken: "privy-access-token-that-is-long-enough" });
 
     expect(result).toMatchObject({ authenticated: true, openId: "privy:did:privy:abc123" });
-    expect(inserted[0]).toMatchObject({ openId: "privy:did:privy:abc123", loginMethod: "privy" });
+    expect(inserted[0]).toMatchObject({ openId: "privy:did:privy:abc123", loginMethod: "privy", role: "user" });
     expect(res.cookie).toHaveBeenCalled();
   });
 

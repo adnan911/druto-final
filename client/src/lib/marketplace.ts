@@ -64,6 +64,7 @@ export function appendMarketplacePayment(queue: MarketplacePaymentQueue, payment
 }
 
 export function getNextMarketplaceCheckout(queue: MarketplacePaymentQueue, intentId: string) {
+  if (!Array.isArray(queue.intentIds) || !Array.isArray(queue.checkoutUrls) || !Array.isArray(queue.sellerNames)) return null;
   const index = queue.intentIds.indexOf(intentId);
   if (index < 0 || index >= queue.checkoutUrls.length - 1) return null;
   return { index: index + 1, sellerName: queue.sellerNames[index + 1] ?? "next seller", checkoutUrl: queue.checkoutUrls[index + 1] };
@@ -73,7 +74,14 @@ export function parseMarketplaceOrderContext(serialized: string | null | undefin
   if (!serialized) return null;
   try {
     const parsed = JSON.parse(serialized);
-    if (!parsed || typeof parsed !== "object") return null;
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.items)
+      || typeof parsed.delivery !== "string" || typeof parsed.buyerEmail !== "string") return null;
+    if (!parsed.items.every((item: any) => item &&
+      [item.productId, item.name, item.seller].every(value => typeof value === "string") &&
+      typeof item.unitPrice === "number" && Number.isFinite(item.unitPrice) && item.unitPrice >= 0 &&
+      Number.isSafeInteger(item.quantity) && item.quantity > 0)) return null;
+    const address = parsed.shippingAddress;
+    if (!address || ![address.name, address.line1, address.city, address.postalCode, address.country].every(value => typeof value === "string")) return null;
     return parsed as MarketplaceOrderContext;
   } catch {
     return null;

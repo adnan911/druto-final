@@ -11,7 +11,7 @@ pnpm typecheck
 pnpm dev
 ```
 
-The starter uses the local SDK with `file:../druto-sdk`. After the SDK is published, replace that dependency with the registry version.
+The starter uses the bundled local SDK with `file:./lib/druto-sdk`.
 
 ## 2. Configure secrets
 
