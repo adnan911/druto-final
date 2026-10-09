@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ARC_CHAIN_ID, ARC_CHAIN_ID_HEX, ARC_RPC_URL, ARC_USDC_ADDRESS, CIRCLE_FAUCET_URL, fetchArcUsdcBalance, encodeArcUsdcTransfer } from "@/lib/arcChain";
 import { toast } from "sonner";
 import { signPaymentConfirmation } from "@/lib/paymentProof";
+import { checkoutWalletError } from "@/lib/walletError";
 import { usePrivy } from "@privy-io/react-auth";
 const D1_WALLET_ONLY = import.meta.env.VITE_D1_WALLET_ONLY === "true";
 import { useAccount, useConnect, useSignMessage } from "wagmi";
@@ -1358,20 +1359,31 @@ function CheckoutPage() {
   const [address, setAddress] = useState<`0x${string}` | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
   const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
+  const [balanceStatus, setBalanceStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [connecting, setConnecting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(() => { try { return window.localStorage.getItem(`druto:payment:${intentId}`); } catch { return null; } });
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const isArc = chainId === ARC_CHAIN_ID;
   const isSucceeded = intent?.status === "succeeded";
+  const isExpired = Boolean(intent && !txHash && new Date(intent.expiresAt).getTime() <= nowMs);
 
   const updateBalance = async (addr: `0x${string}`) => {
+    setBalanceStatus("loading");
     try {
       const bal = await fetchArcUsdcBalance(addr);
       setUsdcBalance(bal);
+      setBalanceStatus("ready");
     } catch {
-      setUsdcBalance("0.00");
+      setUsdcBalance(null);
+      setBalanceStatus("unavailable");
     }
   };
 
@@ -1498,8 +1510,9 @@ function CheckoutPage() {
     }
 
     setPaying(true);
+    let submittedHash = txHash;
     try {
-      let hash = txHash;
+      let hash = submittedHash;
       if (!hash) {
         const data = encodeArcUsdcTransfer(intent.merchantAddress as `0x${string}`, intent.amountAtomic);
         hash = await window.ethereum.request({
@@ -1515,6 +1528,7 @@ function CheckoutPage() {
       }
       if (!hash) throw new Error("The wallet did not return a transaction hash");
 
+      submittedHash = hash;
       setTxHash(hash);
       try { window.localStorage.setItem(`druto:payment:${intent.id}`, hash); } catch { /* in-memory hash still prevents a second send */ }
       setPaying(false);
@@ -1532,7 +1546,7 @@ function CheckoutPage() {
     } catch (err: any) {
       setPaying(false);
       setVerifying(false);
-      toast.error(err?.message || "Payment transaction failed or was rejected");
+      toast.error(checkoutWalletError(err, Boolean(submittedHash)));
     }
   };
 
@@ -1584,6 +1598,11 @@ function CheckoutPage() {
               This payment link has older fee terms. Ask the marketplace for a new link. If you already sent a payment, contact support with its transaction hash.
             </div>
           )}
+          {isExpired && !isSucceeded && (
+            <div role="alert" className="checkout-note" style={{ margin: "14px 0" }}>
+              This checkout has expired. Ask the marketplace for a new payment link; do not send funds using this one.
+            </div>
+          )}
 
           <div className="checkout-network">
             <span className="network-symbol">A</span>
@@ -1609,8 +1628,8 @@ function CheckoutPage() {
             {address && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", paddingTop: "6px", borderTop: "1px solid #f0f0f0" }}>
                 <span style={{ color: "#666" }}>Arc USDC Balance:</span>
-                <strong style={{ color: Number(usdcBalance ?? 0) < Number(intent ? Number(intent.amountAtomic) / 1_000_000 : 0) ? "#e17055" : "#1e9b83" }}>
-                  {usdcBalance !== null ? `${usdcBalance} USDC` : "Loading…"}
+                <strong style={{ color: usdcBalance === null ? "#666" : Number(usdcBalance) < Number(intent ? Number(intent.amountAtomic) / 1_000_000 : 0) ? "#e17055" : "#1e9b83" }}>
+                  {usdcBalance !== null ? `${usdcBalance} USDC` : balanceStatus === "unavailable" ? "Balance unavailable" : "Loading…"}
                 </strong>
               </div>
             )}
@@ -1642,17 +1661,19 @@ function CheckoutPage() {
                 <button
                   className="button button-primary full-width"
                   onClick={connectWallet}
-                  disabled={connecting || requiresNewPaymentLink}
+                  disabled={connecting || requiresNewPaymentLink || isExpired}
                 >
-                  <Wallet size={16} /> {connecting ? "Connecting Wallet…" : "Connect EVM Wallet"}
+                  <Wallet size={16} /> {isExpired ? "Checkout expired · request a new link" : connecting ? "Connecting Wallet…" : "Connect EVM Wallet"}
                 </button>
               ) : (
                 <button
                   className="button button-primary full-width"
                   onClick={handlePay}
-                  disabled={paying || verifying || !isArc || requiresNewPaymentLink}
+                  disabled={paying || verifying || !isArc || requiresNewPaymentLink || isExpired}
                 >
-                  {requiresNewPaymentLink ? (
+                  {isExpired ? (
+                    <>Checkout expired · request a new link</>
+                  ) : requiresNewPaymentLink ? (
                     <>Request a new payment link</>
                   ) : paying ? (
                     <>Confirm in wallet…</>

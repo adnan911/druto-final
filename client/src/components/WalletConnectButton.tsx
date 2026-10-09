@@ -24,8 +24,8 @@ export default function WalletConnectButton() {
       const num = parseFloat(bal);
       setUsdcBalance(!isNaN(num) ? num.toFixed(2) : "0.00");
     } catch (e) {
-      console.warn("Could not fetch Arc USDC balance:", e);
-      setUsdcBalance("0.00");
+      console.warn("Could not fetch Arc USDC balance");
+      setUsdcBalance(null);
     } finally {
       setIsRefreshingBal(false);
     }
@@ -208,7 +208,7 @@ export default function WalletConnectButton() {
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#1e9b83", fontWeight: 600 }}>
             <CheckCircle2 size={13} />
-            <span>{usdcBalance !== null ? `${usdcBalance} USDC` : isRefreshingBal ? "Loading…" : "0.00 USDC"}</span>
+            <span>{usdcBalance !== null ? `${usdcBalance} USDC` : isRefreshingBal ? "Loading…" : "Balance unavailable"}</span>
           </div>
         )}
 
@@ -279,7 +279,7 @@ export default function WalletConnectButton() {
 
           <div style={{ fontSize: "12px", padding: "4px 0", display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: "#666" }}>Arc USDC Balance:</span>
-            <strong style={{ color: "#1e9b83" }}>{usdcBalance ?? "0.00"} USDC</strong>
+            <strong style={{ color: "#1e9b83" }}>{usdcBalance !== null ? `${usdcBalance} USDC` : "Balance unavailable"}</strong>
           </div>
 
           <a
