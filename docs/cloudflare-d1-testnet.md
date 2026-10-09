@@ -91,6 +91,8 @@ target, source identity checks, row-count and fingerprint reconciliation.
   honest about unavailable subscriptions, fiat payouts, and mainnet support.
 - Add operational backup/export, alerting, recovery drill, rate limiting, and
   jurisdiction-specific compliance work before any real customer launch.
+- Use the [Testnet incident runbook](CLOUDFLARE_TESTNET_INCIDENT_RUNBOOK.md)
+  to triage a reconciliation failure without changing payment records.
 - After verified cutover, retire Vercel deployment and TiDB credentials/data
   in that order. Do not delete the old store while any live marketplace URL or
   webhook still depends on it.
