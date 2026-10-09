@@ -17,6 +17,18 @@
     "database_id": "d1f68dd0-c984-4b56-8167-d4ae0ee70ca2",
     "migrations_dir": "drizzle-d1"
   }],
+  "ratelimits": [
+    {
+      "name": "DRUTO_IP_RATE_LIMITER",
+      "namespace_id": "50420021",
+      "simple": { "limit": 300, "period": 60 }
+    },
+    {
+      "name": "DRUTO_CREDENTIAL_RATE_LIMITER",
+      "namespace_id": "50420022",
+      "simple": { "limit": 120, "period": 60 }
+    }
+  ],
   "triggers": { "crons": ["*/2 * * * *"] },
   "assets": {
     "directory": "./dist/public",

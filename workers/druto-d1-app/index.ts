@@ -4,8 +4,9 @@ import { createD1App, assertD1Configuration } from "../../api/d1-app";
 import { withD1 } from "../../server/d1-db";
 import { checkD1Readiness } from "../../server/d1-db";
 import { drainD1WebhookOutbox } from "../../server/d1-webhook-drain";
+import { enforceD1ApiRateLimit, type RateLimitEnv } from "./rate-limit";
 
-type WorkerEnv = { ASSETS: Fetcher; DRUTO_D1: Parameters<typeof withD1>[0] };
+type WorkerEnv = { ASSETS: Fetcher; DRUTO_D1: Parameters<typeof withD1>[0] } & RateLimitEnv;
 let handler: ReturnType<typeof httpServerHandler> | undefined;
 function getHandler() {
   handler ??= httpServerHandler(createServer(createD1App()));
@@ -16,6 +17,8 @@ export default {
   async fetch(request, env, context) {
     const path = new URL(request.url).pathname;
     if (path.startsWith("/api/") || path.startsWith("/trpc/")) {
+      const limited = await enforceD1ApiRateLimit(request, env);
+      if (limited) return limited;
       if (!env.DRUTO_D1) return new Response(JSON.stringify({ ready: false }), { status: 503,
         headers: { "content-type": "application/json", "cache-control": "no-store" } });
       if (path !== "/api/health" && path !== "/api/ready") {

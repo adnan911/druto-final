@@ -50,6 +50,15 @@ target, source identity checks, row-count and fingerprint reconciliation.
   retries and a lease-fenced manual retry path.
 - Dashboard cookies use `HttpOnly`, `Secure` on HTTPS, and `SameSite=Lax`;
   cross-site browser mutations with a session cookie are rejected.
+- The Worker applies Cloudflare Rate Limiting bindings before D1-backed API
+  routes: 300 requests/minute per route group and Cloudflare client IP, plus
+  120 requests/minute per route group and hashed API key/session cookie.
+  Health/readiness checks remain available. Missing or failing bindings return
+  503; exhausted buckets return 429 with `Retry-After: 60`. These are Testnet
+  abuse limits, not payment accounting or guaranteed global quotas: Cloudflare
+  documents that binding counters are location-local and eventually consistent.
+  Shared IPs can affect unrelated buyers, so measure 429s and adjust the
+  policy before a broader pilot.
 - The server-only Testnet SDK is available on the [developer page](https://druto-d1-testnet.robobq.workers.dev/developers)
   and as a [versioned ZIP](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.2.zip)
   with a [SHA-256 manifest](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.2.zip.sha256).
