@@ -11,22 +11,13 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
-  UserCheck,
   Wallet,
 } from "lucide-react";
-import { usePrivy } from "@privy-io/react-auth";
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { toast } from "sonner";
-
-const D1_WALLET_ONLY = import.meta.env.VITE_D1_WALLET_ONLY === "true";
-
 export default function AccountLoginCard() {
-
   const [isWalletSigning, setIsWalletSigning] = useState(false);
   const auraCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
-
-  const privyAccountLogin = trpc.auth.privyLogin.useMutation();
   const createChallenge = trpc.auth.createWalletChallenge.useMutation();
   const verifyWallet = trpc.auth.verifyWalletLogin.useMutation();
   const utils = trpc.useUtils();
@@ -34,14 +25,6 @@ export default function AccountLoginCard() {
   const { address, isConnected } = useAccount();
   const { connectAsync, connectors } = useConnect();
   const { signMessageAsync } = useSignMessage();
-
-  let privy: any = null;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    privy = usePrivy();
-  } catch {
-    privy = null;
-  }
 
   // Dynamic Aura Wave Animation
   useEffect(() => {
@@ -148,46 +131,7 @@ export default function AccountLoginCard() {
     }
   };
 
-  const handlePrivySignIn = async () => {
-    if (!privy) {
-      toast.error("Privy authentication not initialized");
-      return;
-    }
-
-    try {
-      if (!privy.authenticated) {
-        await privy.login();
-      }
-
-      const privyUser = privy.user;
-      if (!privyUser) return;
-
-      const accessToken = await privy.getAccessToken();
-      if (!accessToken) {
-        toast.error("Could not obtain Privy access token");
-        return;
-      }
-
-      const privyEmail = privyUser.email?.address || privyUser.google?.email;
-      const privyWallet = privyUser.wallet?.address;
-
-      await privyAccountLogin.mutateAsync({
-        accessToken,
-        email: privyEmail,
-        name: privyEmail ? privyEmail.split("@")[0] : undefined,
-        walletAddress: privyWallet,
-      });
-
-      toast.success("Privy account linked");
-      await utils.auth.me.invalidate();
-    } catch (err: any) {
-      toast.error(err?.message || "Privy login failed");
-    }
-  };
-
   const isPending =
-
-    privyAccountLogin.isPending ||
     isWalletSigning ||
     createChallenge.isPending ||
     verifyWallet.isPending;
@@ -259,7 +203,7 @@ export default function AccountLoginCard() {
               </span>
               <h2 className="text-2xl font-serif font-light text-[var(--foreground)]">Sign in to Druto</h2>
               <p className="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed font-sans">
-                {D1_WALLET_ONLY ? "Verify your EVM wallet to access the Arc Testnet workspace." : "Verify your EVM wallet or sign in with Privy."}
+                Verify your EVM wallet to access the Arc Testnet workspace.
               </p>
             </div>
 
@@ -285,17 +229,6 @@ export default function AccountLoginCard() {
                 )}
               </button>
 
-              {!D1_WALLET_ONLY && privy && (
-                <button
-                  type="button"
-                  onClick={handlePrivySignIn}
-                  disabled={!privy.ready || isPending}
-                  className="w-full py-3 px-5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] text-xs font-medium hover:bg-[var(--sidebar-accent)] transition-all flex items-center justify-center gap-2"
-                >
-                  <UserCheck size={14} className="text-[var(--muted-foreground)]" />
-                  <span>Sign in with Privy (Email / Social)</span>
-                </button>
-              )}
             </div>
 
 

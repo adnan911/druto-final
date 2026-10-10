@@ -71,6 +71,12 @@ expect(revoked.status === 200, 'API key revocation failed');
 const denied = await call('payments.createIntent', { ...paymentInput, externalOrderId: `revoked-${suffix}`,
   idempotencyKey: `revoked-${suffix}` }, authorization);
 expect(denied.status === 403, 'Revoked API key could create checkout');
+const loggedOut = await call('auth.logout', {});
+expect(loggedOut.status === 200, 'Server logout failed');
+const anonymous = await call('auth.me');
+expect(anonymous.status === 200 && anonymous.data === null, 'Logout did not clear the browser session');
+const privateAfterLogout = await call('merchantAccounts.listMine');
+expect(privateAfterLogout.status === 401, 'Seller records remained accessible after logout');
 console.log(JSON.stringify({ passed: true, checks: ['wallet-signin', 'wallet-replay', 'seller-ownership',
   'ownership-replay', 'http-only-session', 'api-key', 'cookie-free-checkout', 'idempotency',
-  'public-lookup', 'reporting', 'api-key-revocation'] }));
+  'public-lookup', 'reporting', 'api-key-revocation', 'session-logout'] }));

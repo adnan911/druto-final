@@ -5,7 +5,6 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { PrivyProvider } from "@privy-io/react-auth";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -75,7 +74,6 @@ const trpcClient = trpc.createClient({
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "@/lib/arcChain";
 
-const privyAppId = import.meta.env.VITE_PRIVY_APP_ID as string | undefined;
 const app = <trpc.Provider client={trpcClient} queryClient={queryClient}>
   <WagmiProvider config={wagmiConfig}>
     <QueryClientProvider client={queryClient}>
@@ -84,23 +82,4 @@ const app = <trpc.Provider client={trpcClient} queryClient={queryClient}>
   </WagmiProvider>
 </trpc.Provider>;
 
-createRoot(document.getElementById("root")!).render(
-  privyAppId ? (
-    <PrivyProvider
-      appId={privyAppId}
-      config={{
-        loginMethods: ["email", "wallet", "google", "github"],
-        appearance: { theme: "light", accentColor: "#2458d6" },
-        embeddedWallets: {
-          ethereum: {
-            createOnLogin: "users-without-wallets",
-          },
-        },
-      }}
-    >
-      {app}
-    </PrivyProvider>
-  ) : (
-    app
-  )
-);
+createRoot(document.getElementById("root")!).render(app);

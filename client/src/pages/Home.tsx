@@ -15,9 +15,7 @@ import { ARC_CHAIN_ID, ARC_CHAIN_ID_HEX, ARC_RPC_URL, ARC_USDC_ADDRESS, CIRCLE_F
 import { toast } from "sonner";
 import { signPaymentConfirmation } from "@/lib/paymentProof";
 import { checkoutWalletError } from "@/lib/walletError";
-import { usePrivy } from "@privy-io/react-auth";
 const D1_WALLET_ONLY = import.meta.env.VITE_D1_WALLET_ONLY === "true";
-import { useAccount, useConnect, useSignMessage } from "wagmi";
 import {
   Activity, AlertCircle, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, ChevronUp, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, LogOut, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Rocket, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, Wallet, WalletCards, X, Zap
 } from "lucide-react";
@@ -85,14 +83,6 @@ function Mark({ full = false }: { full?: boolean }) {
   return <img src={full ? logoFull : logo} alt="Druto" className={full ? "brand-logo-full" : "brand-mark"} />;
 }
 
-function privyIdentityLabel(privyUser: ReturnType<typeof usePrivy>["user"]) {
-  if (!privyUser) return null;
-  if (privyUser.email?.address) return privyUser.email.address;
-  if (privyUser.google?.email || privyUser.google?.name) return privyUser.google.email ?? privyUser.google.name;
-  if (privyUser.github?.username || privyUser.github?.email) return privyUser.github.username ?? privyUser.github.email;
-  return null;
-}
-
 function ProfileEditModal({ user, onClose }: { user: { name?: string | null; profileImage?: string | null }; onClose: () => void }) {
   const [name, setName] = useState(user.name || "");
   const [profileImage, setProfileImage] = useState(user.profileImage || "");
@@ -136,20 +126,10 @@ function ProfileEditModal({ user, onClose }: { user: { name?: string | null; pro
 }
 
 function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggles }: { active: string; setActive: (value: string) => void; collapsed: boolean; setCollapsed: (value: boolean) => void; user: { name?: string | null; openId?: string | null; profileImage?: string | null }; moduleToggles: ModuleToggles }) {
-  const { user: privyUser, authenticated: privyAuthenticated, logout: privyLogout } = usePrivy();
   const drutoLogout = trpc.auth.logout.useMutation();
-  const createChallenge = trpc.auth.createWalletChallenge.useMutation();
-  const bindWallet = trpc.auth.bindWallet.useMutation();
   const utils = trpc.useUtils();
   const [profileOpen, setProfileOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [isBinding, setIsBinding] = useState(false);
-  const isPrivy = user.openId?.startsWith("privy:") === true;
-  const identity = isPrivy ? privyIdentityLabel(privyUser) : null;
-  const { address, isConnected } = useAccount();
-  const { connectAsync, connectors } = useConnect();
-  const { signMessageAsync } = useSignMessage();
-
   const navGroups = useMemo(() => [
     {
       label: "Operate",
@@ -176,38 +156,8 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggl
     },
   ], [moduleToggles]);
 
-  const handleBindWallet = async () => {
-    setIsBinding(true);
-    try {
-      let activeAddress = address;
-      if (!isConnected || !activeAddress) {
-        const connector = connectors[0];
-        if (!connector) throw new Error("No EVM wallet detected (e.g. MetaMask).");
-        const connectResult = await connectAsync({ connector });
-        activeAddress = connectResult.accounts[0];
-      }
-      if (!activeAddress) throw new Error("Could not detect wallet address.");
-      const challenge = await createChallenge.mutateAsync({ walletAddress: activeAddress });
-      const signature = await signMessageAsync({ message: challenge.message });
-      await bindWallet.mutateAsync({
-        challengeId: challenge.challengeId,
-        walletAddress: activeAddress,
-        signature,
-      });
-      await utils.auth.me.invalidate();
-      toast.success(`Wallet ${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)} bound to your account!`);
-      setProfileOpen(false);
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Failed to bind wallet");
-    } finally {
-      setIsBinding(false);
-    }
-  };
-
   const logout = async () => {
     try {
-      if (privyAuthenticated) await privyLogout();
       await drutoLogout.mutateAsync();
       utils.auth.me.setData(undefined, null);
       window.location.href = "/dashboard";
@@ -235,17 +185,11 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggl
           </div>
           <div className="user-meta">
             <strong>{user.name || "Workspace"}</strong>
-            <span>{isPrivy ? "Signed in with Privy" : "Workspace owner"}</span>
+            <span>Workspace owner</span>
           </div>
           <MoreHorizontal size={16} />
         </button>
         {profileOpen && <div className="profile-menu">
-          {identity && (
-            <div className="profile-menu-heading">
-              <strong>{isPrivy ? "Signed in with Privy" : "Signed in"}</strong>
-              <span>{identity}</span>
-            </div>
-          )}
           <button className="profile-logout" onClick={() => { setEditModalOpen(true); setProfileOpen(false); }} style={{ borderBottom: "1px solid var(--border-subtle, rgba(0,0,0,0.08))", marginBottom: "0.25rem", borderRadius: "0", color: "inherit" }}>
             <Settings2 size={15} /> Edit Profile
           </button>
@@ -265,12 +209,6 @@ function NavIcon({ item }: { item: string }) {
 }
 
 function Topbar({ title, onCreate }: { title: string; onCreate: () => void }) {
-  let privy: any = null;
-  try {
-    privy = usePrivy();
-  } catch {
-    privy = null;
-  }
   const logout = trpc.auth.logout.useMutation();
   const utils = trpc.useUtils();
   const syncMutation = trpc.payments.syncArcPayments.useMutation();
@@ -303,11 +241,6 @@ function Topbar({ title, onCreate }: { title: string; onCreate: () => void }) {
   };
 
   const disconnect = async () => {
-    try {
-      if (privy?.authenticated) await privy.logout();
-    } catch (e) {
-      console.error("Privy logout failed", e);
-    }
     await logout.mutateAsync();
     utils.auth.me.setData(undefined, null);
     window.location.href = "/";
@@ -1514,6 +1447,7 @@ function CheckoutPage() {
     try {
       let hash = submittedHash;
       if (!hash) {
+        if (!window.ethereum) throw new Error("Reconnect your EVM wallet before sending this payment");
         const data = encodeArcUsdcTransfer(intent.merchantAddress as `0x${string}`, intent.amountAtomic);
         hash = await window.ethereum.request({
         method: "eth_sendTransaction",
@@ -2151,47 +2085,13 @@ function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: s
 
 function DashboardAccess() {
   const session = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
-  const privyLogin = trpc.auth.privyLogin.useMutation();
-  const utils = trpc.useUtils();
-  const [privyExchangeState, setPrivyExchangeState] = useState<"idle" | "loading" | "success" | "error">("idle");
-
-  let privy: any = null;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    privy = usePrivy();
-  } catch {
-    privy = null;
-  }
-
-  const privyReady = privy?.ready;
-  const privyAuthenticated = privy?.authenticated;
-  const getAccessToken = privy?.getAccessToken;
-
-  useEffect(() => {
-    if (D1_WALLET_ONLY || !privyReady || !privyAuthenticated || session.data || privyExchangeState !== "idle" || !getAccessToken) return;
-    setPrivyExchangeState("loading");
-    void (async () => {
-      try {
-        const accessToken = await getAccessToken();
-        if (!accessToken) throw new Error("Privy did not return an access token. Please sign in again.");
-        await privyLogin.mutateAsync({ accessToken });
-        await utils.auth.me.invalidate();
-        setPrivyExchangeState("success");
-      } catch (error) {
-        setPrivyExchangeState("error");
-        toast.error(error instanceof Error ? error.message : "Privy session could not be established");
-      }
-    })();
-  }, [getAccessToken, privyAuthenticated, privyReady, privyExchangeState, session.data, utils.auth.me, privyLogin]);
-
-  const waitingForPrivy = !D1_WALLET_ONLY && privyAuthenticated && !session.data && privyExchangeState === "idle";
-  if (session.isLoading || privyExchangeState === "loading" || waitingForPrivy) {
+  if (session.isLoading) {
     return (
       <div className="dashboard-loading">
         <Mark />
         <div className="auth-spinner" aria-hidden="true" />
         <strong>Loading Druto workspace…</strong>
-        <span>{privyAuthenticated ? "Finishing secure sign-in with Privy." : "Verifying your sign-in session."}</span>
+        <span>Verifying your sign-in session.</span>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 # Druto dependency remediation — 2026-10-10
 
-The latest production dependency audit reports **0 critical / 0 high / 3 moderate / 0 low**. The first pass reduced the original **1 critical / 26 high / 76 moderate / 10 low** to **0 critical / 0 high / 35 moderate / 9 low**; the second pass below reduced those 44 findings to three. These are registry advisory checks of the dependency graph, not proof that the application has no vulnerabilities.
+The latest production dependency audit reports **0 critical / 0 high / 0 moderate / 0 low**, after the [wallet-only frontend pass](D1_WALLET_ONLY_FRONTEND_2026-10-10.md) removed the remaining legacy Privy browser tree. That report supersedes the open dependency findings below. The first pass reduced the original **1 critical / 26 high / 76 moderate / 10 low** to **0 critical / 0 high / 35 moderate / 9 low**; the second pass below reduced those 44 findings to three. These are registry advisory checks of the dependency graph, not proof that the application has no vulnerabilities. `pnpm audit:prod` now uses the low-severity threshold; the high-only gate described below is historical.
 
 ## Changes
 
