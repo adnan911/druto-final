@@ -18,19 +18,22 @@ export function createD1App() {
   const app = express();
   app.disable("x-powered-by");
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
-  // Dashboard mutations use cookies. Reject browser requests originating from
-  // another site before any tRPC procedure executes. Bearer-key requests from
-  // server-side marketplace SDKs do not send a browser session cookie.
+  // Dashboard mutations use cookies. Require a verified same-origin source
+  // before any tRPC procedure executes. Bearer-key requests from server-side
+  // marketplace SDKs do not send a browser session cookie.
   app.use((req, res, next) => {
-    if (req.method === "POST" && req.headers.cookie && req.headers.origin) {
+    if (req.method === "POST" && req.headers.cookie) {
       try {
-        const origin = new URL(req.headers.origin);
+        const source = req.headers.origin || req.headers.referer;
+        if (!source || source === "null") throw new Error("Missing source origin");
+        const origin = new URL(source);
         const localHost = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || "");
-        if (origin.host !== req.headers.host || origin.protocol !== (localHost ? "http:" : "https:")) {
+        if ((req.headers.origin && source !== origin.origin) ||
+            origin.host !== req.headers.host || origin.protocol !== (localHost ? "http:" : "https:")) {
           res.status(403).json({ error: "Cross-site mutation blocked" });
           return;
         }
-      } catch { res.status(403).json({ error: "Invalid Origin" }); return; }
+      } catch { res.status(403).json({ error: "Untrusted mutation origin" }); return; }
     }
     next();
   });

@@ -16,6 +16,7 @@ import { createApiKeyMaterial, hashApiKey } from "./api-keys";
 import { drutoPublicOrigin } from "./public-origin";
 import { paymentInput, sellerRoutingInput } from "./payment-contract";
 import { amountToAtomicUsdc, verifyArcUsdcTransfer, ARC_CHAIN_ID, ARC_USDC_ADDRESS } from "./arc";
+import { arcVerificationError } from "./arc-verification-error";
 import { normalizeMarketplaceReturnUrl } from "./payment-policy";
 import { assertIntentRetry, scopedIntentKey } from "./payment-idempotency";
 import { createdPaymentSession, privatePaymentIntent, publicPaymentIntent } from "./payment-intent-view";
@@ -111,7 +112,9 @@ export const d1Router = router({
         .onConflictDoUpdate({ target: usersD1.openId, set: { name, loginMethod: "wallet", lastSignedIn: new Date() } });
       const token = await sdk.createSessionToken(openId, { name });
       ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), sameSite: "lax", maxAge: 365 * 24 * 60 * 60 * 1000 });
-      return { authenticated: true, openId, name, token, walletAddress } as const;
+      // The session is delivered only in the HttpOnly cookie. Returning the
+      // same JWT in JSON would expose it to browser JavaScript.
+      return { authenticated: true, openId, name, walletAddress } as const;
     }),
     privyLogin: publicProcedure.mutation(unavailable),
     bindWallet: protectedProcedure.mutation(unavailable),
@@ -295,7 +298,7 @@ export const d1Router = router({
       const verified = await verifyArcUsdcTransfer(hash, intent.amountAtomic, intent.merchantAddress, intent.id,
         { createdAt: intent.createdAt, expiresAt: intent.expiresAt, payerSignature: input.payerSignature as `0x${string}` | undefined,
           origin: drutoPublicOrigin(), platformFeeBps: intent.platformFeeBps, splitterAddress: intent.splitContractAddress })
-        .catch(error => { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Arc verification failed" }); });
+        .catch(error => { throw arcVerificationError(error); });
       if (verified.isSplit || verified.platformFeeAmount !== "0" || verified.amountAtomic !== intent.amountAtomic) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Only direct zero-fee USDC transfers are supported" });
       }
