@@ -116,8 +116,12 @@ target, source identity checks, row-count and fingerprint reconciliation.
   confirming that the hosted Cloudflare invocation was rate-limited even though
   the local scheduled test passed. A chain-checked backup was deployed as
   version `67f12fe6-2276-4729-a9e7-3f2f6a1ebab4` with the normal 15-minute
-  Cron restored. Its natural scheduled result still needs observation; do not
-  count the local test or deployment as a successful scheduled run.
+  Cron restored. Its first observed natural scheduled invocation at
+  `2026-10-10T09:15:25Z` returned `PASS` on version
+  `67f12fe6-2276-4729-a9e7-3f2f6a1ebab4`: 2 succeeded payments, 0
+  undelivered webhooks, and 0 exceptions. This proves the generalized hosted
+  path worked at that time. The report does not expose which RPC endpoint
+  answered, so it does not prove the backup path was exercised in production.
 - The first observed real scheduled invocation of the former Luvre-bound
   version at `2026-10-09T09:30:45Z`
   finished `PASS` on Worker version `8efc1c2b-405d-4e91-b26e-308a47a932c9`:
