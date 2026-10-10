@@ -85,22 +85,24 @@ target, source identity checks, row-count and fingerprint reconciliation.
   script in `scripts/reconcile-cloudflare-testnet.mjs` returned `PASS` for bound
   demo orders, but covers at most 100 orders.
 - `workers/testnet-reconciler/index.ts` is a separate, read-only Cloudflare
-  Worker with bindings to the two Testnet D1 databases. Its 15-minute Cron
-  checks Druto payment policy and transaction rows, Luvre paid orders and
-  outbox rows, and the corresponding Arc USDC receipt. It has no public HTTP
-  trigger, no write query, and no credential. The Worker stops with an
-  `INCOMPLETE` result if either database has more than 20 relevant rows, a
-  binding is unavailable, or Arc RPC fails. A recently settled payment gets
-  a 10-minute webhook grace window; internal ledger corruption never does.
+  Worker bound only to Druto Testnet D1. Its 15-minute Cron checks every
+  seller's succeeded payment policy, seller identity, transaction row,
+  undelivered webhook count, and matching Arc USDC receipt. Marketplace order
+  and fulfillment state are outside this gateway audit. It has no public HTTP
+  trigger, write query, or credential. The Worker stops with `INCOMPLETE` if
+  Druto has more than 20 succeeded rows, its binding is unavailable, or Arc
+  RPC fails. A recently settled payment gets a 10-minute webhook grace window;
+  internal ledger corruption never does.
   The Cron logs only aggregate counts and exception codes. Deploy it with
   `pnpm cf:reconcile:deploy` after local checks. A failed Cron is visible in
   Cloudflare Workers Logs and Issues. An account notification policy has not
   yet been configured; this is not a guaranteed paging system.
-- The first observed real scheduled invocation at `2026-10-09T09:30:45Z`
+- The first observed real scheduled invocation of the former Luvre-bound
+  version at `2026-10-09T09:30:45Z`
   finished `PASS` on Worker version `8efc1c2b-405d-4e91-b26e-308a47a932c9`:
   2 Druto succeeded payments, 2 Luvre paid orders, 1 pending order, 2 pending
-  fulfillment records, and no exception codes. This validates the Cron path
-  for the current bounded Testnet data, not alert delivery or future scale.
+  fulfillment records, and no exception codes. This validates that former
+  Cron path, not the generalized code, alert delivery, or future scale.
 - A non-destructive D1 restore drill on 2026-10-09 exported both remote Testnet
   databases, imported each into a separate local Wrangler D1, and compared
   aggregate live/restored counts. Druto matched at 2 users, 1 seller, 3

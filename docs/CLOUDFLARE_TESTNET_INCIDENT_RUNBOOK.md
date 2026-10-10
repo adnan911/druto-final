@@ -12,17 +12,21 @@ authorize mainnet settlement, manual `PAID` flags, or database edits.
    Issues. Find the latest *scheduled* invocation and the
    `druto_testnet_reconciliation` report. Record its time, status, counts, and
    exception codes without copying buyer details or secrets into a ticket.
-3. From the Druto feature checkout, run the read-only operator audit:
+   The scheduled audit covers Druto's ledger and Arc receipt across sellers;
+   it does not assert that a marketplace fulfilled an order.
+3. For the historical Luvre integration only, run the read-only operator audit:
    `node scripts/reconcile-cloudflare-testnet.mjs`. It reads both remote D1
    databases and Arc Testnet RPC; it does not modify payment state. Preserve
    the `checkedAt`, `status`, counts, and exception codes. This script audits
-   at most 100 bound records; the scheduled Worker stops at 20. A `PASS` from
+   at most 100 bound Luvre records; the scheduled Worker stops at 20 succeeded
+   Druto payments across sellers. A `PASS` from
    either tool is not proof that arbitrary unreported chain transfers are
    absent.
 
 ## Interpret the result
 
-- `FAIL` means a payment, marketplace record, or Arc receipt disagrees. Pause
+- Scheduled `FAIL` means Druto's payment policy, transaction row, webhook
+  delivery, or Arc receipt disagrees. Pause
   new Testnet checkout issuance and investigate before relying on any order's
   fulfillment state. Do not mark an order paid or issue a replacement payment
   link for the same transfer until the transaction and recipient are clear.
@@ -30,10 +34,11 @@ authorize mainnet settlement, manual `PAID` flags, or database edits.
   binding/RPC failure or its bounded row limit. Treat it as an unknown state,
   not a clean result. Restore the dependency or expand the audit safely, then
   rerun it.
-- `PASS` with `pendingFulfillment > 0` means payment reconciliation succeeded
-  but marketplace fulfillment has not been completed. Do not call these orders
-  shipped or delivered. A `PENDING` order is not a failed payment by itself.
-- A just-settled payment can have up to 10 minutes of cross-system webhook
+- The separate Luvre integration script can report `pendingFulfillment > 0`.
+  That means payment reconciliation succeeded but marketplace fulfillment has
+  not been completed. Do not call these orders shipped or delivered. A
+  `PENDING` order is not a failed payment by itself.
+- A just-settled payment can have up to 10 minutes of webhook
   grace in the scheduled audit. If the next scheduled run still reports an
   exception, investigate it; do not extend the grace silently.
 

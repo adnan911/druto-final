@@ -1,28 +1,23 @@
-// Read-only, bounded reconciliation of the two isolated Arc Testnet D1 ledgers.
+// Read-only, bounded reconciliation of Druto's Arc Testnet payment ledger.
+// Marketplace order/fulfillment checks belong to each integration, not Druto.
 // No HTTP trigger, payment mutation, customer data, or credential is exposed.
 type RowValue = string | number | null;
 type Database = {
   prepare(sql: string): { bind(...values: RowValue[]): { all<T>(): Promise<{ results: T[] }> } };
 };
-type Env = { DRUTO_D1: Database; LUVRE_ORDERS_DB: Database };
+type Env = { DRUTO_D1: Database };
 
 type DrutoPayment = {
-  id: string; externalOrderId: string; amountAtomic: string; merchantAddress: string;
+  id: string; amountAtomic: string; merchantAddress: string;
   marketplaceId: string; sellerId: string; merchantAccountId: string;
+  accountMarketplaceId: string | null; accountSellerId: string | null;
   asset: string; network: string; platformFeeBps: number;
   platformFeeAmount: string | null; merchantPayoutAmount: string | null;
   splitContractAddress: string | null;
   transactionHash: string | null; recordedHash: string | null; recordedAmount: string | null;
   fromAddress: string | null; recordedTo: string | null; chainId: number | null;
-  tokenAddress: string | null; deliveredWebhooks: number;
+  tokenAddress: string | null; undeliveredWebhooks: number;
   settledAt: number | null;
-};
-type LuvreOrder = {
-  id: string; status: string; amountAtomic: string; paymentIntentId: string;
-  marketplaceId: string; sellerId: string; merchantAccountId: string;
-  receivingAddress: string; asset: string; network: string;
-  transactionHash: string | null; processedEvents: number; fulfillmentRecords: number;
-  fulfillmentStatus: string | null; paidAt: number | null;
 };
 type ArcReceipt = {
   status?: string; transactionHash?: string;
@@ -35,27 +30,21 @@ const chainId = '0x4cef52'; // 5042002
 const usdc = '0x3600000000000000000000000000000000000000';
 const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const maxRows = 20; // Bound Arc RPC calls; a larger ledger needs a paginated audit.
-const graceMs = 10 * 60_000; // Allow webhook delivery and separate D1 reads to converge.
+const graceMs = 10 * 60_000; // Allow the independent webhook outbox time to drain.
 
-const drutoSql = `SELECT p.id, p.externalOrderId, p.amountAtomic, p.merchantAddress,
+const drutoSql = `SELECT p.id, p.amountAtomic, p.merchantAddress,
   p.marketplaceId, p.sellerId, p.merchantAccountId, p.asset, p.network,
+  m.marketplaceId AS accountMarketplaceId, m.externalSellerId AS accountSellerId,
   p.platformFeeBps, p.platformFeeAmount, p.merchantPayoutAmount, p.splitContractAddress,
   p.transactionHash, t.transactionHash AS recordedHash, t.amountAtomic AS recordedAmount,
   t.fromAddress, t.toAddress AS recordedTo, t.chainId, t.tokenAddress,
   COALESCE(t.finalizedAt, p.updatedAt) AS settledAt,
-  (SELECT COUNT(*) FROM webhookDeliveries d JOIN webhookEndpoints e ON e.id=d.endpointId
-    WHERE d.paymentIntentId=p.id AND e.url='https://luvre-franc-d1-testnet.robobq.workers.dev/api/webhooks/druto'
-      AND d.status='succeeded') AS deliveredWebhooks
+  (SELECT COUNT(*) FROM webhookDeliveries d WHERE d.paymentIntentId=p.id
+    AND d.status <> 'succeeded') AS undeliveredWebhooks
   FROM paymentIntents p LEFT JOIN paymentTransactions t ON t.paymentIntentId=p.id
-  WHERE p.marketplaceId='luvre-franc' AND p.status='succeeded'
+  LEFT JOIN merchantAccounts m ON m.id=p.merchantAccountId
+  WHERE p.status='succeeded'
   ORDER BY p.id LIMIT 21`;
-const luvreSql = `SELECT o.id, o.status, o.amountAtomic, o.paymentIntentId, o.transactionHash,
-  o.marketplaceId, o.sellerId, o.merchantAccountId, o.receivingAddress, o.asset, o.network,
-  o.paidAt,
-  (SELECT COUNT(*) FROM processedEvents e WHERE e.orderId=o.id) AS processedEvents,
-  (SELECT COUNT(*) FROM fulfillmentOutbox f WHERE f.orderId=o.id) AS fulfillmentRecords,
-  (SELECT status FROM fulfillmentOutbox f WHERE f.orderId=o.id) AS fulfillmentStatus
-  FROM orders o WHERE o.paymentIntentId IS NOT NULL ORDER BY o.id LIMIT 21`;
 
 const same = (a: string | null | undefined, b: string | null | undefined) =>
   typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
@@ -74,68 +63,50 @@ async function arcRpc<T>(method: string, params: unknown[], fetcher: typeof fetc
 
 export type ReconciliationReport = {
   status: 'PASS' | 'FAIL' | 'INCOMPLETE'; checkedAt: string;
-  drutoSucceeded: number; luvrePaid: number; pendingOrders: number;
-  pendingFulfillment: number; withinGrace: number; exceptionCodes: string[];
+  drutoSucceeded: number; undeliveredWebhooks: number;
+  withinGrace: number; exceptionCodes: string[];
 };
 
 export async function reconcileTestnet(env: Env, fetcher: typeof fetch = fetch,
   now = Date.now()): Promise<ReconciliationReport> {
   const report: ReconciliationReport = { status: 'INCOMPLETE', checkedAt: new Date(now).toISOString(),
-    drutoSucceeded: 0, luvrePaid: 0, pendingOrders: 0, pendingFulfillment: 0,
-    withinGrace: 0, exceptionCodes: [] };
+    drutoSucceeded: 0, undeliveredWebhooks: 0, withinGrace: 0, exceptionCodes: [] };
   try {
-    if (!env.DRUTO_D1 || !env.LUVRE_ORDERS_DB) throw new Error('D1 binding unavailable');
-    const [drutoResult, luvreResult] = await Promise.all([
-      env.DRUTO_D1.prepare(drutoSql).bind().all<DrutoPayment>(),
-      env.LUVRE_ORDERS_DB.prepare(luvreSql).bind().all<LuvreOrder>(),
-    ]);
+    if (!env.DRUTO_D1) throw new Error('D1 binding unavailable');
+    const drutoResult = await env.DRUTO_D1.prepare(drutoSql).bind().all<DrutoPayment>();
     const druto = drutoResult.results;
-    const luvre = luvreResult.results;
-    if (!Array.isArray(druto) || !Array.isArray(luvre) ||
-      druto.length > maxRows || luvre.length > maxRows) throw new Error('Audit bound exceeded');
+    if (!Array.isArray(druto) || druto.length > maxRows) throw new Error('Audit bound exceeded');
     report.drutoSucceeded = druto.length;
-    report.luvrePaid = luvre.filter(row => row.status === 'PAID').length;
-    report.pendingOrders = luvre.filter(row => row.status === 'PENDING').length;
-    report.pendingFulfillment = luvre.filter(row => row.fulfillmentStatus === 'PENDING').length;
-    const byIntent = new Map(druto.map(row => [row.id, row]));
-    const byOrder = new Map(luvre.map(row => [row.id, row]));
     const fail = (code: string) => { report.exceptionCodes.push(code); };
 
     for (const payment of druto) {
-      if (payment.marketplaceId !== 'luvre-franc' || payment.sellerId !== 'luvre-seller-1' ||
-          payment.merchantAccountId !== 'ma_4uguzltzDSiU' || payment.asset !== 'USDC' ||
+      if (!payment.marketplaceId || !payment.sellerId || !payment.merchantAccountId ||
+          payment.accountMarketplaceId !== payment.marketplaceId ||
+          payment.accountSellerId !== payment.sellerId ||
+          payment.asset !== 'USDC' ||
           payment.network !== 'arc-testnet' || Number(payment.platformFeeBps) !== 0 ||
           payment.platformFeeAmount !== '0' ||
           payment.merchantPayoutAmount !== payment.amountAtomic ||
           payment.splitContractAddress !== null) fail('DRUTO_PAYMENT_POLICY_MISMATCH');
+      if (!/^[1-9][0-9]*$/.test(payment.amountAtomic)) fail('DRUTO_PAYMENT_POLICY_MISMATCH');
       if (!same(payment.recordedHash, payment.transactionHash) ||
           payment.recordedAmount !== payment.amountAtomic ||
           !same(payment.recordedTo, payment.merchantAddress) ||
           Number(payment.chainId) !== 5042002 || !same(payment.tokenAddress, usdc) ||
-          !payment.fromAddress) {
+          !/^0x[a-fA-F0-9]{40}$/.test(payment.fromAddress ?? '') ||
+          !/^0x[a-fA-F0-9]{40}$/.test(payment.merchantAddress)) {
         fail('DRUTO_TRANSACTION_MISMATCH');
         continue;
       }
-      const order = byOrder.get(payment.externalOrderId);
-      const linked = order?.paymentIntentId === payment.id && order.status === 'PAID' &&
-        order.amountAtomic === payment.amountAtomic && same(order.transactionHash, payment.transactionHash) &&
-        order.marketplaceId === payment.marketplaceId && order.sellerId === payment.sellerId &&
-        order.merchantAccountId === payment.merchantAccountId &&
-        same(order.receivingAddress, payment.merchantAddress) &&
-        order.asset === payment.asset && order.network === payment.network;
-      if (payment.deliveredWebhooks !== 1 || !linked) {
+      const undelivered = Number(payment.undeliveredWebhooks);
+      if (!Number.isSafeInteger(undelivered) || undelivered < 0) {
+        fail('DRUTO_WEBHOOK_LEDGER_MISMATCH');
+      } else {
+        report.undeliveredWebhooks += undelivered;
+      }
+      if (undelivered > 0) {
         if (recent(payment.settledAt, now)) report.withinGrace++;
-        else fail(payment.deliveredWebhooks !== 1 ? 'WEBHOOK_NOT_DELIVERED_ONCE' : 'MARKETPLACE_ORDER_MISMATCH');
-      }
-    }
-    for (const order of luvre) {
-      if (order.status !== 'PAID') continue;
-      if (!byIntent.has(order.paymentIntentId)) {
-        if (recent(order.paidAt, now)) report.withinGrace++;
-        else fail('PAID_ORDER_WITHOUT_DRUTO_SETTLEMENT');
-      }
-      if (order.processedEvents !== 1 || order.fulfillmentRecords !== 1) {
-        fail('MARKETPLACE_EVENT_OR_OUTBOX_MISMATCH');
+        else fail('WEBHOOK_UNDELIVERED');
       }
     }
     if ((await arcRpc<string>('eth_chainId', [], fetcher)).toLowerCase() !== chainId) {
