@@ -135,8 +135,12 @@ target, source identity checks, row-count and fingerprint reconciliation.
   The full suite passed 217 tests (one skipped), TypeScript and Wrangler dry
   run passed, and remote D1 count/keyset queries returned the expected two
   succeeded intents without writes. A real scheduled invocation on this
-  version still needs observation; 100-payment throughput and CPU remain
-  unverified in hosted Cloudflare.
+  version returned `PASS` in a natural scheduled invocation at
+  `2026-10-10T09:30:17Z`: 2 succeeded payments, 1 page, primary RPC selected,
+  no fallback attempt, 0 undelivered webhooks, 0 exceptions, and 8 ms CPU in
+  the Cloudflare trace. This verifies the deployed pagination path for the
+  current two-row ledger only. Hosted 100-payment throughput and CPU remain
+  unverified and may exceed the Free-tier limit.
 - The first observed real scheduled invocation of the former Luvre-bound
   version at `2026-10-09T09:30:45Z`
   finished `PASS` on Worker version `8efc1c2b-405d-4e91-b26e-308a47a932c9`:
