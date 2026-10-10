@@ -91,15 +91,23 @@ target, source identity checks, row-count and fingerprint reconciliation.
   and fulfillment state are outside this gateway audit. The webhook count
   covers existing delivery rows; it cannot prove an endpoint was configured
   when the payment settled or that a receiver fulfilled an order. It has no public HTTP
-  trigger, write query, or credential. The Worker stops with `INCOMPLETE` if
-  Druto has more than 20 succeeded rows, its binding is unavailable, or Arc
-  RPC fails. The Arc primary RPC is used first; if it returns 429, 502–504, or
+  trigger, write query, or credential. A bounded keyset scan reads up to 10
+  pages of 10 succeeded payments as of the run start, then compares the page
+  count to the initial D1 count. Arc receipts are fetched in matching batches
+  of at most 10. The Worker stops with `INCOMPLETE` if Druto has more than 100
+  succeeded rows, the pages disagree with the count, its binding is unavailable,
+  or Arc RPC fails. This 100-payment Testnet bound is not a production-scale
+  reconciliation system: Cloudflare Free limits Cron CPU to 10 ms and external
+  subrequests to 50 per invocation, and 100-payment hosted performance has not
+  been measured. The Arc primary RPC is used first; if it returns 429, 502–504, or
   a fetch failure, the Worker tries Arc's documented dRPC Testnet endpoint
   after checking its chain ID. If both providers fail, the audit remains
   `INCOMPLETE`; neither provider is an availability guarantee. A recently
   settled payment gets a 10-minute webhook grace window;
   internal ledger corruption never does.
-  The Cron logs only aggregate counts and exception codes. Deploy it with
+  The Cron logs aggregate counts, pages checked, selected RPC provider, whether
+  fallback was attempted, and exception codes; no wallet or transaction detail.
+  Deploy it with
   `pnpm cf:reconcile:deploy` after local checks. A failed Cron is visible in
   Cloudflare Workers Logs and Issues. An account notification policy has not
   yet been configured; this is not a guaranteed paging system.
@@ -122,6 +130,13 @@ target, source identity checks, row-count and fingerprint reconciliation.
   undelivered webhooks, and 0 exceptions. This proves the generalized hosted
   path worked at that time. The report does not expose which RPC endpoint
   answered, so it does not prove the backup path was exercised in production.
+- On 2026-10-10, the bounded keyset/batch audit was deployed as Worker version
+  `8f6307f9-10a6-4f39-90af-0e965c6eef97` with the same 15-minute Cron.
+  The full suite passed 217 tests (one skipped), TypeScript and Wrangler dry
+  run passed, and remote D1 count/keyset queries returned the expected two
+  succeeded intents without writes. A real scheduled invocation on this
+  version still needs observation; 100-payment throughput and CPU remain
+  unverified in hosted Cloudflare.
 - The first observed real scheduled invocation of the former Luvre-bound
   version at `2026-10-09T09:30:45Z`
   finished `PASS` on Worker version `8efc1c2b-405d-4e91-b26e-308a47a932c9`:

@@ -24,9 +24,16 @@ function paymentFixture(overrides: Record<string, unknown> = {}) {
 }
 
 function database(rows: object[]) {
+  const ordered = [...rows].sort((a, b) => String((a as { id: string }).id)
+    .localeCompare(String((b as { id: string }).id)));
   const prepare = vi.fn((sql: string) => {
     if (!/^SELECT\s/i.test(sql)) throw new Error('Reconciler attempted a write');
-    return { bind: () => ({ all: async () => ({ results: rows }) }) };
+    return { bind: (...values: unknown[]) => ({ all: async () => ({
+      results: sql.includes('COUNT(*) AS total')
+        ? [{ total: ordered.length }]
+        : ordered.filter(row => String((row as { id: string }).id) > String(values[1]))
+          .slice(0, Number(values[2])),
+    }) }) };
   });
   return { prepare };
 }
@@ -34,14 +41,20 @@ function database(rows: object[]) {
 function rpc(payments: Array<ReturnType<typeof paymentFixture>>, wrongAmount = false) {
   const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
     const request = JSON.parse(String(init?.body));
-    if (request.method === 'eth_chainId') return Response.json({ jsonrpc: '2.0', id: 1, result: '0x4cef52' });
-    const payment = payments.find(row => row.transactionHash === request.params[0]);
-    if (!payment) return Response.json({ jsonrpc: '2.0', id: 1, result: null });
-    return Response.json({ jsonrpc: '2.0', id: 1, result: {
-      status: '0x1', transactionHash: payment.transactionHash,
-      logs: [{ address: token, topics: [transfer, topic(buyer), topic(String(payment.merchantAddress))],
-        data: `0x${BigInt(wrongAmount ? '1000000' : String(payment.amountAtomic)).toString(16)}` }],
-    } });
+    const answer = (item: { id: number; method: string; params: string[] }) => {
+      if (item.method === 'eth_chainId') {
+        return { jsonrpc: '2.0', id: item.id, result: '0x4cef52' };
+      }
+      const payment = payments.find(row => row.transactionHash === item.params[0]);
+      if (!payment) return { jsonrpc: '2.0', id: item.id, result: null };
+      return { jsonrpc: '2.0', id: item.id, result: {
+        status: '0x1', transactionHash: payment.transactionHash,
+        logs: [{ address: token, topics: [transfer, topic(buyer), topic(String(payment.merchantAddress))],
+          data: `0x${BigInt(wrongAmount ? '1000000' : String(payment.amountAtomic)).toString(16)}` }],
+      } };
+    };
+    // Providers may return batch responses in a different order.
+    return Response.json(Array.isArray(request) ? request.map(answer).reverse() : answer(request));
   });
   return fetcher as unknown as typeof fetch;
 }
@@ -58,13 +71,63 @@ describe('scheduled Druto Arc Testnet reconciliation', () => {
     const fetcher = rpc(payments);
     const report = await reconcileTestnet({ DRUTO_D1: druto }, fetcher, now);
     expect(report).toMatchObject({ status: 'PASS', drutoSucceeded: 2,
+      pagesChecked: 1, rpcProvider: 'primary', rpcFallbackAttempted: false,
       undeliveredWebhooks: 0, exceptionCodes: [] });
-    expect(druto.prepare).toHaveBeenCalledTimes(1);
-    const sql = druto.prepare.mock.calls[0][0];
+    expect(druto.prepare).toHaveBeenCalledTimes(2);
+    const sql = druto.prepare.mock.calls[1][0];
     expect(sql).not.toContain("luvre-franc'");
     expect(sql).toContain("WHERE p.status='succeeded'");
-    expect(vi.mocked(fetcher)).toHaveBeenCalledTimes(3);
+    expect(sql).toContain('p.id>?');
+    expect(vi.mocked(fetcher)).toHaveBeenCalledTimes(2);
     expect((await worker.fetch()).status).toBe(404);
+  });
+
+  it('checks 25 payments through three ordered pages and three bounded RPC batches', async () => {
+    const payments = Array.from({ length: 25 }, (_, index) => paymentFixture({
+      id: `pi_${String(index).padStart(3, '0')}`,
+      transactionHash: `0x${(index + 1).toString(16).padStart(64, '0')}`,
+      recordedHash: `0x${(index + 1).toString(16).padStart(64, '0')}`,
+    }));
+    const druto = database(payments);
+    const fetcher = rpc(payments);
+    const report = await reconcileTestnet({ DRUTO_D1: druto }, fetcher, now);
+    expect(report).toMatchObject({ status: 'PASS', drutoSucceeded: 25,
+      pagesChecked: 3, rpcProvider: 'primary', exceptionCodes: [] });
+    expect(druto.prepare).toHaveBeenCalledTimes(4); // One count and three pages.
+    expect(vi.mocked(fetcher)).toHaveBeenCalledTimes(4); // One chain and three batches.
+    expect(vi.mocked(fetcher).mock.calls.slice(1).map(call =>
+      JSON.parse(String(call[1]?.body)).length)).toEqual([10, 10, 5]);
+  });
+
+  it('audits the 100-payment boundary within the Free-tier external request budget', async () => {
+    const payments = Array.from({ length: 100 }, (_, index) => paymentFixture({
+      id: `pi_${String(index).padStart(3, '0')}`,
+      transactionHash: `0x${(index + 1).toString(16).padStart(64, '0')}`,
+      recordedHash: `0x${(index + 1).toString(16).padStart(64, '0')}`,
+    }));
+    const druto = database(payments);
+    const fetcher = rpc(payments);
+    const report = await reconcileTestnet({ DRUTO_D1: druto }, fetcher, now);
+    expect(report).toMatchObject({ status: 'PASS', drutoSucceeded: 100,
+      pagesChecked: 10, exceptionCodes: [] });
+    expect(druto.prepare).toHaveBeenCalledTimes(11);
+    expect(vi.mocked(fetcher)).toHaveBeenCalledTimes(11);
+  });
+
+  it('fails closed on duplicate page IDs or malformed batch IDs', async () => {
+    const payment = paymentFixture();
+    const repeated = await reconcileTestnet({ DRUTO_D1: database([payment, payment]) },
+      rpc([payment]), now);
+    expect(repeated).toMatchObject({ status: 'INCOMPLETE',
+      exceptionCodes: ['AUDIT_INCOMPLETE', 'AUDIT_PAGE_MISMATCH'] });
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body));
+      if (!Array.isArray(request)) return Response.json({ jsonrpc: '2.0', id: 1, result: '0x4cef52' });
+      return Response.json([{ jsonrpc: '2.0', id: 2, result: {} }]);
+    }) as unknown as typeof fetch;
+    const malformed = await reconcileTestnet({ DRUTO_D1: database([payment]) }, fetcher, now);
+    expect(malformed).toMatchObject({ status: 'INCOMPLETE', rpcProvider: 'primary',
+      exceptionCodes: ['AUDIT_INCOMPLETE', 'ARC_RPC_BAD_BATCH'] });
   });
 
   it('fails on wrong fee policy, seller identity, ledger transaction and Arc amount', async () => {
@@ -95,9 +158,9 @@ describe('scheduled Druto Arc Testnet reconciliation', () => {
     const missing = await reconcileTestnet({ DRUTO_D1: undefined as never }, rpc([payment]), now);
     expect(missing).toMatchObject({ status: 'INCOMPLETE',
       exceptionCodes: ['AUDIT_INCOMPLETE', 'AUDIT_D1_READ_FAILED'] });
-    const overLimit = await reconcileTestnet({ DRUTO_D1: database(Array(21).fill(payment)) }, rpc([payment]), now);
+    const overLimit = await reconcileTestnet({ DRUTO_D1: database(Array(101).fill(payment)) }, rpc([payment]), now);
     expect(overLimit).toMatchObject({ status: 'INCOMPLETE',
-      exceptionCodes: ['AUDIT_INCOMPLETE', 'AUDIT_D1_READ_FAILED'] });
+      exceptionCodes: ['AUDIT_INCOMPLETE', 'AUDIT_PAYMENT_LIMIT'] });
     const unavailable = await reconcileTestnet({ DRUTO_D1: database([payment]) },
       vi.fn(async () => new Response('unavailable', { status: 503 })) as unknown as typeof fetch, now);
     expect(unavailable).toMatchObject({ status: 'INCOMPLETE',
@@ -121,7 +184,8 @@ describe('scheduled Druto Arc Testnet reconciliation', () => {
       return working(url, init);
     }) as unknown as typeof fetch;
     const report = await reconcileTestnet({ DRUTO_D1: database([payment]) }, fetcher, now);
-    expect(report).toMatchObject({ status: 'PASS', drutoSucceeded: 1, exceptionCodes: [] });
+    expect(report).toMatchObject({ status: 'PASS', drutoSucceeded: 1,
+      rpcProvider: 'backup', rpcFallbackAttempted: true, exceptionCodes: [] });
     expect(vi.mocked(fetcher).mock.calls.map(call => call[0])).toEqual([
       'https://rpc.testnet.arc.io', 'https://rpc.drpc.testnet.arc.io',
       'https://rpc.drpc.testnet.arc.io', 'https://rpc.drpc.testnet.arc.io',
@@ -140,13 +204,14 @@ describe('scheduled Druto Arc Testnet reconciliation', () => {
     const working = rpc([payment]);
     const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));
-      if (url === 'https://rpc.testnet.arc.io' && request.method === 'eth_getTransactionReceipt') {
+      if (url === 'https://rpc.testnet.arc.io' && Array.isArray(request)) {
         return new Response('', { status: 429 });
       }
       return working(url, init);
     }) as unknown as typeof fetch;
     const report = await reconcileTestnet({ DRUTO_D1: database([payment]) }, fetcher, now);
-    expect(report.status).toBe('PASS');
+    expect(report).toMatchObject({ status: 'PASS', rpcProvider: 'backup',
+      rpcFallbackAttempted: true });
     expect(vi.mocked(fetcher).mock.calls.map(call => call[0])).toEqual([
       'https://rpc.testnet.arc.io', 'https://rpc.testnet.arc.io',
       'https://rpc.drpc.testnet.arc.io', 'https://rpc.drpc.testnet.arc.io',

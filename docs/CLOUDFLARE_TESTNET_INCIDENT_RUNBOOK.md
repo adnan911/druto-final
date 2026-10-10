@@ -18,8 +18,9 @@ authorize mainnet settlement, manual `PAID` flags, or database edits.
    `node scripts/reconcile-cloudflare-testnet.mjs`. It reads both remote D1
    databases and Arc Testnet RPC; it does not modify payment state. Preserve
    the `checkedAt`, `status`, counts, and exception codes. This script audits
-   at most 100 bound Luvre records; the scheduled Worker stops at 20 succeeded
-   Druto payments across sellers. A `PASS` from
+   at most 100 bound Luvre records; the scheduled Worker stops at 100 succeeded
+   Druto payments across sellers. The scheduled report also records pages
+   checked and the selected Arc RPC provider. A `PASS` from
    either tool is not proof that arbitrary unreported chain transfers are
    absent.
 
@@ -34,6 +35,10 @@ authorize mainnet settlement, manual `PAID` flags, or database edits.
   binding/RPC failure or its bounded row limit. Treat it as an unknown state,
   not a clean result. Restore the dependency or expand the audit safely, then
   rerun it.
+- `AUDIT_PAYMENT_LIMIT` means more than 100 succeeded payments are eligible
+  for the bounded Testnet run. None may be silently omitted from a `PASS`.
+  Do not merely raise the cap: measure hosted CPU/RPC usage and design a
+  checkpointed or paid-plan audit before increasing the volume.
 - `ARC_RPC_HTTP_429` means the primary Arc public RPC rate-limited the hosted
   Cron. The Worker can try Arc's documented dRPC Testnet endpoint only after
   checking that endpoint's chain ID. If the backup also fails, leave the audit
