@@ -2,6 +2,8 @@
 
 Scope: the active Arc Testnet D1 Worker (`workers/druto-d1-app`, `api/d1-app.ts`, `server/d1-router.ts`) and its payment/webhook boundaries. This is a targeted code review and regression check, not a certification, penetration test, or approval for customer funds.
 
+Follow-up: the [dependency remediation](DEPENDENCY_REMEDIATION_2026-10-10.md) resolved the critical/high registry advisories after the baseline audit below. The new production graph reports 0 critical, 0 high, 35 moderate, and 9 low; remaining findings are still open.
+
 ## Fixed in this review
 
 1. **Session JWT exposure (high):** `auth.verifyWalletLogin` set an `HttpOnly` cookie but also returned the same JWT in the JSON response. The D1 response now returns only non-secret account information. The dashboard ignores the old `token` field, so its login flow does not need a frontend change. Existing sessions are not revoked by this patch.

@@ -10,7 +10,7 @@ let cookie = '';
 async function call(path, input, headers = {}) {
   const response = await fetch(new URL(`/api/trpc/${path}`, origin), {
     method: input === undefined ? 'GET' : 'POST',
-    headers: { ...(input === undefined ? {} : { 'content-type': 'application/json' }),
+    headers: { ...(input === undefined ? {} : { 'content-type': 'application/json', origin }),
       ...(cookie ? { cookie } : {}), ...headers },
     body: input === undefined ? undefined : JSON.stringify({ json: input }),
   });
@@ -29,9 +29,10 @@ const signature = await account.signMessage({ message: challenge.data.message })
 const login = await call('auth.verifyWalletLogin', { challengeId: challenge.data.challengeId,
   walletAddress: account.address, signature });
 expect(login.status === 200 && login.data?.authenticated && cookie, 'Wallet login failed');
+expect(!Object.hasOwn(login.data, 'token'), 'Wallet login exposed a session token in JSON');
 const replay = await call('auth.verifyWalletLogin', { challengeId: challenge.data.challengeId,
   walletAddress: account.address, signature });
-expect(replay.status >= 400, 'Wallet challenge replay accepted');
+expect(replay.status === 400 || replay.status === 409, 'Wallet replay did not reach challenge validation');
 const registration = await call('merchantAccounts.register', { marketplaceId: `local-smoke-${suffix}`,
   sellerId: 'seller-1', displayName: 'Local smoke seller', receivingAddress: account.address });
 expect(registration.status === 200 && registration.data?.status === 'pending', 'Seller registration failed');
@@ -43,13 +44,13 @@ const verified = await call('sellerOwnership.verify', { merchantAccountId: regis
 expect(verified.status === 200 && verified.data?.status === 'active', 'Seller ownership failed');
 const ownershipReplay = await call('sellerOwnership.verify', { merchantAccountId: registration.data.id,
   challengeId: ownership.data.challengeId, signature: ownershipSignature });
-expect(ownershipReplay.status >= 400, 'Seller challenge replay accepted');
+expect(ownershipReplay.status === 400 || ownershipReplay.status === 409, 'Ownership replay did not reach challenge validation');
 const key = await call('apiKeys.create', { name: 'Local smoke key', merchantAccountId: registration.data.id });
 expect(key.status === 200 && key.data?.secret, 'API key creation failed');
 const paymentInput = { externalOrderId: `order-${suffix}`, idempotencyKey: `order-${suffix}`,
   itemName: 'Local smoke order', amount: '1.00', seller: { marketplaceId: `local-smoke-${suffix}`,
     sellerId: 'seller-1', merchantAccountId: registration.data.id } };
-const authorization = { authorization: `Bearer ${key.data.secret}` };
+const authorization = { authorization: `Bearer ${key.data.secret}`, cookie: '' };
 const intent = await call('payments.createIntent', paymentInput, authorization);
 expect(intent.status === 200 && intent.data?.id && intent.data?.platformFeeBps === 0 &&
   intent.data?.merchantAddress?.toLowerCase() === account.address.toLowerCase(), 'Payment intent failed');
@@ -65,5 +66,11 @@ expect(summary.status === 200 && summary.data?.pendingCount === 1 && summary.dat
 const listings = await call('merchantAccounts.listMine');
 expect(listings.status === 200 && listings.data?.accounts?.some(row => row.id === registration.data.id),
   'Seller dashboard linkage failed');
+const revoked = await call('apiKeys.revoke', { id: key.data.id });
+expect(revoked.status === 200, 'API key revocation failed');
+const denied = await call('payments.createIntent', { ...paymentInput, externalOrderId: `revoked-${suffix}`,
+  idempotencyKey: `revoked-${suffix}` }, authorization);
+expect(denied.status === 403, 'Revoked API key could create checkout');
 console.log(JSON.stringify({ passed: true, checks: ['wallet-signin', 'wallet-replay', 'seller-ownership',
-  'ownership-replay', 'api-key', 'checkout', 'idempotency', 'public-lookup', 'reporting'] }));
+  'ownership-replay', 'http-only-session', 'api-key', 'cookie-free-checkout', 'idempotency',
+  'public-lookup', 'reporting', 'api-key-revocation'] }));
