@@ -88,15 +88,36 @@ target, source identity checks, row-count and fingerprint reconciliation.
   Worker bound only to Druto Testnet D1. Its 15-minute Cron checks every
   seller's succeeded payment policy, seller identity, transaction row,
   undelivered webhook count, and matching Arc USDC receipt. Marketplace order
-  and fulfillment state are outside this gateway audit. It has no public HTTP
+  and fulfillment state are outside this gateway audit. The webhook count
+  covers existing delivery rows; it cannot prove an endpoint was configured
+  when the payment settled or that a receiver fulfilled an order. It has no public HTTP
   trigger, write query, or credential. The Worker stops with `INCOMPLETE` if
   Druto has more than 20 succeeded rows, its binding is unavailable, or Arc
-  RPC fails. A recently settled payment gets a 10-minute webhook grace window;
+  RPC fails. The Arc primary RPC is used first; if it returns 429, 502–504, or
+  a fetch failure, the Worker tries Arc's documented dRPC Testnet endpoint
+  after checking its chain ID. If both providers fail, the audit remains
+  `INCOMPLETE`; neither provider is an availability guarantee. A recently
+  settled payment gets a 10-minute webhook grace window;
   internal ledger corruption never does.
   The Cron logs only aggregate counts and exception codes. Deploy it with
   `pnpm cf:reconcile:deploy` after local checks. A failed Cron is visible in
   Cloudflare Workers Logs and Issues. An account notification policy has not
   yet been configured; this is not a guaranteed paging system.
+- On 2026-10-10, a temporary local Wrangler scheduled test with a read-only
+  remote Druto D1 binding returned `PASS`: 2 succeeded payments, 0 undelivered
+  webhooks, and 0 exceptions after Arc receipt checks. The temporary preview
+  configuration was removed. This verifies the generalized handler against
+  current remote data. A natural scheduled invocation of deployed version
+  `d6761750-9a69-4774-afc6-d282294bf8b3` at `2026-10-10T08:45:22Z`
+  returned `INCOMPLETE` after reading 2 succeeded payments. The original
+  aggregate-only error code did not identify the failed dependency. Safe
+  dependency-stage codes were added for diagnosis. The next natural Cron at
+  `2026-10-10T09:00:31Z` reported `ARC_RPC_HTTP_429` from the Arc primary RPC,
+  confirming that the hosted Cloudflare invocation was rate-limited even though
+  the local scheduled test passed. A chain-checked backup was deployed as
+  version `67f12fe6-2276-4729-a9e7-3f2f6a1ebab4` with the normal 15-minute
+  Cron restored. Its natural scheduled result still needs observation; do not
+  count the local test or deployment as a successful scheduled run.
 - The first observed real scheduled invocation of the former Luvre-bound
   version at `2026-10-09T09:30:45Z`
   finished `PASS` on Worker version `8efc1c2b-405d-4e91-b26e-308a47a932c9`:

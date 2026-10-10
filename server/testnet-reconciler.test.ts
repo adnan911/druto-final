@@ -93,11 +93,63 @@ describe('scheduled Druto Arc Testnet reconciliation', () => {
   it('fails closed on missing D1, over-limit ledgers and unavailable Arc RPC', async () => {
     const payment = paymentFixture();
     const missing = await reconcileTestnet({ DRUTO_D1: undefined as never }, rpc([payment]), now);
-    expect(missing).toMatchObject({ status: 'INCOMPLETE', exceptionCodes: ['AUDIT_INCOMPLETE'] });
+    expect(missing).toMatchObject({ status: 'INCOMPLETE',
+      exceptionCodes: ['AUDIT_INCOMPLETE', 'AUDIT_D1_READ_FAILED'] });
     const overLimit = await reconcileTestnet({ DRUTO_D1: database(Array(21).fill(payment)) }, rpc([payment]), now);
-    expect(overLimit).toMatchObject({ status: 'INCOMPLETE', exceptionCodes: ['AUDIT_INCOMPLETE'] });
+    expect(overLimit).toMatchObject({ status: 'INCOMPLETE',
+      exceptionCodes: ['AUDIT_INCOMPLETE', 'AUDIT_D1_READ_FAILED'] });
     const unavailable = await reconcileTestnet({ DRUTO_D1: database([payment]) },
       vi.fn(async () => new Response('unavailable', { status: 503 })) as unknown as typeof fetch, now);
-    expect(unavailable).toMatchObject({ status: 'INCOMPLETE', exceptionCodes: ['AUDIT_INCOMPLETE'] });
+    expect(unavailable).toMatchObject({ status: 'INCOMPLETE',
+      exceptionCodes: ['AUDIT_INCOMPLETE', 'ARC_BACKUP_RPC_HTTP_503'] });
+    const network = await reconcileTestnet({ DRUTO_D1: database([payment]) },
+      vi.fn(async () => { throw new Error('secret upstream detail'); }) as unknown as typeof fetch, now);
+    expect(network).toMatchObject({ status: 'INCOMPLETE',
+      exceptionCodes: ['AUDIT_INCOMPLETE', 'ARC_BACKUP_RPC_FETCH_FAILED'] });
+    expect(JSON.stringify(network)).not.toContain('secret upstream detail');
+    const limited = await reconcileTestnet({ DRUTO_D1: database([payment]) },
+      vi.fn(async () => new Response('', { status: 429 })) as unknown as typeof fetch, now);
+    expect(limited).toMatchObject({ status: 'INCOMPLETE',
+      exceptionCodes: ['AUDIT_INCOMPLETE', 'ARC_BACKUP_RPC_HTTP_429'] });
+  });
+
+  it('uses an Arc-documented backup only after primary 429 and checks its chain', async () => {
+    const payment = paymentFixture();
+    const working = rpc([payment]);
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === 'https://rpc.testnet.arc.io') return new Response('', { status: 429 });
+      return working(url, init);
+    }) as unknown as typeof fetch;
+    const report = await reconcileTestnet({ DRUTO_D1: database([payment]) }, fetcher, now);
+    expect(report).toMatchObject({ status: 'PASS', drutoSucceeded: 1, exceptionCodes: [] });
+    expect(vi.mocked(fetcher).mock.calls.map(call => call[0])).toEqual([
+      'https://rpc.testnet.arc.io', 'https://rpc.drpc.testnet.arc.io',
+      'https://rpc.drpc.testnet.arc.io', 'https://rpc.drpc.testnet.arc.io',
+    ]);
+
+    const wrongChain = vi.fn(async (url: string) => url === 'https://rpc.testnet.arc.io'
+      ? new Response('', { status: 429 })
+      : Response.json({ jsonrpc: '2.0', id: 1, result: '0x1' })) as unknown as typeof fetch;
+    const unsafe = await reconcileTestnet({ DRUTO_D1: database([payment]) }, wrongChain, now);
+    expect(unsafe).toMatchObject({ status: 'INCOMPLETE',
+      exceptionCodes: ['AUDIT_INCOMPLETE', 'ARC_BACKUP_CHAIN_ID_MISMATCH'] });
+  });
+
+  it('switches to the checked backup if the primary fails during receipt lookup', async () => {
+    const payment = paymentFixture();
+    const working = rpc([payment]);
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body));
+      if (url === 'https://rpc.testnet.arc.io' && request.method === 'eth_getTransactionReceipt') {
+        return new Response('', { status: 429 });
+      }
+      return working(url, init);
+    }) as unknown as typeof fetch;
+    const report = await reconcileTestnet({ DRUTO_D1: database([payment]) }, fetcher, now);
+    expect(report.status).toBe('PASS');
+    expect(vi.mocked(fetcher).mock.calls.map(call => call[0])).toEqual([
+      'https://rpc.testnet.arc.io', 'https://rpc.testnet.arc.io',
+      'https://rpc.drpc.testnet.arc.io', 'https://rpc.drpc.testnet.arc.io',
+    ]);
   });
 });
