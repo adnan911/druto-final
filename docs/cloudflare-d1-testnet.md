@@ -141,6 +141,12 @@ target, source identity checks, row-count and fingerprint reconciliation.
   the Cloudflare trace. This verifies the deployed pagination path for the
   current two-row ledger only. Hosted 100-payment throughput and CPU remain
   unverified and may exceed the Free-tier limit.
+- A separate temporary Cloudflare Worker exercised the same reconciliation
+  function with synthetic 2, 10, 25, 50, and 100-payment ledgers. All returned
+  `PASS`; the 100-payment HTTP trace showed 3 ms CPU. This did **not** include
+  real D1 queries, Arc RPC transport, or provider rate limits, so it does not
+  establish 100-payment production capacity. The probe Worker was deleted,
+  its URL returned 404, and its temporary source/config were removed.
 - The first observed real scheduled invocation of the former Luvre-bound
   version at `2026-10-09T09:30:45Z`
   finished `PASS` on Worker version `8efc1c2b-405d-4e91-b26e-308a47a932c9`:
