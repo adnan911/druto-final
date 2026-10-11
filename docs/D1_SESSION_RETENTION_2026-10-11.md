@@ -1,5 +1,7 @@
 # D1 session retention — 2026-10-11
 
+Follow-up: [backlog/failure recovery exercise and hosted log-access blocker](D1_SESSION_CAPACITY_2026-10-11.md). Natural hosted cleanup verification is still open.
+
 ## Policy and implementation
 
 - Druto Testnet retains every dashboard session row until seven days after its original absolute expiry, including revoked sessions. Revocation still takes effect immediately for subsequent authentication; retention never extends access. With the current 24-hour lifetime, rows become eligible eight days after creation.

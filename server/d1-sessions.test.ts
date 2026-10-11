@@ -51,6 +51,51 @@ beforeEach(() => {
 afterEach(() => { sqlite.close(); vi.useRealTimers(); });
 
 describe("D1 revocable dashboard sessions", () => {
+  it("drains a 10,000-row backlog in bounded batches while preserving 10,000 unexpired rows", async () => run(async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-11T00:00:00Z"));
+    const cutoff = Date.now() - D1_SESSION_RETENTION_MS;
+    const insert = sqlite.prepare("INSERT INTO dashboardSessions VALUES (?, 1, ?, ?, ?)");
+    sqlite.exec("BEGIN");
+    for (let i = 0; i < 10_000; i++) {
+      insert.run(`backlog-${i}`, cutoff - D1_SESSION_LIFETIME_MS - i, cutoff - i, i % 2 ? cutoff - i : null);
+      insert.run(`unexpired-${i}`, Date.now(), Date.now() + D1_SESSION_LIFETIME_MS, null);
+    }
+    sqlite.exec("COMMIT");
+    const active = await createD1Session(1);
+    const survivorDigest = () => sqlite.prepare("SELECT tokenHash, expiresAt, revokedAt FROM dashboardSessions WHERE expiresAt > ? ORDER BY tokenHash").all(cutoff);
+    const survivorsBefore = survivorDigest();
+    for (let batch = 0; batch < 100; batch++) {
+      expect(await cleanupD1Sessions()).toEqual({ deleted: 100, limitReached: true });
+      if (batch === 0) {
+        // Oldest first: the newest eligible fixture must wait for a later batch.
+        expect(sqlite.prepare("SELECT 1 FROM dashboardSessions WHERE tokenHash='backlog-0'").get()).toBeDefined();
+        expect(sqlite.prepare("SELECT 1 FROM dashboardSessions WHERE tokenHash='backlog-9999'").get()).toBeUndefined();
+      }
+    }
+    expect(await cleanupD1Sessions()).toEqual({ deleted: 0, limitReached: false });
+    expect(survivorDigest()).toEqual(survivorsBefore);
+    expect((await context(active.token)).user?.id).toBe(1);
+  }));
+
+  it("rolls back a mid-batch database failure and safely retries after recovery", async () => run(async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-11T00:00:00Z"));
+    const cutoff = Date.now() - D1_SESSION_RETENTION_MS;
+    const insert = sqlite.prepare("INSERT INTO dashboardSessions VALUES (?, 1, 0, ?, NULL)");
+    for (let i = 0; i < 100; i++) insert.run(`failure-${i}`, cutoff);
+    const active = await createD1Session(1);
+    // Abort after ten deletions within one statement, not before it starts.
+    sqlite.exec(`CREATE TRIGGER fail_cleanup BEFORE DELETE ON dashboardSessions
+      WHEN (SELECT count(*) FROM dashboardSessions WHERE expiresAt <= ${cutoff}) = 90
+      BEGIN SELECT RAISE(ABORT, 'Injected cleanup failure'); END`);
+    await expect(cleanupD1Sessions()).rejects.toThrow('Injected cleanup failure');
+    expect(sqlite.prepare("SELECT count(*) AS n FROM dashboardSessions WHERE expiresAt <= ?").get(cutoff)?.n).toBe(100);
+    expect((await context(active.token)).user?.id).toBe(1);
+    sqlite.exec("DROP TRIGGER fail_cleanup");
+    expect(await cleanupD1Sessions()).toEqual({ deleted: 100, limitReached: true });
+    expect(await cleanupD1Sessions()).toEqual({ deleted: 0, limitReached: false });
+    expect((await context(active.token)).user?.id).toBe(1);
+  }));
+
   it("cleans only rows past retention, with a bounded restartable batch", async () => run(async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-11T00:00:00Z"));
     const cutoff = Date.now() - D1_SESSION_RETENTION_MS;
