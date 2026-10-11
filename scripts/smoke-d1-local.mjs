@@ -61,10 +61,19 @@ const retry = await call('payments.createIntent', paymentInput, authorization);
 expect(retry.status === 200 && retry.data?.id === intent.data.id, 'Idempotent payment retry failed');
 const conflict = await call('payments.createIntent', { ...paymentInput, amount: '2.00' }, authorization);
 expect(conflict.status === 409, 'Changed idempotent payment was accepted');
+const concurrentInput = { ...paymentInput, externalOrderId: `parallel-${suffix}`, idempotencyKey: `parallel-${suffix}` };
+const parallel = await Promise.all(Array.from({ length: 20 }, () => call('payments.createIntent', concurrentInput, authorization)));
+expect(parallel.every(result => result.status === 200 && result.data?.id === parallel[0].data?.id &&
+  JSON.stringify(result.data) === JSON.stringify(parallel[0].data)), 'Concurrent identical checkouts diverged');
+const competingInput = { ...paymentInput, externalOrderId: `competing-${suffix}`, idempotencyKey: `competing-${suffix}` };
+const competing = await Promise.all(['1.00', '2.00'].map(amount =>
+  call('payments.createIntent', { ...competingInput, amount }, authorization)));
+expect(competing.filter(result => result.status === 200).length === 1 &&
+  competing.filter(result => result.status === 409).length === 1, 'Concurrent conflicting checkout was not rejected');
 const publicIntent = await call(`payments.getIntent?input=${encodeURIComponent(JSON.stringify({ json: { id: intent.data.id } }))}`);
 expect(publicIntent.status === 200 && publicIntent.data?.id === intent.data.id, 'Public checkout lookup failed');
 const summary = await call('payments.summary');
-expect(summary.status === 200 && summary.data?.pendingCount === 1 && summary.data?.successfulCount === 0,
+expect(summary.status === 200 && summary.data?.pendingCount === 3 && summary.data?.successfulCount === 0,
   'Seller reporting failed');
 const listings = await call('merchantAccounts.listMine');
 expect(listings.status === 200 && listings.data?.accounts?.some(row => row.id === registration.data.id),
@@ -103,4 +112,5 @@ expect((await call('auth.logout', {})).status === 200, 'Final local session clea
 console.log(JSON.stringify({ passed: true, checks: ['wallet-signin', 'wallet-replay', 'seller-ownership',
   'ownership-replay', 'http-only-session', 'api-key', 'cookie-free-checkout', 'idempotency',
   'public-lookup', 'reporting', 'api-key-revocation', 'session-logout', '24-hour-cookie',
-  'revoked-cookie-replay', 'fresh-login-seller-linkage', 'session-rotation'] }));
+  'revoked-cookie-replay', 'fresh-login-seller-linkage', 'session-rotation',
+  'concurrent-identical-checkout', 'concurrent-conflicting-checkout'] }));

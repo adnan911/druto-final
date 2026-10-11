@@ -1,5 +1,7 @@
 # Druto remediation checklist
 
+Latest D1-specific validation (11 October): [checkout concurrency and webhook recovery](D1_CHECKOUT_WEBHOOK_CONCURRENCY_2026-10-11.md) records eight real-SQL tests and 18 local Wrangler smoke checks. [Session capacity/hosted evidence](D1_SESSION_CAPACITY_2026-10-11.md) and [encrypted backup/local restore](D1_BACKUP_RESTORE_2026-10-11.md) cover separate gates. These dated results supersede corresponding older pending observations; they do not certify production readiness or retire Vercel/TiDB.
+
 Initial review: 26 September 2026. Checklist/code review: 4 October 2026 (Asia/Dhaka). Findings F01–F18 refer to `DRUTO_DEEP_REVIEW_2026-09-26.md` in this directory. Checked boxes indicate bounded local implementation with recorded validation, not deployment. A successful build or testnet payment does not close an entire gate.
 
 Milestone evidence: `SECURITY_MILESTONE_1.md`, `TIDB_SETUP_STATUS.md`, `SELLER_OWNERSHIP_MILESTONE.md`, `PAYMENT_SETTLEMENT_MILESTONE.md`, `WEBHOOK_OUTBOX_MILESTONE.md`, `LUVRE_PERSISTENCE_MILESTONE_2026-09-29.md`, and `API_BOUNDARIES_MILESTONE_2026-10-04.md`. Partial items remain unchecked. Historical milestone text describes its implementation date; later evidence below supersedes earlier next-step lists.
