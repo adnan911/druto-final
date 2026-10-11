@@ -1,6 +1,8 @@
 # Druto remediation checklist
 
-Latest reconciliation update (11 October): [detection and recovery](D1_RECONCILIATION_RECOVERY_2026-10-11.md) closes three reproduced detection gaps with 26 passing tests and a hosted-data read-only PASS. Deployed only the reconciler; natural Cron evidence for its new version remains pending. No automatic payment repair or webhook backfill was introduced.
+Portable recovery preparation (12 October): [owner passphrase step](PORTABLE_BACKUP_OWNER_STEP_2026-10-12.md). Conversion helper passed synthetic archive/restore and failure-cleanup checks. Actual encrypted archive, owner USB copy and independent-device restore remain pending; do not mark backup portability complete yet.
+
+Latest reconciliation evidence (12 October): [detection and recovery](D1_RECONCILIATION_RECOVERY_2026-10-11.md) closes three reproduced detection gaps with 26 passing tests and a hosted-data read-only PASS. Natural Cron verified at 00:15 GMT+6 on the new reconciler version: report PASS, invocation outcome ok, two payments, all anomaly counters zero. No automatic payment repair or webhook backfill was introduced; this is one observed run, not an all-time reliability or email-alert guarantee.
 
 Latest D1-specific validation (11 October): [settlement atomicity/replay](D1_SETTLEMENT_ATOMICITY_2026-10-11.md) adds eleven real-SQL router tests for concurrent verification, rollback and lost acknowledgements. Earlier [checkout concurrency and webhook recovery](D1_CHECKOUT_WEBHOOK_CONCURRENCY_2026-10-11.md) records eight real-SQL tests and 18 local Wrangler smoke checks. [Session capacity/hosted evidence](D1_SESSION_CAPACITY_2026-10-11.md) and [encrypted backup/local restore](D1_BACKUP_RESTORE_2026-10-11.md) cover separate gates. These dated results supersede corresponding older pending observations; they do not certify production readiness or retire Vercel/TiDB.
 

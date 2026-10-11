@@ -56,6 +56,8 @@ Cloudflare documents export precision limits for large numeric values. Druto sto
 
 ## Remaining work
 
+- 12 October follow-up: owner will retain USB/other-PC copy. [Portable conversion helper and owner step](PORTABLE_BACKUP_OWNER_STEP_2026-10-12.md) tested with synthetic data on PowerShell 5/7. Actual archive creation awaits owner passphrase, and off-device copy/recovery and secret recovery remain unverified.
+
 - Follow-up: a natural hosted hourly cleanup invocation was verified at 16:17:54.183 GMT+6, outcome `ok`; see [hosted evidence](D1_SESSION_CAPACITY_2026-10-11.md). No new deployment was made by this drill.
 - Owner-controlled fresh dashboard login is still outstanding; snapshot had zero dashboard sessions.
 - Establish portable encrypted/off-device backup and secret-recovery policy, then a separate hosted replacement-database drill before real customer launch.
