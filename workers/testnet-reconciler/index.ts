@@ -17,6 +17,7 @@ type DrutoPayment = {
   transactionHash: string | null; recordedHash: string | null; recordedAmount: string | null;
   fromAddress: string | null; recordedTo: string | null; chainId: number | null;
   tokenAddress: string | null; undeliveredWebhooks: number;
+  webhookCoverageGaps: number; exhaustedWebhooks: number;
   settledAt: number | null;
 };
 type ArcReceipt = {
@@ -40,7 +41,11 @@ const maxPages = 10; // Bound D1 reads, RPC load and Free-tier subrequests.
 const maxRows = pageSize * maxPages;
 const graceMs = 10 * 60_000; // Allow the independent webhook outbox time to drain.
 
-const countSql = `SELECT COUNT(*) AS total FROM paymentIntents p
+const countSql = `SELECT COUNT(*) AS total,
+  (SELECT COUNT(*) FROM (SELECT t.id FROM paymentTransactions t
+    LEFT JOIN paymentIntents i ON i.id=t.paymentIntentId
+    WHERE i.id IS NULL OR i.status<>'succeeded' LIMIT 101)) AS unsettledTransactions
+  FROM paymentIntents p
   WHERE p.status='succeeded' AND p.updatedAt<=?`;
 const drutoSql = `SELECT p.id, p.amountAtomic, p.merchantAddress,
   p.marketplaceId, p.sellerId, p.merchantAccountId, p.asset, p.network,
@@ -50,7 +55,14 @@ const drutoSql = `SELECT p.id, p.amountAtomic, p.merchantAddress,
   t.fromAddress, t.toAddress AS recordedTo, t.chainId, t.tokenAddress,
   COALESCE(t.finalizedAt, p.updatedAt) AS settledAt,
   (SELECT COUNT(*) FROM webhookDeliveries d WHERE d.paymentIntentId=p.id
-    AND d.status <> 'succeeded') AS undeliveredWebhooks
+    AND d.status <> 'succeeded') AS undeliveredWebhooks,
+  (SELECT COUNT(*) FROM webhookDeliveries d WHERE d.paymentIntentId=p.id
+    AND d.attempts>=10 AND (d.status='failed' OR
+      (d.status='pending' AND (d.nextAttemptAt IS NULL OR d.nextAttemptAt<=?)))) AS exhaustedWebhooks,
+  (SELECT COUNT(*) FROM webhookEndpoints e WHERE e.merchantAccountId=p.merchantAccountId
+    AND e.active=1 AND e.createdAt<=t.createdAt
+    AND NOT EXISTS (SELECT 1 FROM webhookDeliveries d WHERE d.endpointId=e.id
+      AND d.paymentIntentId=p.id AND d.eventType='payment.verified')) AS webhookCoverageGaps
   FROM paymentIntents p LEFT JOIN paymentTransactions t ON t.paymentIntentId=p.id
   LEFT JOIN merchantAccounts m ON m.id=p.merchantAccountId
   WHERE p.status='succeeded' AND p.updatedAt<=? AND p.id>?
@@ -142,6 +154,7 @@ function arcClient(fetcher: typeof fetch) {
 export type ReconciliationReport = {
   status: 'PASS' | 'FAIL' | 'INCOMPLETE'; checkedAt: string;
   drutoSucceeded: number; undeliveredWebhooks: number;
+  unsettledTransactions: number; webhookCoverageGaps: number; exhaustedWebhooks: number;
   pagesChecked: number; rpcProvider: 'none' | 'primary' | 'backup';
   rpcFallbackAttempted: boolean; withinGrace: number; exceptionCodes: string[];
 };
@@ -150,22 +163,31 @@ export async function reconcileTestnet(env: Env, fetcher: typeof fetch = fetch,
   now = Date.now()): Promise<ReconciliationReport> {
   const report: ReconciliationReport = { status: 'INCOMPLETE', checkedAt: new Date(now).toISOString(),
     drutoSucceeded: 0, undeliveredWebhooks: 0, pagesChecked: 0,
+    unsettledTransactions: 0, webhookCoverageGaps: 0, exhaustedWebhooks: 0,
     rpcProvider: 'none', rpcFallbackAttempted: false, withinGrace: 0, exceptionCodes: [] };
   let stage: 'D1_READ' | 'LEDGER_CHECK' | 'ARC_CHAIN' | 'ARC_RECEIPT' = 'D1_READ';
   let client: ReturnType<typeof arcClient> | undefined;
   let chainVerified = false;
   try {
     if (!env.DRUTO_D1) throw new Error('D1 binding unavailable');
-    const countResult = await env.DRUTO_D1.prepare(countSql).bind(now).all<{ total: number }>();
+    const countResult = await env.DRUTO_D1.prepare(countSql).bind(now)
+      .all<{ total: number; unsettledTransactions: number }>();
     const expected = Number(countResult.results?.[0]?.total);
+    const unsettled = Number(countResult.results?.[0]?.unsettledTransactions);
     if (countResult.results?.length !== 1 || !Number.isSafeInteger(expected) || expected < 0) {
       throw new AuditDependencyError('AUDIT_BAD_COUNT');
     }
+    if (!Number.isSafeInteger(unsettled) || unsettled < 0 || unsettled > maxRows + 1) {
+      throw new AuditDependencyError('AUDIT_BAD_COUNT');
+    }
+    report.unsettledTransactions = unsettled;
+    if (unsettled > 0) report.exceptionCodes.push('DRUTO_UNSETTLED_TRANSACTION');
+    if (unsettled > maxRows) throw new AuditDependencyError('AUDIT_TRANSACTION_LIMIT');
     if (expected > maxRows) throw new AuditDependencyError('AUDIT_PAYMENT_LIMIT');
     const druto: DrutoPayment[] = [];
     let cursor = '';
     for (let page = 0; druto.length < expected && page < maxPages; page++) {
-      const result = await env.DRUTO_D1.prepare(drutoSql).bind(now, cursor, pageSize).all<DrutoPayment>();
+      const result = await env.DRUTO_D1.prepare(drutoSql).bind(now, now, cursor, pageSize).all<DrutoPayment>();
       const rows = result.results;
       if (!Array.isArray(rows) || rows.length === 0 || rows.length > pageSize ||
           rows.some(row => typeof row.id !== 'string' || row.id <= cursor ||
@@ -188,6 +210,16 @@ export async function reconcileTestnet(env: Env, fetcher: typeof fetch = fetch,
     const fail = (code: string) => { report.exceptionCodes.push(code); };
 
     for (const payment of druto) {
+      // This is candidate coverage, not proof of historical subscription:
+      // endpoint activation/deletion history is not currently persisted.
+      for (const [field, code] of [
+        ['webhookCoverageGaps', 'WEBHOOK_COVERAGE_REVIEW_REQUIRED'],
+        ['exhaustedWebhooks', 'WEBHOOK_RETRIES_EXHAUSTED'],
+      ] as const) {
+        const count = Number(payment[field]);
+        if (!Number.isSafeInteger(count) || count < 0) fail('DRUTO_WEBHOOK_LEDGER_MISMATCH');
+        else { report[field] += count; if (count > 0) fail(code); }
+      }
       if (!payment.marketplaceId || !payment.sellerId || !payment.merchantAccountId ||
           payment.accountMarketplaceId !== payment.marketplaceId ||
           payment.accountSellerId !== payment.sellerId ||

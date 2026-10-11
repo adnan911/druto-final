@@ -35,6 +35,6 @@ Multiple assertions share tests; the suite total is eleven. The initial test run
 
 ## Next
 
-Review read-only reconciliation against deliberately inconsistent local fixtures: intent/transaction mismatch, missing subscribed outbox, and exhausted delivery retries. Confirm which anomalies are detected and how an operator recovers without resending funds or duplicating events. Prefer improving existing reconciliation and operator guidance before adding another service.
+Completed follow-up: [read-only reconciliation detection and recovery](D1_RECONCILIATION_RECOVERY_2026-10-11.md) reproduces and fixes three detection gaps, with local tests, hosted-data preflight and a separate reconciler deployment. Its dated report distinguishes verified results from pending natural Cron evidence.
 
 Hosted capacity, portable/off-device encrypted backup with secret recovery, owner-controlled fresh dashboard login, deferred account-email alerts and Vercel/TiDB retirement remain separate open gates. Current hosted version remains `499a5902-a3b9-475c-8015-f40f4805359f`. No Git push, deployment, migration or hosted mutation occurred for this test-only change.

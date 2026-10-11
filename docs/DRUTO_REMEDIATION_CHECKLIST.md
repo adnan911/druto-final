@@ -1,5 +1,7 @@
 # Druto remediation checklist
 
+Latest reconciliation update (11 October): [detection and recovery](D1_RECONCILIATION_RECOVERY_2026-10-11.md) closes three reproduced detection gaps with 26 passing tests and a hosted-data read-only PASS. Deployed only the reconciler; natural Cron evidence for its new version remains pending. No automatic payment repair or webhook backfill was introduced.
+
 Latest D1-specific validation (11 October): [settlement atomicity/replay](D1_SETTLEMENT_ATOMICITY_2026-10-11.md) adds eleven real-SQL router tests for concurrent verification, rollback and lost acknowledgements. Earlier [checkout concurrency and webhook recovery](D1_CHECKOUT_WEBHOOK_CONCURRENCY_2026-10-11.md) records eight real-SQL tests and 18 local Wrangler smoke checks. [Session capacity/hosted evidence](D1_SESSION_CAPACITY_2026-10-11.md) and [encrypted backup/local restore](D1_BACKUP_RESTORE_2026-10-11.md) cover separate gates. These dated results supersede corresponding older pending observations; they do not certify production readiness or retire Vercel/TiDB.
 
 Initial review: 26 September 2026. Checklist/code review: 4 October 2026 (Asia/Dhaka). Findings F01–F18 refer to `DRUTO_DEEP_REVIEW_2026-09-26.md` in this directory. Checked boxes indicate bounded local implementation with recorded validation, not deployment. A successful build or testnet payment does not close an entire gate.

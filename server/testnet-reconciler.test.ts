@@ -20,6 +20,7 @@ function paymentFixture(overrides: Record<string, unknown> = {}) {
     splitContractAddress: null, transactionHash: tx, recordedHash: tx,
     recordedAmount: '2000000', fromAddress: buyer, recordedTo: seller,
     chainId: 5042002, tokenAddress: token, undeliveredWebhooks: 0,
+    webhookCoverageGaps: 0, exhaustedWebhooks: 0,
     settledAt: now - 20 * 60_000, ...overrides };
 }
 
@@ -30,9 +31,9 @@ function database(rows: object[]) {
     if (!/^SELECT\s/i.test(sql)) throw new Error('Reconciler attempted a write');
     return { bind: (...values: unknown[]) => ({ all: async () => ({
       results: sql.includes('COUNT(*) AS total')
-        ? [{ total: ordered.length }]
-        : ordered.filter(row => String((row as { id: string }).id) > String(values[1]))
-          .slice(0, Number(values[2])),
+        ? [{ total: ordered.length, unsettledTransactions: 0 }]
+        : ordered.filter(row => String((row as { id: string }).id) > String(values[2]))
+          .slice(0, Number(values[3])),
     }) }) };
   });
   return { prepare };
