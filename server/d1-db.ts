@@ -27,8 +27,8 @@ export function getD1() {
 export async function checkD1Readiness() {
   const binding = getD1Binding();
   const tables = ["users", "merchantAccounts", "ownershipChallenges", "walletLoginChallenges",
-    "apiKeys", "paymentIntents", "paymentTransactions", "webhookEndpoints", "webhookDeliveries"];
-  const result = await binding.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('users', 'merchantAccounts', 'ownershipChallenges', 'walletLoginChallenges', 'apiKeys', 'paymentIntents', 'paymentTransactions', 'webhookEndpoints', 'webhookDeliveries')").all<{ name: string }>();
+    "apiKeys", "paymentIntents", "paymentTransactions", "webhookEndpoints", "webhookDeliveries", "dashboardSessions"];
+  const result = await binding.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('users', 'merchantAccounts', 'ownershipChallenges', 'walletLoginChallenges', 'apiKeys', 'paymentIntents', 'paymentTransactions', 'webhookEndpoints', 'webhookDeliveries', 'dashboardSessions')").all<{ name: string }>();
   const found = new Set((result.results as Array<{ name: string }> | undefined)?.map(row => row.name));
   if (tables.some(table => !found.has(table))) throw new Error("D1 schema is incomplete");
 }

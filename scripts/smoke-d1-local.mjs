@@ -17,7 +17,7 @@ async function call(path, input, headers = {}) {
   const setCookie = response.headers.get('set-cookie');
   if (setCookie) cookie = setCookie.split(';', 1)[0];
   const body = await response.json();
-  return { status: response.status, data: body.result?.data?.json, code: body.error?.data?.code };
+  return { status: response.status, data: body.result?.data?.json, code: body.error?.data?.code, setCookie };
 }
 function expect(value, message) { if (!value) throw new Error(message); }
 
@@ -30,6 +30,9 @@ const login = await call('auth.verifyWalletLogin', { challengeId: challenge.data
   walletAddress: account.address, signature });
 expect(login.status === 200 && login.data?.authenticated && cookie, 'Wallet login failed');
 expect(!Object.hasOwn(login.data, 'token'), 'Wallet login exposed a session token in JSON');
+expect(login.setCookie?.includes('HttpOnly') && login.setCookie?.includes('SameSite=Lax') &&
+  /Max-Age=86400(?:;|$)/.test(login.setCookie), 'Session cookie expiry or protections are incorrect');
+const copiedSessionCookie = cookie;
 const replay = await call('auth.verifyWalletLogin', { challengeId: challenge.data.challengeId,
   walletAddress: account.address, signature });
 expect(replay.status === 400 || replay.status === 409, 'Wallet replay did not reach challenge validation');
@@ -77,6 +80,27 @@ const anonymous = await call('auth.me');
 expect(anonymous.status === 200 && anonymous.data === null, 'Logout did not clear the browser session');
 const privateAfterLogout = await call('merchantAccounts.listMine');
 expect(privateAfterLogout.status === 401, 'Seller records remained accessible after logout');
+const replayedCookie = await call('merchantAccounts.listMine', undefined, { cookie: copiedSessionCookie });
+expect(replayedCookie.status === 401, 'A copied session cookie still worked after logout');
+const freshChallenge = await call('auth.createWalletChallenge', { walletAddress: account.address });
+const freshSignature = await account.signMessage({ message: freshChallenge.data.message });
+const freshLogin = await call('auth.verifyWalletLogin', { challengeId: freshChallenge.data.challengeId,
+  walletAddress: account.address, signature: freshSignature });
+expect(freshLogin.status === 200 && freshLogin.data?.authenticated && cookie !== copiedSessionCookie,
+  'Fresh login did not establish a new session');
+const restoredAccess = await call('merchantAccounts.listMine');
+expect(restoredAccess.status === 200 && restoredAccess.data?.accounts?.some(row => row.id === registration.data.id),
+  'Fresh login lost seller linkage');
+const beforeRotationCookie = cookie;
+const rotateChallenge = await call('auth.createWalletChallenge', { walletAddress: account.address });
+const rotateSignature = await account.signMessage({ message: rotateChallenge.data.message });
+const rotated = await call('auth.verifyWalletLogin', { challengeId: rotateChallenge.data.challengeId,
+  walletAddress: account.address, signature: rotateSignature });
+expect(rotated.status === 200 && cookie !== beforeRotationCookie, 'Login failed to rotate the browser session');
+expect((await call('merchantAccounts.listMine', undefined, { cookie: beforeRotationCookie })).status === 401,
+  'Replaced browser session still worked');
+expect((await call('auth.logout', {})).status === 200, 'Final local session cleanup failed');
 console.log(JSON.stringify({ passed: true, checks: ['wallet-signin', 'wallet-replay', 'seller-ownership',
   'ownership-replay', 'http-only-session', 'api-key', 'cookie-free-checkout', 'idempotency',
-  'public-lookup', 'reporting', 'api-key-revocation', 'session-logout'] }));
+  'public-lookup', 'reporting', 'api-key-revocation', 'session-logout', '24-hour-cookie',
+  'revoked-cookie-replay', 'fresh-login-seller-linkage', 'session-rotation'] }));

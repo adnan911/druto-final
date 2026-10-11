@@ -9,7 +9,7 @@ import { apiKeysD1, merchantAccountsD1, ownershipChallengesD1, paymentIntentsD1,
   paymentTransactionsD1, usersD1, walletLoginChallengesD1, webhookDeliveriesD1, webhookEndpointsD1 } from "../drizzle/schema.d1";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { sdk } from "./_core/sdk";
+import { createD1Session, D1_SESSION_LIFETIME_MS, readD1SessionToken, revokeD1Session } from "./d1-sessions";
 import { getD1, getD1Binding } from "./d1-db";
 import { commitDirectPaymentAndOutbox, consumeVerifiedSellerChallenge, consumeVerifiedWalletLoginChallenge } from "./d1-atomic";
 import { createApiKeyMaterial, hashApiKey } from "./api-keys";
@@ -78,7 +78,8 @@ export const d1Router = router({
   }),
   auth: router({
     me: publicProcedure.query(({ ctx }) => ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      await revokeD1Session(readD1SessionToken(ctx.req.headers.cookie));
       ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), sameSite: "lax", maxAge: -1 });
       return { success: true } as const;
     }),
@@ -110,10 +111,11 @@ export const d1Router = router({
       const name = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
       await db().insert(usersD1).values({ openId, name, loginMethod: "wallet", role: "user", lastSignedIn: new Date() })
         .onConflictDoUpdate({ target: usersD1.openId, set: { name, loginMethod: "wallet", lastSignedIn: new Date() } });
-      const token = await sdk.createSessionToken(openId, { name });
-      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), sameSite: "lax", maxAge: 365 * 24 * 60 * 60 * 1000 });
-      // The session is delivered only in the HttpOnly cookie. Returning the
-      // same JWT in JSON would expose it to browser JavaScript.
+      const [user] = await db().select({ id: usersD1.id }).from(usersD1).where(eq(usersD1.openId, openId)).limit(1);
+      if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not establish a wallet session" });
+      const session = await createD1Session(user.id, readD1SessionToken(ctx.req.headers.cookie));
+      ctx.res.cookie(COOKIE_NAME, session.token, { ...getSessionCookieOptions(ctx.req), sameSite: "lax", maxAge: D1_SESSION_LIFETIME_MS });
+      // Raw session credentials are delivered only in the HttpOnly cookie.
       return { authenticated: true, openId, name, walletAddress } as const;
     }),
     privyLogin: publicProcedure.mutation(unavailable),

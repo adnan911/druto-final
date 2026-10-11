@@ -15,6 +15,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Node 22.11 needs this flag in the test workers for real-SQL session tests.
+    poolOptions: { forks: { execArgv: ["--experimental-sqlite"] } },
     environment: "node",
     include: ["server/**/*.test.ts", "server/**/*.spec.ts", "client/src/**/*.test.ts", "client/src/**/*.spec.ts", "sdk/**/*.test.ts"],
   },

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
-// Parallel Testnet schema. It is not bound to the running Worker yet.
+// Schema for the Cloudflare D1 Testnet Worker.
 const nowMs = sql`(unixepoch() * 1000)`;
 const date = (name: string) => integer(name, { mode: "timestamp_ms" });
 
@@ -17,6 +17,17 @@ export const usersD1 = sqliteTable("users", {
   updatedAt: date("updatedAt").notNull().default(nowMs),
   lastSignedIn: date("lastSignedIn").notNull().default(nowMs),
 });
+
+export const dashboardSessionsD1 = sqliteTable("dashboardSessions", {
+  tokenHash: text("tokenHash").primaryKey(),
+  userId: integer("userId").notNull().references(() => usersD1.id, { onDelete: "cascade" }),
+  createdAt: date("createdAt").notNull(),
+  expiresAt: date("expiresAt").notNull(),
+  revokedAt: date("revokedAt"),
+}, table => ({
+  userIndex: index("dashboardSessions_user_idx").on(table.userId),
+  expiryIndex: index("dashboardSessions_expiry_idx").on(table.expiresAt),
+}));
 
 export const apiKeysD1 = sqliteTable("apiKeys", {
   id: text("id").primaryKey(),

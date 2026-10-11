@@ -23,7 +23,7 @@ The frontend now uses the existing EVM wallet challenge and Druto cookie session
 
 ## Next release gates
 
-1. Shorter session lifetime and server-side revocation; define how existing Testnet sessions are invalidated.
+1. Completed in the [D1 session follow-up](D1_SESSION_REVOCATION_2026-10-10.md): 24-hour lifetime, server-side per-session revocation and legacy-session invalidation. Idle timeout, all-device controls and record retention remain open.
 2. Cloudflare account-email alert remains deferred by the owner.
 3. Capacity/backup/restore exercises and retirement of the old Vercel/TiDB setup remain open.
 4. Any real-money launch still requires separate payment lifecycle, operational and jurisdiction-specific review.
