@@ -35,7 +35,7 @@ The local tests cover selected races and failure windows. They do **not** establ
 
 ## Next gates
 
-1. Exercise payment verification/ledger/outbox atomicity under concurrent verification and injected persistence failure using isolated fixtures.
+1. Completed locally: [payment verification/transaction/outbox atomicity](D1_SETTLEMENT_ATOMICITY_2026-10-11.md), eleven additional tests. Next review reconciliation detection and recovery using deliberately inconsistent local fixtures.
 2. Measure hosted capacity only in an isolated Testnet environment with explicit request limits; this work does not justify increasing quotas or opening real-money traffic.
 3. Complete owner-controlled fresh-login check and portable encrypted/off-device backup/secret recovery. Preserve deferred email-alert status and pending legacy Vercel/TiDB retirement.
 
