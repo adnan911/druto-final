@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { COOKIE_NAME } from "@shared/const";
 import { withD1, checkD1Readiness } from "./d1-db";
-import { createD1Session, D1_SESSION_LIFETIME_MS, hashD1SessionToken, readD1SessionToken, revokeD1Session } from "./d1-sessions";
+import { cleanupD1Sessions, D1_SESSION_RETENTION_MS, D1_SESSION_CLEANUP_LIMIT, createD1Session, D1_SESSION_LIFETIME_MS, hashD1SessionToken, readD1SessionToken, revokeD1Session } from "./d1-sessions";
 import { createD1Context } from "./d1-context";
 import { d1Router } from "./d1-router";
 
@@ -16,7 +16,7 @@ const { DatabaseSync: SQLiteDatabase } = createRequire(import.meta.url)("node:sq
 function statement(sql: string, parameters: SQLInputValue[] = []): any {
   return {
     bind: (...values: SQLInputValue[]) => statement(sql, values),
-    run: async () => sqlite.prepare(sql).run(...parameters),
+    run: async () => ({ success: true, meta: { changes: Number(sqlite.prepare(sql).run(...parameters).changes) } }),
     raw: async () => sqlite.prepare(sql).all(...parameters).map(row => Object.values(row)),
     all: async () => ({ results: sqlite.prepare(sql).all(...parameters) }),
   };
@@ -51,6 +51,37 @@ beforeEach(() => {
 afterEach(() => { sqlite.close(); vi.useRealTimers(); });
 
 describe("D1 revocable dashboard sessions", () => {
+  it("cleans only rows past retention, with a bounded restartable batch", async () => run(async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-11T00:00:00Z"));
+    const cutoff = Date.now() - D1_SESSION_RETENTION_MS;
+    const insert = sqlite.prepare("INSERT INTO dashboardSessions VALUES (?, 1, ?, ?, ?)");
+    for (let i = 0; i < D1_SESSION_CLEANUP_LIMIT + 1; i++) {
+      insert.run(`old-${i}`, cutoff - D1_SESSION_LIFETIME_MS, cutoff, i % 2 ? cutoff - 100 : null);
+    }
+    insert.run("recent-expired", cutoff, cutoff + 1, null);
+    insert.run("recent-revoked", Date.now(), Date.now() + D1_SESSION_LIFETIME_MS, Date.now());
+    const active = await createD1Session(1);
+    expect(await cleanupD1Sessions()).toEqual({ deleted: 100, limitReached: true });
+    expect(await cleanupD1Sessions()).toEqual({ deleted: 1, limitReached: false });
+    expect(await cleanupD1Sessions()).toEqual({ deleted: 0, limitReached: false });
+    expect(sqlite.prepare("SELECT count(*) AS n FROM dashboardSessions").get()?.n).toBe(3);
+    expect((await context(active.token)).user?.id).toBe(1);
+    expect(sqlite.prepare("SELECT count(*) AS n FROM users").get()?.n).toBe(2);
+    const plan = sqlite.prepare("EXPLAIN QUERY PLAN SELECT tokenHash FROM dashboardSessions WHERE expiresAt <= ? ORDER BY expiresAt LIMIT ?").all(cutoff, 100);
+    expect(JSON.stringify(plan)).toContain("dashboardSessions_expiry_idx");
+  }));
+
+  it("does not revive a revoked token after deleting its retained row", async () => run(async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-01T00:00:00Z"));
+    const session = await createD1Session(1);
+    await revokeD1Session(session.token);
+    vi.setSystemTime(session.expiresAt + D1_SESSION_RETENTION_MS);
+    expect(await cleanupD1Sessions()).toEqual({ deleted: 1, limitReached: false });
+    expect((await context(session.token)).user).toBeNull();
+    sqlite.exec("DROP TABLE dashboardSessions");
+    await expect(cleanupD1Sessions()).rejects.toThrow();
+  }));
+
   it("persists only a token hash with a 24-hour absolute expiry", async () => run(async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-10T00:00:00Z"));
     const session = await createD1Session(1);

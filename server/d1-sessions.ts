@@ -4,6 +4,21 @@ import { COOKIE_NAME } from "@shared/const";
 import { getD1Binding } from "./d1-db";
 
 export const D1_SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000;
+export const D1_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+export const D1_SESSION_CLEANUP_LIMIT = 100;
+
+export async function cleanupD1Sessions() {
+  // Use the existing expiry index, including for revoked sessions. Retaining
+  // every row until seven days after its original expiry avoids a second scan.
+  const cutoff = Date.now() - D1_SESSION_RETENTION_MS;
+  const result = await getD1Binding().prepare(`DELETE FROM dashboardSessions
+    WHERE tokenHash IN (SELECT tokenHash FROM dashboardSessions
+      WHERE expiresAt <= ? ORDER BY expiresAt LIMIT ?)`)
+    .bind(cutoff, D1_SESSION_CLEANUP_LIMIT).run();
+  if (!result.success) throw new Error("D1 session cleanup failed");
+  const deleted = result.meta.changes;
+  return { deleted, limitReached: deleted === D1_SESSION_CLEANUP_LIMIT };
+}
 
 export function readD1SessionToken(cookieHeader: string | undefined): string | undefined {
   const token = parseCookie(cookieHeader || "")[COOKIE_NAME];

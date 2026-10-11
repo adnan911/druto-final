@@ -29,7 +29,7 @@
       "simple": { "limit": 120, "period": 60 }
     }
   ],
-  "triggers": { "crons": ["*/2 * * * *"] },
+  "triggers": { "crons": ["*/2 * * * *", "17 * * * *"] },
   "assets": {
     "directory": "./dist/public",
     "binding": "ASSETS",

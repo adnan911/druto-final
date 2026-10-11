@@ -6,7 +6,7 @@ interface Fetcher {
 
 interface ExportedHandler<Env> {
   fetch?(request: Request, env: Env, context: unknown): Promise<Response> | Response;
-  scheduled?(event: unknown, env: Env, context: unknown): Promise<void> | void;
+  scheduled?(event: { cron: string; scheduledTime: number }, env: Env, context: unknown): Promise<void> | void;
 }
 
 declare module "cloudflare:node" {

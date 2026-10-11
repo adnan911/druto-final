@@ -1,5 +1,7 @@
 # D1 dashboard session expiry and revocation — 2026-10-10
 
+Update: bounded retention cleanup is now implemented; see [2026-10-11 retention report](D1_SESSION_RETENTION_2026-10-11.md). The original verification below describes the session rollout before that follow-up.
+
 The D1 dashboard now uses an opaque random session token backed by a D1 row. This replaces its one-year stateless JWT. The Testnet policy is a **24-hour absolute lifetime**, with server-side revocation on logout and token rotation on a fresh wallet login. Existing legacy JWT cookies are deliberately rejected after deployment; users must sign in again. User, seller and payment records are preserved.
 
 ## Behavior and security boundary

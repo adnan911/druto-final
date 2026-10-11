@@ -3,7 +3,7 @@ import { httpServerHandler } from "cloudflare:node";
 import { createD1App, assertD1Configuration } from "../../api/d1-app";
 import { withD1 } from "../../server/d1-db";
 import { checkD1Readiness } from "../../server/d1-db";
-import { drainD1WebhookOutbox } from "../../server/d1-webhook-drain";
+import { runD1Scheduled } from "../../server/d1-scheduled";
 import { enforceD1ApiRateLimit, type RateLimitEnv } from "./rate-limit";
 
 type WorkerEnv = { ASSETS: Fetcher; DRUTO_D1: Parameters<typeof withD1>[0] } & RateLimitEnv;
@@ -30,14 +30,12 @@ export default {
     }
     return env.ASSETS.fetch(request);
   },
-  async scheduled(_event, env) {
+  async scheduled(event, env) {
     if (!env.DRUTO_D1) throw new Error("D1 binding unavailable");
     await withD1(env.DRUTO_D1, async () => {
       assertD1Configuration();
       await checkD1Readiness();
-      const result = await drainD1WebhookOutbox(2);
-      console.info("[D1 webhook drain]", result);
-      if (result.selected !== result.delivered) throw new Error("One or more webhook deliveries need retry or review");
+      await runD1Scheduled(event.cron);
     });
   },
 } satisfies ExportedHandler<WorkerEnv>;
