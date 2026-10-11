@@ -1,6 +1,6 @@
 # D1 session retention — 2026-10-11
 
-Follow-up: [backlog/failure recovery exercise and hosted log-access blocker](D1_SESSION_CAPACITY_2026-10-11.md). Natural hosted cleanup verification is still open.
+Follow-up: [backlog/failure recovery exercise and successful hosted invocation](D1_SESSION_CAPACITY_2026-10-11.md). Natural hosted cleanup was verified on 2026-10-11 at 16:17:54.183 GMT+6, outcome `ok`, zero deleted rows. Earlier unverified status below describes the initial deployment checks.
 
 ## Policy and implementation
 

@@ -56,7 +56,7 @@ Cloudflare documents export precision limits for large numeric values. Druto sto
 
 ## Remaining work
 
-- Natural hosted hourly cleanup invocation still unobserved. The retention Worker was deployed after the 10:17 Bangladesh slot; the next hourly slot is 11:17. Do not use empty session counts as proof that Cron ran. No new deployment was made by this drill.
+- Follow-up: a natural hosted hourly cleanup invocation was verified at 16:17:54.183 GMT+6, outcome `ok`; see [hosted evidence](D1_SESSION_CAPACITY_2026-10-11.md). No new deployment was made by this drill.
 - Owner-controlled fresh dashboard login is still outstanding; snapshot had zero dashboard sessions.
 - Establish portable encrypted/off-device backup and secret-recovery policy, then a separate hosted replacement-database drill before real customer launch.
 - Capacity exercise, owner-deferred email alerts, and Vercel/TiDB retirement remain open. **NO GIT PUSH** remains active.
