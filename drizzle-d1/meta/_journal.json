@@ -22,6 +22,13 @@
       "when": 1791744762216,
       "tag": "0002_reconciliation_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791777367500,
+      "tag": "0003_reconciliation_checkpoint",
+      "breakpoints": true
     }
   ]
 }

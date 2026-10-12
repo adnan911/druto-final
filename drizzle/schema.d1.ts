@@ -5,6 +5,26 @@ import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqli
 const nowMs = sql`(unixepoch() * 1000)`;
 const date = (name: string) => integer(name, { mode: "timestamp_ms" });
 
+// Single operational checkpoint; no wallet keys or business payment state.
+export const reconciliationCheckpointD1 = sqliteTable('reconciliationCheckpoint', {
+  id: text('id').primaryKey(),
+  cycleId: text('cycleId').notNull().default(''),
+  phase: text('phase').notNull().default('complete'),
+  cutoff: integer('cutoff').notNull().default(0),
+  intentUpper: text('intentUpper').notNull().default(''),
+  transactionUpper: integer('transactionUpper').notNull().default(0),
+  expectedIntents: integer('expectedIntents').notNull().default(0),
+  expectedTransactions: integer('expectedTransactions').notNull().default(0),
+  intentCursor: text('intentCursor').notNull().default(''),
+  transactionCursor: integer('transactionCursor').notNull().default(0),
+  report: text('report').notNull().default('{}'),
+  leaseToken: text('leaseToken'),
+  leaseUntil: integer('leaseUntil').notNull().default(0),
+  startedAt: integer('startedAt').notNull().default(0),
+  completedAt: integer('completedAt'),
+  updatedAt: integer('updatedAt').notNull().default(0),
+});
+
 export const usersD1 = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   openId: text("openId").notNull().unique(),
