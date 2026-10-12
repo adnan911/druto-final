@@ -1,5 +1,7 @@
 # Druto remediation checklist
 
+Reconciliation query indexes (12 October): [migration and query-plan evidence](D1_RECONCILIATION_INDEXES_2026-10-12.md). Three non-unique indexes applied to hosted D1; actual remote query plan uses them, business counts preserved, 57 targeted tests pass. The 100-payment cap and hosted load/capacity gate remain unchanged.
+
 Portable recovery preparation (12 October): [owner passphrase step](PORTABLE_BACKUP_OWNER_STEP_2026-10-12.md). Conversion helper passed synthetic archive/restore and failure-cleanup checks. Actual encrypted archive, owner USB copy and independent-device restore remain pending; do not mark backup portability complete yet.
 
 Latest reconciliation evidence (12 October): [detection and recovery](D1_RECONCILIATION_RECOVERY_2026-10-11.md) closes three reproduced detection gaps with 26 passing tests and a hosted-data read-only PASS. Natural Cron verified at 00:15 GMT+6 on the new reconciler version: report PASS, invocation outcome ok, two payments, all anomaly counters zero. No automatic payment repair or webhook backfill was introduced; this is one observed run, not an all-time reliability or email-alert guarantee.

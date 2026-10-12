@@ -13,11 +13,13 @@ const hash = `0x${'a'.repeat(64)}`;
 const token = '0x3600000000000000000000000000000000000000';
 const transfer = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 let sqlite: DatabaseSync;
+let queryPlans: string[] | undefined;
 const database = { prepare(sql: string) {
   if (!/^SELECT\s/i.test(sql)) throw new Error('Reconciler attempted a write');
-  return { bind: (...values: SQLInputValue[]) => ({ all: async <T>() => ({
-    results: sqlite.prepare(sql).all(...values) as T[],
-  }) }) };
+  return { bind: (...values: SQLInputValue[]) => ({ all: async <T>() => {
+    if (queryPlans) queryPlans.push(...sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...values).map(row => String(row.detail)));
+    return { results: sqlite.prepare(sql).all(...values) as T[] };
+  } }) };
 } };
 const fetcher = vi.fn(async (_url: unknown, init?: RequestInit) => {
   const request = JSON.parse(String(init?.body));
@@ -48,6 +50,8 @@ async function audit() {
 beforeEach(() => {
   sqlite = new SQLiteDatabase(':memory:');
   sqlite.exec(readFileSync('drizzle-d1/0000_cool_tempest.sql','utf8'));
+  sqlite.exec(readFileSync('drizzle-d1/0002_reconciliation_indexes.sql','utf8'));
+  queryPlans = undefined;
   sqlite.exec(`INSERT INTO users(id,openId) VALUES(1,'fixture');
     INSERT INTO merchantAccounts(id,marketplaceId,externalSellerId,ownerUserId,displayName,receivingAddress,status,walletVerifiedAt)
       VALUES('merchant','market','seller',1,'Fixture','${recipient}','active',1);
@@ -60,6 +64,42 @@ beforeEach(() => {
 afterEach(() => {sqlite.close();vi.clearAllMocks();});
 
 describe('read-only reconciliation against real SQL and inconsistent fixtures', () => {
+  it('replaces repeated cross-payment scans with indexed lookups without changing rows or audit results', async () => {
+    endpoint(); delivery();
+    sqlite.exec(`DROP INDEX paymentIntents_status_id_updated_idx;
+      DROP INDEX webhookDeliveries_payment_endpoint_type_idx;
+      DROP INDEX webhookEndpoints_merchant_active_created_idx;`);
+    sqlite.exec('BEGIN');
+    for (let index=0;index<1000;index++) {
+      sqlite.prepare(`INSERT INTO paymentIntents(id,externalOrderId,itemName,amountAtomic,merchantAddress,expiresAt)
+        VALUES (?,?,'Pending fixture','2000000',?,?)`).run(`pi_noise_${index}`,`order_${index}`,recipient,now);
+      sqlite.prepare(`INSERT INTO webhookEndpoints(id,marketplaceId,merchantAccountId,ownerUserId,url,urlHash,secretCiphertext,createdAt)
+        VALUES (?,'noise-market','noise-merchant',1,'https://fixture.invalid/hook',?,'fixture',?)`).run(`noise-${index}`,`url-${index}`,settled-1000);
+    }
+    for (let index=0;index<5000;index++) {
+      sqlite.prepare(`INSERT INTO webhookDeliveries(id,endpointId,eventId,eventType,paymentIntentId,payload,signature,status)
+        VALUES (?,?,?,'payment.verified',?,'{}','fixture','succeeded')`)
+        .run(`noise-${index}`,`noise-${index%1000}`,`evt-${index}`,`pi_noise_${index%1000}`);
+    }
+    sqlite.exec('COMMIT');
+    const snapshot = () => ['paymentIntents','paymentTransactions','webhookEndpoints','webhookDeliveries']
+      .map(table => sqlite.prepare(`SELECT * FROM ${table} ORDER BY id`).all());
+    const beforeRows = snapshot();
+    queryPlans = [];
+    const beforeReport = await audit();
+    const baseline = queryPlans.join('\n');
+    expect(baseline).toMatch(/SCAN d\b/); expect(baseline).toMatch(/SCAN e\b/);
+    sqlite.exec(readFileSync('drizzle-d1/0002_reconciliation_indexes.sql','utf8'));
+    expect(snapshot()).toEqual(beforeRows);
+    queryPlans = [];
+    expect(await audit()).toEqual(beforeReport);
+    const indexed = queryPlans.join('\n');
+    expect(indexed).not.toMatch(/SCAN [de]\b/);
+    expect(indexed).toContain('paymentIntents_status_id_updated_idx');
+    expect(indexed).toContain('webhookDeliveries_payment_endpoint_type_idx');
+    expect(indexed).toContain('webhookEndpoints_merchant_active_created_idx');
+    expect(indexed).toMatch(/SCAN t\b/); // Reverse-integrity audit still traverses the transaction ledger.
+  });
   it('accepts a complete settlement and delivery', async () => {
     endpoint();delivery();expect(await audit()).toMatchObject({status:'PASS',exceptionCodes:[]});
   });

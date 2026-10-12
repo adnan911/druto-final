@@ -93,7 +93,10 @@ export const webhookEndpointsD1 = sqliteTable("webhookEndpoints", {
   active: integer("active").notNull().default(1),
   createdAt: date("createdAt").notNull().default(nowMs),
   updatedAt: date("updatedAt").notNull().default(nowMs),
-}, table => ({ endpointOwnerIndex: uniqueIndex("webhookEndpoints_marketplace_url_hash_unique").on(table.marketplaceId, table.urlHash) }));
+}, table => ({
+  endpointOwnerIndex: uniqueIndex("webhookEndpoints_marketplace_url_hash_unique").on(table.marketplaceId, table.urlHash),
+  merchantCoverageIndex: index("webhookEndpoints_merchant_active_created_idx").on(table.merchantAccountId, table.active, table.createdAt, table.id),
+}));
 
 export const webhookDeliveriesD1 = sqliteTable("webhookDeliveries", {
   id: text("id").primaryKey(),
@@ -110,7 +113,10 @@ export const webhookDeliveriesD1 = sqliteTable("webhookDeliveries", {
   deliveredAt: date("deliveredAt"),
   createdAt: date("createdAt").notNull().default(nowMs),
   updatedAt: date("updatedAt").notNull().default(nowMs),
-}, table => ({ eventEndpointUnique: uniqueIndex("webhookDeliveries_endpoint_event_unique").on(table.endpointId, table.eventId) }));
+}, table => ({
+  eventEndpointUnique: uniqueIndex("webhookDeliveries_endpoint_event_unique").on(table.endpointId, table.eventId),
+  paymentCoverageIndex: index("webhookDeliveries_payment_endpoint_type_idx").on(table.paymentIntentId, table.endpointId, table.eventType),
+}));
 
 export const paymentIntentsD1 = sqliteTable("paymentIntents", {
   id: text("id").primaryKey(),
@@ -137,7 +143,9 @@ export const paymentIntentsD1 = sqliteTable("paymentIntents", {
   expiresAt: date("expiresAt").notNull(),
   createdAt: date("createdAt").notNull().default(nowMs),
   updatedAt: date("updatedAt").notNull().default(nowMs),
-});
+}, table => ({
+  reconciliationIndex: index("paymentIntents_status_id_updated_idx").on(table.status, table.id, table.updatedAt),
+}));
 
 export const paymentTransactionsD1 = sqliteTable("paymentTransactions", {
   id: integer("id").primaryKey({ autoIncrement: true }),

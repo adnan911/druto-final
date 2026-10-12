@@ -71,7 +71,7 @@ function seedIntent(id: string) {
 }
 beforeEach(() => {
   sqlite = new SQLiteDatabase(':memory:'); sqlite.exec('PRAGMA foreign_keys=ON');
-  for (const migration of ['0000_cool_tempest.sql', '0001_dashboard_sessions.sql']) {
+  for (const migration of ['0000_cool_tempest.sql', '0001_dashboard_sessions.sql', '0002_reconciliation_indexes.sql']) {
     sqlite.exec(readFileSync(`drizzle-d1/${migration}`, 'utf8'));
   }
   sqlite.exec(`INSERT INTO users(id,openId) VALUES(1,'fixture-owner');

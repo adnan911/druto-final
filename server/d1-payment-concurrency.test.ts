@@ -72,7 +72,7 @@ function seedDelivery() {
 }
 beforeEach(() => {
   sqlite = new SQLiteDatabase(':memory:'); sqlite.exec('PRAGMA foreign_keys=ON');
-  for (const file of ['0000_cool_tempest.sql','0001_dashboard_sessions.sql']) sqlite.exec(readFileSync(`drizzle-d1/${file}`, 'utf8'));
+  for (const file of ['0000_cool_tempest.sql','0001_dashboard_sessions.sql','0002_reconciliation_indexes.sql']) sqlite.exec(readFileSync(`drizzle-d1/${file}`, 'utf8'));
   sqlite.exec("INSERT INTO users(id,openId) VALUES(1,'fixture-owner')");
   for (const suffix of ['a','b']) {
     sqlite.prepare(`INSERT INTO merchantAccounts(id,marketplaceId,externalSellerId,ownerUserId,displayName,receivingAddress,status,walletVerifiedAt)

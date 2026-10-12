@@ -43,7 +43,7 @@ async function context(token?: string, authorization?: string) {
 beforeEach(() => {
   sqlite = new SQLiteDatabase(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
-  for (const file of ["0000_cool_tempest.sql", "0001_dashboard_sessions.sql"]) {
+  for (const file of ["0000_cool_tempest.sql", "0001_dashboard_sessions.sql", "0002_reconciliation_indexes.sql"]) {
     sqlite.exec(readFileSync(`drizzle-d1/${file}`, "utf8"));
   }
   sqlite.exec("INSERT INTO users (id, openId, name, loginMethod) VALUES (1, 'wallet-one', 'One', 'wallet'), (2, 'wallet-two', 'Two', 'wallet')");
