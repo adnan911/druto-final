@@ -8,7 +8,17 @@ A D1 conditional update claims a two-minute lease. Each cycle freezes an upper I
 
 Incomplete healthy cycles log `IN_PROGRESS`; occupied leases log `SKIPPED`. Only a completed cycle with no exceptions logs `PASS`. Known anomalies log `FAIL` and remain sticky until that cycle finishes. Dependency/checkpoint errors log `INCOMPLETE`. FAIL and INCOMPLETE still throw in the scheduled handler for observability. Stored partial totals do not claim PASS.
 
-Deployed reconciler version: `52d53de2-cfe4-4e24-840f-1c1218d99815`, Cron `*/15 * * * *`. Gateway Worker unchanged. Remote migration read-back includes 0000–0003. Business counts before/after: users 2, merchants 1, intents 3, transactions 2, endpoints 1, deliveries 2. Time Travel bookmark and count evidence are in ignored outer `audit/backups/d1-*-checkpoint-*-2026-10-12.json`. The initial read-back found no checkpoint row because the new scheduled invocation had not occurred yet. A **complete natural hosted cycle is not yet verified**.
+Deployed reconciler version: `52d53de2-cfe4-4e24-840f-1c1218d99815`, Cron `*/15 * * * *`. Gateway Worker unchanged. Remote migration read-back includes 0000–0003. Business counts before/after: users 2, merchants 1, intents 3, transactions 2, endpoints 1, deliveries 2. Time Travel bookmark and count evidence are in ignored outer `audit/backups/d1-*-checkpoint-*-2026-10-12.json`. The initial read-back found no checkpoint row before the first new invocation; the natural hosted cycle was subsequently verified below.
+
+## Natural hosted cycle verified
+
+Read the signed-in Cloudflare Observability UI on 12 October, without manually triggering a run or modifying settings:
+
+- **10:15:30.455 GMT+6** (`04:15:30.455Z`): scheduled report `IN_PROGRESS`, phase `transactions`, `cycleComplete=false`, two succeeded intents, zero reverse transactions checked. Checked-at `04:15:29.564Z`; request `c66438c45241e072574485eaa237f0d2`.
+- **10:30:29.173 GMT+6** (`04:30:29.173Z`): same cycle `eba1b666-dc3b-491d-9e80-9177e1a5a0c3`, report **PASS**, phase `complete`, `cycleComplete=true`, two succeeded intents and two reverse transactions checked. All displayed anomaly/grace counters zero, primary RPC, no fallback. Checked-at `04:30:28.831Z`.
+- Both reports identify version `52d53de2-cfe4-4e24-840f-1c1218d99815` and scheduled `*/15` events. Completion invocation `5c84e46cb3c876b6f0a490b7c6c5b2ae`, trace `ee57cfa30add7844d9a462b9f3d6f58e`, explicitly reports **outcome `ok`**, CPU 4 ms, wall 361 ms.
+
+This confirms progress survived between natural invocations and the cycle completed on the deployed version. It is one two-payment cycle, not a hosted 123-payment capacity test or all-run reliability guarantee. No new buyer payment was made.
 
 ## Validation
 
