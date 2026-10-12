@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "druto-starter-testnet",
+  "main": "./starter-templates/cloudflare/src/worker.js",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./starter-templates/cloudflare/public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "druto-starter-testnet-orders",
+    "database_id": "d1593784-08a8-499a-90b2-90ac90c35a92",
+    "migrations_dir": "./starter-templates/cloudflare/migrations"
+  }],
+  "ratelimits": [{
+    "name": "REQUEST_LIMITER",
+    "namespace_id": "50420102",
+    "simple": { "limit": 60, "period": 60 }
+  }],
+  "vars": {
+    "APP_URL": "https://druto-starter-testnet.robobq.workers.dev",
+    "DRUTO_BASE_URL": "https://druto-d1-testnet.robobq.workers.dev",
+    "DRUTO_MARKETPLACE_ID": "luvre-franc",
+    "DRUTO_SELLER_ID": "luvre-seller-1",
+    "DRUTO_MERCHANT_ACCOUNT_ID": "ma_4uguzltzDSiU",
+    "DRUTO_RECEIVING_ADDRESS": "0x49b1C6BE866396d6732a16A48D39e9fc305eF4fB"
+  },
+  "observability": { "enabled": true }
+}
