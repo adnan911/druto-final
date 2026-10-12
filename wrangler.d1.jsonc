@@ -9,7 +9,7 @@
   "vars": {
     "DRUTO_RUNTIME": "cloudflare",
     "DRUTO_API_URL": "https://druto-d1-testnet.robobq.workers.dev",
-    "DRUTO_WEBHOOK_ALLOWED_ORIGINS": "https://luvre-franc-d1-testnet.robobq.workers.dev"
+    "DRUTO_WEBHOOK_ALLOWED_ORIGINS": "https://luvre-franc-d1-testnet.robobq.workers.dev,https://druto-starter-testnet.robobq.workers.dev"
   },
   "d1_databases": [{
     "binding": "DRUTO_D1",
