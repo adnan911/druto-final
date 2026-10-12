@@ -123,7 +123,9 @@ export class Druto {
     if (typeof window !== "undefined") throw new Error("Druto API keys may only be used on a server or Worker");
     this.key = nonEmpty(options?.apiKey, "apiKey", 512);
     this.origin = apiOrigin(options.baseUrl ?? DRUTO_TESTNET_URL);
-    this.fetcher = options.fetcher ?? fetch;
+    // Workers requires the global receiver; invoking bare fetch as this.fetcher
+    // otherwise uses the SDK instance and throws "Illegal invocation".
+    this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = options.timeoutMs ?? 10_000;
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs < 1000 || this.timeoutMs > 60_000) throw new TypeError("timeoutMs must be between 1000 and 60000");
   }

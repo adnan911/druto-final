@@ -1,6 +1,6 @@
 # Druto Seller Quick Integration Checklist
 
-Updated 12 October 2026 for the Cloudflare-hosted `0.2.0-testnet.2` SDK. Scope: Arc Testnet USDC, direct seller wallet, 0% fee, one verified seller per payment. [Package integration evidence and limits](SDK_PACKAGE_INTEGRATION_2026-10-12.md).
+Updated 12 October 2026 for the Cloudflare-hosted `0.2.0-testnet.3` SDK. Scope: Arc Testnet USDC, direct seller wallet, 0% fee, one verified seller per payment. [Package integration evidence and limits](SDK_PACKAGE_INTEGRATION_2026-10-12.md). [Workers receiver fix and independent starter verification](STARTER_INDEPENDENT_INSTALL_2026-10-12.md).
 
 ## 1. Open the Druto dashboard
 
@@ -51,7 +51,7 @@ These names are application configuration; the SDK does not automatically read e
 
 ## 5. Install the integration package
 
-Download the [SDK ZIP](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.2.zip), compare its SHA-256 against the [checksum](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.2.zip.sha256), and unzip it. In your server project, install the extracted directory:
+Download the [SDK ZIP](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.3.zip), compare its SHA-256 against the [checksum](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.3.zip.sha256), and unzip it. In your server project, install the extracted directory:
 
 ```bash
 npm install ./druto-sdk

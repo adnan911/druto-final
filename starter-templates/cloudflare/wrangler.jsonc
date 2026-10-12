@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "my-druto-store",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": true,
+  "assets": { "directory": "public", "binding": "ASSETS", "run_worker_first": true },
+  "d1_databases": [{ "binding": "DB", "database_name": "my-druto-store", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+  "ratelimits": [{ "name": "REQUEST_LIMITER", "namespace_id": "50420101", "simple": { "limit": 60, "period": 60 } }],
+  "vars": {
+    "APP_URL": "https://YOUR-STORE.YOUR-SUBDOMAIN.workers.dev",
+    "DRUTO_BASE_URL": "https://druto-d1-testnet.robobq.workers.dev",
+    "DRUTO_MARKETPLACE_ID": "",
+    "DRUTO_SELLER_ID": "",
+    "DRUTO_MERCHANT_ACCOUNT_ID": "",
+    "DRUTO_RECEIVING_ADDRESS": ""
+  },
+  "observability": { "enabled": true }
+}

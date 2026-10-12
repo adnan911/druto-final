@@ -14,6 +14,16 @@ const session = { id: "pi_abc123", externalOrderId: "order_123", marketplaceId: 
   checkoutUrl: "/checkout/pi_abc123", redirectUrl: "https://druto-d1-testnet.robobq.workers.dev/checkout/pi_abc123" };
 
 describe("downloadable Druto SDK", () => {
+  it("keeps the required global receiver for the default Workers fetch", async () => {
+    vi.stubGlobal('fetch', function (this: unknown) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation');
+      return Promise.resolve(Response.json({ result: { data: { json: session } } }));
+    });
+    try {
+      const payment = await new Druto({ apiKey: 'fixture-key' }).createPayment(request);
+      expect(payment.id).toBe(session.id);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it("creates a seller-scoped Testnet checkout with server Bearer auth and stable idempotency", async () => {
     const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
       expect(init.method).toBe("POST");

@@ -4,7 +4,7 @@
 
 ## Install the Cloudflare-hosted package
 
-Download [druto-sdk-0.2.0-testnet.2.zip](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.2.zip), verify its [SHA-256 checksum](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.2.zip.sha256), unzip it, then install the extracted `druto-sdk` directory:
+Download [druto-sdk-0.2.0-testnet.3.zip](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.3.zip), verify its [SHA-256 checksum](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.3.zip.sha256), unzip it, then install the extracted `druto-sdk` directory:
 
 ```sh
 npm install ./druto-sdk
