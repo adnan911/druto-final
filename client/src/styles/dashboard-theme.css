@@ -1,0 +1,100 @@
+/* Dashboard-only appearance. The root marker also reaches Radix portal dialogs. */
+.dashboard-glass .topbar-actions > .dg-theme-toggle { display: inline-flex; flex: none; }
+.dashboard-glass .dg-theme-toggle svg { transition: transform 180ms var(--dg-ease-fluid); }
+@media (hover: hover) and (pointer: fine) { .dashboard-glass .dg-theme-toggle:hover svg { transform: rotate(-15deg); } }
+
+html[data-druto-dashboard-theme="light"] :is(.dashboard-glass,.dashboard-payment-detail) {
+  --dg-bg: #f5f8f7;
+  --dg-ink: #172e32;
+  --dg-muted: #4e6569;
+  --dg-quiet: #526b70;
+  --dg-line: #254f5a24;
+  --dg-glass: #ffffffc9;
+  --dg-mint: #17624f;
+  --dg-lavender: #5e5480;
+  --dg-amber: #805317;
+  --background: #f7faf9;
+  --foreground: #172e32;
+  --card: #ffffff;
+  --card-foreground: #172e32;
+  --popover: #ffffff;
+  --popover-foreground: #172e32;
+  --primary: #17624f;
+  --primary-foreground: #ffffff;
+  --muted: #eaf0ee;
+  --muted-foreground: #4e6569;
+  --border: #254f5a24;
+  --input: #254f5a35;
+  --ring: #17624f;
+  --secondary: #e8f1ed;
+  --secondary-foreground: #172e32;
+  --accent: #e5f1eb;
+  --accent-foreground: #17624f;
+  --destructive: #a33139;
+  --sidebar: #ffffffa6;
+  --sidebar-foreground: #172e32;
+  --sidebar-border: #254f5a24;
+  --sidebar-accent: #17624f0c;
+  --sidebar-accent-foreground: #17624f;
+  --border-subtle: #254f5a24;
+  --text-primary: #172e32;
+  --text-secondary: #4e6569;
+  --text-muted: #526b70;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  color-scheme: light;
+}
+html[data-druto-dashboard-theme="light"] .app-shell.dashboard-glass {
+  background: radial-gradient(ellipse at 30% -20%,#d9eee5a6,transparent 55%),radial-gradient(ellipse at 105% 35%,#e8e3f070,transparent 48%),#f5f8f7;
+}
+html[data-druto-dashboard-theme="light"] .dashboard-glass .brand-mark { filter: brightness(0) saturate(100%) invert(28%) sepia(29%) saturate(896%) hue-rotate(111deg); }
+html[data-druto-dashboard-theme="light"] .dg-brand-name { color: var(--dg-ink); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-glass { background-color: #ffffffc9; border-color: var(--dg-line); box-shadow: inset 0 1px 0 #fff,0 8px 24px #28443805; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-metric:first-child { background: linear-gradient(120deg,#e6f4ed,#f4faf7 65%,#f0f0fa); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-wallet-card { background: linear-gradient(145deg,#f1eef8,#f9f8fc 52%,#edf5f1); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-fluid-selection { background: linear-gradient(110deg,#cbe6d9b3,#e2eee899); box-shadow: inset 0 1px 0 #ffffffb3; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass :is(.dg-filters,.dg-period,.dg-search,.dg-address,.dg-header-search,.environment-switch) { background: #edf3f080; border-color: var(--dg-line); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass :is(.dg-search:focus-within,.dg-seller-select select,.dg-period option,.dg-seller-select option) { background: #fff; color: var(--dg-ink); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass :is(.dg-wallet-icon,.dg-store-avatar) { background: #e4efe9; border-color: var(--dg-line); color: var(--dg-mint); box-shadow: inset 0 1px 0 #fff; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .avatar { background: #e9e4f3; color: #5e5480; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass :is(.nav-active,.nav-item:hover) { color: var(--dg-mint); background: #17624f0c; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-table-wrap th { background: #eaf1ed66; color: var(--dg-quiet); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-table-wrap td { border-color: #254f5a12; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass :is(.dg-table-wrap tr:hover,.dg-table-wrap tr:focus-within,.dg-row-open:hover) { background: #17624f08; }
+html[data-druto-dashboard-theme="light"] :is(.dashboard-glass,.dashboard-payment-detail) .dg-status { color: #17624f; background: #17624f0d; }
+html[data-druto-dashboard-theme="light"] :is(.dashboard-glass,.dashboard-payment-detail) .dg-status:is([data-status="Pending"],[data-status="Ready"],[data-status="Needs review"]) { color: #805317; background: #a8711112; }
+html[data-druto-dashboard-theme="light"] :is(.dashboard-glass,.dashboard-payment-detail) .dg-status[data-status="Expired"] { color: #52636b; background: #52636b0e; }
+html[data-druto-dashboard-theme="light"] :is(.dashboard-glass,.dashboard-payment-detail) .dg-status[data-status="Failed"] { color: #a33139; background: #a331390d; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-wallet-meta strong[data-ownership="disabled"] { color: #a33139; }
+html[data-druto-dashboard-theme="light"] :is(.dashboard-glass,.dashboard-payment-detail) .dg-text-button:hover { color: #104b3b; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-primary { box-shadow: inset 0 1px 0 #fff9,0 4px 14px #14372e0d; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-row-open { color: var(--dg-quiet); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-row-open:focus-visible { color: var(--dg-mint); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass :is(.profile-menu,.modal-card,.table-card,.code-block,.empty-feature,.filter-bar,.form-input) { background-color: #fff; color: var(--dg-ink); border-color: var(--dg-line); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .page-content :is(input,select,textarea) { background-color: #fff; color: var(--dg-ink); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .table-wrap th { background: #edf3f0; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .table-wrap td { border-color: var(--dg-line); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .status-success { color: #17624f; background: #17624f0d; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .status-warning { color: #805317; background: #a8711112; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .status-neutral { color: #52636b; background: #52636b0e; }
+html[data-druto-dashboard-theme="light"] .dashboard-payment-detail { background: #fbfdfcf5; border-color: #254f5a24; box-shadow: 0 22px 85px #16352d26; }
+html[data-druto-dashboard-theme="light"] .dg-payment-sheet { background: linear-gradient(150deg,#f1f8f4fa,#fdfefefd 60%); box-shadow: -12px 10px 65px #183d3021,inset 0 1px 0 #fff; }
+html[data-druto-dashboard-theme="light"] .dg-payment-sheet [data-slot="dialog-close"] { background: #e6eeea; color: #354e52; }
+html[data-druto-dashboard-theme="light"] .dg-payment-sheet [data-slot="dialog-close"]:hover { background: #d9e9e0; }
+html[data-druto-dashboard-theme="light"] .dashboard-payment-detail :is(input,select) { background: #fff; color: var(--dg-ink); border-color: var(--dg-line); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .seller-onboarding-page { --api-ink: #172e32; --api-muted: #4e6569; --api-line: #254f5a24; --api-paper: #ffffff; --api-ground: #f5f8f7; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .seller-onboarding-page :is(.onboarding-progress-step,.onboarding-form,.credential-ledger,.onboarding-secrets,.onboarding-boundaries,.secret-row,.ledger-empty,.onboarding-success) { background: #ffffffc9; border-color: var(--dg-line); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .seller-onboarding-page .onboarding-form .button-primary { background: #c6ecdb; color: #14372e; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-error { background: #fff5e6; border-color: #a871112e; }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-skeleton { background: linear-gradient(90deg,#e4ede8,#f3f7f5,#e4ede8); }
+html[data-druto-dashboard-theme="light"] .dashboard-glass ::selection,
+html[data-druto-dashboard-theme="light"] .dashboard-payment-detail ::selection { background: #c6e7d6; color: #14372e; }
+html[data-druto-dashboard-theme] :is(.dashboard-glass,.dashboard-payment-detail) { scrollbar-width: thin; scrollbar-color: var(--dg-quiet) transparent; }
+html[data-druto-dashboard-theme="light"] .dashboard-preview-banner { background: #edf6f0; color: #234c3f; border-color: #254f5a24; }
+html[data-druto-dashboard-theme="light"] .dashboard-preview-banner button { color: #234c3f; border-color: #254f5a40; }
+@media (hover: hover) and (pointer: fine) {
+  html[data-druto-dashboard-theme="light"] .dashboard-glass :is(.dg-metric:hover,.dg-wallet-card:hover) { background-color: #ffffff; border-color: #254f5a40; }
+}
+@media (max-width: 900px) { html[data-druto-dashboard-theme="light"] .dashboard-glass .sidebar { background: #f8fcf9f5; } }
+@media (prefers-reduced-motion: reduce) { .dashboard-glass .dg-theme-toggle svg { transition: none; } }
+html[data-druto-dashboard-theme="light"] .dashboard-glass .dg-wallet-full-address { background: #edf3f0; color: var(--dg-ink); }

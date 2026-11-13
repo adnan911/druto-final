@@ -55,7 +55,9 @@ describe("wallet-only dashboard without an external auth provider", () => {
     session.data = { name: "Test seller", openId: "wallet-0x1234" };
     const html = renderDashboard();
     expect(html).toContain("Test seller");
-    expect(html).toContain("Live Arc ledger");
+    expect(html).toContain("Verified payment volume");
+    expect(html).not.toContain("Payment activity chart");
+    expect(html).not.toContain("To settle");
     expect(html).toContain("Sign out");
     expect(html).not.toContain("Sign in with Privy");
   });

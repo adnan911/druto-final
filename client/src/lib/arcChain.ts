@@ -1,5 +1,7 @@
 import { createPublicClient, defineChain, getAddress, http, formatUnits } from "viem";
 
+export const ARC_TESTNET_EXPLORER_URL = "https://explorer.testnet.arc.io";
+
 export const arcTestnet = defineChain({
   id: 5042002,
   name: "Arc Testnet",
@@ -19,7 +21,7 @@ export const arcTestnet = defineChain({
   blockExplorers: {
     default: {
       name: "Arc Explorer",
-      url: "https://testnet.arcscan.app",
+      url: ARC_TESTNET_EXPLORER_URL,
     },
   },
   testnet: true,

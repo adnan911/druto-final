@@ -1,6 +1,6 @@
 import { COOKIE_NAME } from "@shared/const";
 import { TRPCError } from "@trpc/server";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, like, lt, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { nanoid } from "nanoid";
 import { getAddress, verifyMessage } from "viem";
@@ -351,6 +351,53 @@ export const d1Router = router({
         finalizedAt: paymentTransactionsD1.finalizedAt, createdAt: paymentIntentsD1.createdAt })
         .from(paymentTransactionsD1).innerJoin(paymentIntentsD1, eq(paymentTransactionsD1.paymentIntentId, paymentIntentsD1.id))
         .where(inArray(paymentIntentsD1.merchantAccountId, ids)) : [];
+    }),
+    verifiedPaymentsPage: protectedProcedure.input(z.object({
+      limit: z.number().int().min(1).max(50).default(25),
+      cursor: z.object({ finalizedAt: z.number().int().nonnegative(), id: z.number().int().positive() }).optional(),
+      fromTimestamp: z.number().int().nonnegative().optional(),
+      search: z.string().trim().max(120).optional(),
+    })).query(async ({ input, ctx }) => {
+      const ids = await accountIds(ctx.user);
+      if (!ids.length) return { items: [], nextCursor: null };
+      const filters = [inArray(paymentIntentsD1.merchantAccountId, ids), isNotNull(paymentTransactionsD1.finalizedAt)];
+      if (input.fromTimestamp !== undefined) filters.push(gte(paymentTransactionsD1.finalizedAt, new Date(input.fromTimestamp)));
+      if (input.cursor) {
+        const cursorDate = new Date(input.cursor.finalizedAt);
+        filters.push(or(lt(paymentTransactionsD1.finalizedAt, cursorDate), and(eq(paymentTransactionsD1.finalizedAt, cursorDate), lt(paymentTransactionsD1.id, input.cursor.id)))!);
+      }
+      const search = input.search?.trim();
+      if (search) {
+        const pattern = `%${search}%`;
+        filters.push(or(
+          like(paymentIntentsD1.id, pattern),
+          like(paymentIntentsD1.itemName, pattern),
+          like(paymentIntentsD1.buyerLabel, pattern),
+          like(paymentTransactionsD1.transactionHash, pattern),
+          like(paymentTransactionsD1.fromAddress, pattern),
+        )!);
+      }
+      const results = await db().select({
+        id: paymentTransactionsD1.id,
+        paymentIntentId: paymentTransactionsD1.paymentIntentId,
+        externalOrderId: paymentIntentsD1.externalOrderId,
+        itemName: paymentIntentsD1.itemName,
+        buyerLabel: paymentIntentsD1.buyerLabel,
+        amountAtomic: paymentTransactionsD1.amountAtomic,
+        transactionHash: paymentTransactionsD1.transactionHash,
+        fromAddress: paymentTransactionsD1.fromAddress,
+        toAddress: paymentTransactionsD1.toAddress,
+        finalizedAt: paymentTransactionsD1.finalizedAt,
+        createdAt: paymentIntentsD1.createdAt,
+      }).from(paymentTransactionsD1).innerJoin(paymentIntentsD1, eq(paymentTransactionsD1.paymentIntentId, paymentIntentsD1.id))
+        .where(and(...filters)).orderBy(desc(paymentTransactionsD1.finalizedAt), desc(paymentTransactionsD1.id)).limit(input.limit + 1);
+      const hasMore = results.length > input.limit;
+      const items = results.slice(0, input.limit);
+      const last = items[items.length - 1];
+      return {
+        items,
+        nextCursor: hasMore && last?.finalizedAt ? { finalizedAt: last.finalizedAt.getTime(), id: last.id } : null,
+      };
     }),
     sellerIntents: protectedProcedure.input(sellerRoutingInput).query(async ({ input, ctx }) => {
       const account = await seller(input, ctx.user.role === "admin" ? undefined : ctx.user.id);

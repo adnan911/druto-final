@@ -121,7 +121,7 @@ export default function WalletConnectButton() {
               gap: "4px",
             }}
           >
-            <div style={{ padding: "4px 8px", fontSize: "11px", color: "#888", fontWeight: 600 }}>
+            <div style={{ padding: "4px 8px", fontSize: "12px", color: "#888", fontWeight: 600 }}>
               Select Wallet
             </div>
             {connectors.map((connector) => (
@@ -198,7 +198,7 @@ export default function WalletConnectButton() {
               border: "none",
               padding: "3px 6px",
               borderRadius: "4px",
-              fontSize: "11px",
+              fontSize: "12px",
               cursor: "pointer",
               fontWeight: 600,
             }}
@@ -252,7 +252,7 @@ export default function WalletConnectButton() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "6px", borderBottom: "1px solid #f0f0f0" }}>
-            <span style={{ fontSize: "11px", color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>Arc Testnet (5042002)</span>
+            <span style={{ fontSize: "12px", color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>Arc Testnet (5042002)</span>
             <button
               onClick={async () => {
                 if (address) {
@@ -268,7 +268,7 @@ export default function WalletConnectButton() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8f9fa", padding: "6px 8px", borderRadius: "4px" }}>
-            <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#333" }}>{address.slice(0, 10)}...{address.slice(-6)}</span>
+            <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#333" }}>{address.slice(0, 10)}...{address.slice(-6)}</span>
             <button
               onClick={copyAddress}
               style={{ background: "none", border: "none", cursor: "pointer", color: "#666" }}
@@ -313,7 +313,7 @@ export default function WalletConnectButton() {
               color: "#d63031",
               padding: "5px",
               borderRadius: "4px",
-              fontSize: "11px",
+              fontSize: "12px",
               cursor: "pointer",
               marginTop: "4px",
             }}

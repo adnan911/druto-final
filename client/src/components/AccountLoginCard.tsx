@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { requestInjectedWalletAddress, signInjectedWalletMessage } from "@/lib/injectedWalletAuth";
 import { Link } from "wouter";
 import {
   ArrowRight,
@@ -13,18 +14,15 @@ import {
   Sparkles,
   Wallet,
 } from "lucide-react";
-import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { toast } from "sonner";
-export default function AccountLoginCard() {
+export default function AccountLoginCard({ onPreview }: { onPreview?: () => void }) {
   const [isWalletSigning, setIsWalletSigning] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<`0x${string}` | null>(null);
   const auraCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const createChallenge = trpc.auth.createWalletChallenge.useMutation();
   const verifyWallet = trpc.auth.verifyWalletLogin.useMutation();
   const utils = trpc.useUtils();
 
-  const { address, isConnected } = useAccount();
-  const { connectAsync, connectors } = useConnect();
-  const { signMessageAsync } = useSignMessage();
 
   // Dynamic Aura Wave Animation
   useEffect(() => {
@@ -87,34 +85,14 @@ export default function AccountLoginCard() {
   const handleWalletSignIn = async () => {
     try {
       setIsWalletSigning(true);
-      let activeAddress = address;
-
-      if (!isConnected || !activeAddress) {
-        const injectedConnector = connectors.find(
-          (c) => c.id === "injected" || c.name.toLowerCase().includes("metamask")
-        ) || connectors[0];
-
-        if (injectedConnector) {
-          const connectResult = await connectAsync({ connector: injectedConnector });
-          activeAddress = connectResult.accounts[0];
-        } else {
-          toast.error("No compatible EVM wallet detected");
-          setIsWalletSigning(false);
-          return;
-        }
-      }
-
-      if (!activeAddress) {
-        toast.error("Could not retrieve wallet address");
-        setIsWalletSigning(false);
-        return;
-      }
+      const activeAddress = await requestInjectedWalletAddress();
+      setWalletAddress(activeAddress);
 
       const { challengeId, message } = await createChallenge.mutateAsync({
         walletAddress: activeAddress,
       });
 
-      const signature = await signMessageAsync({ message });
+      const signature = await signInjectedWalletMessage(message, activeAddress);
 
       await verifyWallet.mutateAsync({
         challengeId,
@@ -149,7 +127,7 @@ export default function AccountLoginCard() {
           <Link href="/developers" className="text-xs font-mono font-medium text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors hidden sm:block">
             Developer Docs
           </Link>
-          <span className="px-3 py-1 rounded-full bg-[var(--card)] border border-[var(--border)] text-[11px] font-mono font-medium text-[var(--primary)] shadow-sm">
+          <span className="px-3 py-1 rounded-full bg-[var(--card)] border border-[var(--border)] text-[12px] font-mono font-medium text-[var(--primary)] shadow-sm">
             Arc Testnet (5042002)
           </span>
         </div>
@@ -164,7 +142,7 @@ export default function AccountLoginCard() {
             <span className="font-medium tracking-wide uppercase font-mono">Merchant & Operator Workspace</span>
           </div>
 
-          <h1 className="text-5xl lg:text-6xl font-light text-[var(--foreground)] font-serif tracking-tight leading-[1.12]">
+          <h1 className="text-5xl lg:text-6xl font-normal text-[var(--foreground)] font-serif tracking-tight leading-[1.12]">
             Operate your stablecoin <br />
             <span className="italic text-[var(--primary)] font-serif">flow from one ledger</span>
           </h1>
@@ -178,7 +156,7 @@ export default function AccountLoginCard() {
               <ShieldCheck size={20} className="text-[var(--primary)] shrink-0 mt-0.5" />
               <div>
                 <strong className="text-xs font-semibold text-[var(--foreground)] block font-sans">Wallet Signature Auth</strong>
-                <span className="text-[11px] text-[var(--muted-foreground)] leading-tight block mt-0.5 font-sans">Non-custodial login. Your private keys never leave your device.</span>
+                <span className="text-[12px] text-[var(--muted-foreground)] leading-tight block mt-0.5 font-sans">Non-custodial login. Your private keys never leave your device.</span>
               </div>
             </div>
 
@@ -186,7 +164,7 @@ export default function AccountLoginCard() {
               <KeyRound size={20} className="text-[var(--primary)] shrink-0 mt-0.5" />
               <div>
                 <strong className="text-xs font-semibold text-[var(--foreground)] block font-sans">Immediate Credentials</strong>
-                <span className="text-[11px] text-[var(--muted-foreground)] leading-tight block mt-0.5 font-sans">Provision server API keys and HMAC secrets instantaneously.</span>
+                <span className="text-[12px] text-[var(--muted-foreground)] leading-tight block mt-0.5 font-sans">Provision server API keys and HMAC secrets instantaneously.</span>
               </div>
             </div>
           </div>
@@ -201,7 +179,7 @@ export default function AccountLoginCard() {
               <span className="text-xs font-mono font-semibold text-[var(--primary)] uppercase tracking-widest block mb-1">
                 Authentication
               </span>
-              <h2 className="text-2xl font-serif font-light text-[var(--foreground)]">Sign in to Druto</h2>
+              <h2 className="text-2xl font-serif font-normal text-[var(--foreground)]">Sign in to Druto</h2>
               <p className="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed font-sans">
                 Verify your EVM wallet to access the Arc Testnet workspace.
               </p>
@@ -223,17 +201,27 @@ export default function AccountLoginCard() {
                 ) : (
                   <>
                     <Wallet size={16} />
-                    <span>{address ? `Sign in (${address.slice(0, 6)}…${address.slice(-4)})` : "Sign in with EVM Wallet"}</span>
+                    <span>{walletAddress ? `Sign in (${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)})` : "Sign in with EVM Wallet"}</span>
                     <ArrowRight size={15} />
                   </>
                 )}
               </button>
 
+              {import.meta.env.DEV && onPreview && <div className="pt-3">
+                <button type="button" onClick={onPreview} disabled={isPending}
+                  className="w-full py-3 px-5 rounded-full border border-[var(--primary)] text-[var(--primary)] text-sm font-medium hover:bg-[var(--secondary)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--primary)] disabled:opacity-60">
+                  Skip sign-in · preview dashboard
+                </button>
+                <p className="mt-2 text-center text-xs leading-relaxed text-[var(--muted-foreground)]">
+                  Development only. Sample data; no account or payment access.
+                </p>
+              </div>}
+
             </div>
 
 
 
-            <div className="mt-6 pt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--muted-foreground)] font-sans">
+            <div className="mt-6 pt-4 border-t border-[var(--border)] flex items-center justify-between text-[12px] text-[var(--muted-foreground)] font-sans">
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 size={13} className="text-emerald-500" />
                 <span>Zero seed phrase requested</span>

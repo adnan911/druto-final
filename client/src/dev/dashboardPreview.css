@@ -1,0 +1,9 @@
+.dashboard-preview-banner { display: flex; align-items: center; gap: 12px; padding: 14px 24px; background: var(--primary); color: var(--primary-foreground); }
+.dashboard-preview-banner > svg { flex: none; }
+.dashboard-preview-banner > div { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+.dashboard-preview-banner strong { font-size: 14px; font-weight: 600; }
+.dashboard-preview-banner span { font-size: 13px; line-height: 1.5; }
+.dashboard-preview-banner button { display: inline-flex; flex: none; align-items: center; gap: 6px; min-height: 40px; padding: 8px 12px; border: 1px solid currentColor; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.dashboard-preview-banner button:hover { background: #ffffff18; }
+.dashboard-preview-banner button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+@media (max-width: 600px) { .dashboard-preview-banner { padding: 12px 16px; align-items: flex-start; } .dashboard-preview-banner > svg { display: none; } .dashboard-preview-banner > div { display: block; } .dashboard-preview-banner span { display: block; } }

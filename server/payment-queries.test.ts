@@ -33,6 +33,34 @@ describe("verified payment queries", () => {
     expect(await caller.payments.verifiedPayments()).toEqual([]);
     expect(await caller.payments.summary()).toMatchObject({ availableUsdc: "0.00", grossUsdc: "0.00", successfulCount: 0 });
   });
+
+  it("returns a bounded payment page and a stable cursor", async () => {
+    const finalizedAt = new Date("2026-10-22T04:00:00.000Z");
+    const rows = [
+      { id: 12, paymentIntentId: "pi_newest", itemName: "Newest item", buyerLabel: "buyer@example.test", amountAtomic: "2500000", transactionHash: "0xnewest", fromAddress: "0xbuyer", toAddress: "0xseller", finalizedAt, createdAt: finalizedAt },
+      { id: 11, paymentIntentId: "pi_older", itemName: "Older item", buyerLabel: null, amountAtomic: "1000000", transactionHash: "0xolder", fromAddress: "0xbuyer2", toAddress: "0xseller", finalizedAt: new Date("2026-10-21T04:00:00.000Z"), createdAt: finalizedAt },
+    ];
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          innerJoin: vi.fn(() => ({
+            where: vi.fn(() => ({
+              orderBy: vi.fn(() => ({
+                limit: vi.fn((limit: number) => Promise.resolve(rows.slice(0, limit))),
+              })),
+            })),
+          })),
+        })),
+      })),
+    };
+    getDbMock.mockResolvedValue(db);
+    const caller = appRouter.createCaller({ user: { id: 1, openId: "admin", role: "admin" }, req: {}, res: {} } as never);
+
+    const page = await caller.payments.verifiedPaymentsPage({ limit: 1 });
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].paymentIntentId).toBe("pi_newest");
+    expect(page.nextCursor).toEqual({ finalizedAt: finalizedAt.getTime(), id: 12 });
+  });
 });
 
 

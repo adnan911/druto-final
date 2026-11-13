@@ -1,5 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, like, lt, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -448,6 +448,59 @@ export const appRouter = router({
       const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
       if (!accountIds.length) return [];
       return db.select({ id: paymentTransactions.transactionHash, paymentIntentId: paymentTransactions.paymentIntentId, externalOrderId: paymentIntents.externalOrderId, itemName: paymentIntents.itemName, buyerLabel: paymentIntents.buyerLabel, amountAtomic: paymentTransactions.amountAtomic, transactionHash: paymentTransactions.transactionHash, fromAddress: paymentTransactions.fromAddress, toAddress: paymentTransactions.toAddress, finalizedAt: paymentTransactions.finalizedAt, createdAt: paymentIntents.createdAt }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id)).where(inArray(paymentIntents.merchantAccountId, accountIds));
+    }),
+
+    verifiedPaymentsPage: protectedProcedure.input(z.object({
+      limit: z.number().int().min(1).max(50).default(25),
+      cursor: z.object({ finalizedAt: z.number().int().nonnegative(), id: z.number().int().positive() }).optional(),
+      fromTimestamp: z.number().int().nonnegative().optional(),
+      search: z.string().trim().max(120).optional(),
+    })).query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Database is not available" });
+      const filters = [isNotNull(paymentTransactions.finalizedAt)];
+      if (ctx.user.role !== "admin") {
+        const accountIds = await getOperatorMerchantAccountIds(db, ctx.user);
+        if (!accountIds.length) return { items: [], nextCursor: null };
+        filters.push(inArray(paymentIntents.merchantAccountId, accountIds));
+      }
+      if (input.fromTimestamp !== undefined) filters.push(gte(paymentTransactions.finalizedAt, new Date(input.fromTimestamp)));
+      if (input.cursor) {
+        const cursorDate = new Date(input.cursor.finalizedAt);
+        filters.push(or(lt(paymentTransactions.finalizedAt, cursorDate), and(eq(paymentTransactions.finalizedAt, cursorDate), lt(paymentTransactions.id, input.cursor.id)))!);
+      }
+      const search = input.search?.trim();
+      if (search) {
+        const pattern = `%${search}%`;
+        filters.push(or(
+          like(paymentIntents.id, pattern),
+          like(paymentIntents.itemName, pattern),
+          like(paymentIntents.buyerLabel, pattern),
+          like(paymentTransactions.transactionHash, pattern),
+          like(paymentTransactions.fromAddress, pattern),
+        )!);
+      }
+      const results = await db.select({
+        id: paymentTransactions.id,
+        paymentIntentId: paymentTransactions.paymentIntentId,
+        externalOrderId: paymentIntents.externalOrderId,
+        itemName: paymentIntents.itemName,
+        buyerLabel: paymentIntents.buyerLabel,
+        amountAtomic: paymentTransactions.amountAtomic,
+        transactionHash: paymentTransactions.transactionHash,
+        fromAddress: paymentTransactions.fromAddress,
+        toAddress: paymentTransactions.toAddress,
+        finalizedAt: paymentTransactions.finalizedAt,
+        createdAt: paymentIntents.createdAt,
+      }).from(paymentTransactions).innerJoin(paymentIntents, eq(paymentTransactions.paymentIntentId, paymentIntents.id))
+        .where(and(...filters)).orderBy(desc(paymentTransactions.finalizedAt), desc(paymentTransactions.id)).limit(input.limit + 1);
+      const hasMore = results.length > input.limit;
+      const items = results.slice(0, input.limit);
+      const last = items[items.length - 1];
+      return {
+        items,
+        nextCursor: hasMore && last?.finalizedAt ? { finalizedAt: last.finalizedAt.getTime(), id: last.id } : null,
+      };
     }),
 
     summary: protectedProcedure.query(async ({ ctx }) => {
