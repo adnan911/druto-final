@@ -1,0 +1,3 @@
+CREATE INDEX `paymentIntents_status_id_updated_idx` ON `paymentIntents` (`status`,`id`,`updatedAt`);--> statement-breakpoint
+CREATE INDEX `webhookDeliveries_payment_endpoint_type_idx` ON `webhookDeliveries` (`paymentIntentId`,`endpointId`,`eventType`);--> statement-breakpoint
+CREATE INDEX `webhookEndpoints_merchant_active_created_idx` ON `webhookEndpoints` (`merchantAccountId`,`active`,`createdAt`,`id`);

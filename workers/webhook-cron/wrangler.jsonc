@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/wrangler.json",
+  "name": "druto-testnet-webhook-cron",
+  "main": "index.mjs",
+  "compatibility_date": "2026-10-05",
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

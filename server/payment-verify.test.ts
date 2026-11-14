@@ -17,14 +17,14 @@ import { appRouter } from "./routers";
 import { paymentIntents, paymentTransactions } from "../drizzle/schema";
 
 function createDbMock(intents: any[] = [], transactions: any[] = []) {
-  const db = {
+  intents.forEach(i => { i.createdAt ??= new Date(); i.expiresAt ??= new Date(Date.now() + 60000); });
+  const db: any = {
     select: vi.fn(() => ({
       from: vi.fn((table: any) => ({
         where: vi.fn((condition: any) => ({
-          limit: vi.fn(async () => {
-            if (table === paymentIntents) return intents.slice(0, 1);
-            if (table === paymentTransactions) return transactions.slice(0, 1);
-            return [];
+          limit: vi.fn(() => {
+            const rows = table === paymentIntents ? intents.slice(0, 1) : table === paymentTransactions ? transactions.slice(0, 1) : [];
+            return Object.assign(Promise.resolve(rows), { for: async () => rows });
           }),
         })),
       })),
@@ -47,6 +47,7 @@ function createDbMock(intents: any[] = [], transactions: any[] = []) {
       })),
     })),
   };
+  db.transaction = async (callback: any) => callback(db);
   return { db, intents, transactions };
 }
 

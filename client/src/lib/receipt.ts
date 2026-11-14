@@ -23,7 +23,7 @@ export function buildReceiptSummary(intent: { amountAtomic: number | string; sta
   const orderContext = parseMarketplaceOrderContext(intent.orderContext);
   const lineItems = orderContext?.items?.length ? orderContext.items : [{ productId: "fallback", name: intent.itemName, seller: "Merchant", unitPrice: Number(intent.amountAtomic) / 1_000_000, quantity: 1 }];
   return {
-    amount: (Number(intent.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+    amount: (Number(intent.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }),
     isSucceeded: intent.status === "succeeded",
     orderContext,
     lineItems,

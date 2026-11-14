@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-13T11:17:58.805435+00:00",
+  "title": "Design System: Druto Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "charcoal": {
+        "role": "neutral",
+        "displayName": "Charcoal canvas",
+        "tonalRamp": [
+          "oklch(15% 0.005 230)",
+          "oklch(26% 0.012 230)",
+          "oklch(38% 0.017 230)",
+          "oklch(49% 0.02 230)",
+          "oklch(61% 0.02 230)",
+          "oklch(72% 0.017 230)",
+          "oklch(84% 0.011 230)",
+          "oklch(95% 0.003 230)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Primary ink",
+        "tonalRamp": [
+          "oklch(15% 0.0037 165)",
+          "oklch(26% 0.009 165)",
+          "oklch(38% 0.0127 165)",
+          "oklch(49% 0.015 165)",
+          "oklch(61% 0.015 165)",
+          "oklch(72% 0.0127 165)",
+          "oklch(84% 0.0083 165)",
+          "oklch(95% 0.0022 165)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted text",
+        "tonalRamp": [
+          "oklch(15% 0.005 198)",
+          "oklch(26% 0.012 198)",
+          "oklch(38% 0.017 198)",
+          "oklch(49% 0.02 198)",
+          "oklch(61% 0.02 198)",
+          "oklch(72% 0.017 198)",
+          "oklch(84% 0.011 198)",
+          "oklch(95% 0.003 198)"
+        ]
+      },
+      "quiet": {
+        "role": "neutral",
+        "displayName": "Quiet metadata",
+        "tonalRamp": [
+          "oklch(15% 0.0075 205)",
+          "oklch(26% 0.018 205)",
+          "oklch(38% 0.0255 205)",
+          "oklch(49% 0.03 205)",
+          "oklch(61% 0.03 205)",
+          "oklch(72% 0.0255 205)",
+          "oklch(84% 0.0165 205)",
+          "oklch(95% 0.0045 205)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Translucent separator",
+        "tonalRamp": [
+          "oklch(15% 0.0063 190)",
+          "oklch(26% 0.015 190)",
+          "oklch(38% 0.0213 190)",
+          "oklch(49% 0.025 190)",
+          "oklch(61% 0.025 190)",
+          "oklch(72% 0.0213 190)",
+          "oklch(84% 0.0138 190)",
+          "oklch(95% 0.0037 190)"
+        ]
+      },
+      "glass": {
+        "role": "neutral",
+        "displayName": "Slate glass",
+        "tonalRamp": [
+          "oklch(15% 0.0063 220)",
+          "oklch(26% 0.015 220)",
+          "oklch(38% 0.0213 220)",
+          "oklch(49% 0.025 220)",
+          "oklch(61% 0.025 220)",
+          "oklch(72% 0.0213 220)",
+          "oklch(84% 0.0138 220)",
+          "oklch(95% 0.0037 220)"
+        ]
+      },
+      "mint": {
+        "role": "primary",
+        "displayName": "Mint action",
+        "tonalRamp": [
+          "oklch(15% 0.0225 165)",
+          "oklch(26% 0.054 165)",
+          "oklch(38% 0.0765 165)",
+          "oklch(49% 0.09 165)",
+          "oklch(61% 0.09 165)",
+          "oklch(72% 0.0765 165)",
+          "oklch(84% 0.0495 165)",
+          "oklch(95% 0.0135 165)"
+        ]
+      },
+      "lavender": {
+        "role": "secondary",
+        "displayName": "Lavender material",
+        "tonalRamp": [
+          "oklch(15% 0.0175 290)",
+          "oklch(26% 0.042 290)",
+          "oklch(38% 0.0595 290)",
+          "oklch(49% 0.07 290)",
+          "oklch(61% 0.07 290)",
+          "oklch(72% 0.0595 290)",
+          "oklch(84% 0.0385 290)",
+          "oklch(95% 0.0105 290)"
+        ]
+      },
+      "amber": {
+        "role": "secondary",
+        "displayName": "Amber state",
+        "tonalRamp": [
+          "oklch(15% 0.02 75)",
+          "oklch(26% 0.048 75)",
+          "oklch(38% 0.068 75)",
+          "oklch(49% 0.08 75)",
+          "oklch(61% 0.08 75)",
+          "oklch(72% 0.068 75)",
+          "oklch(84% 0.044 75)",
+          "oklch(95% 0.012 75)"
+        ]
+      },
+      "primary-ink": {
+        "role": "neutral",
+        "displayName": "Dark mint ink",
+        "tonalRamp": [
+          "oklch(15% 0.01 165)",
+          "oklch(26% 0.024 165)",
+          "oklch(38% 0.034 165)",
+          "oklch(49% 0.04 165)",
+          "oklch(61% 0.04 165)",
+          "oklch(72% 0.034 165)",
+          "oklch(84% 0.022 165)",
+          "oklch(95% 0.006 165)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Overview heading",
+        "purpose": "Desktop page heading; 27px on mobile."
+      },
+      "metric": {
+        "displayName": "Operational metric",
+        "purpose": "Tabular summary figures; responsive 34/29/27px."
+      }
+    },
+    "shadows": [
+      {
+        "name": "payment-detail",
+        "value": "0 22px 85px #0007",
+        "purpose": "Ambient separation for payment evidence dialog."
+      },
+      {
+        "name": "profile-menu",
+        "value": "0 12px 35px #0005",
+        "purpose": "Final-cascade dashboard profile menu."
+      }
+    ],
+    "motion": [
+      {
+        "name": "dashboard-ease",
+        "value": "cubic-bezier(.22, 1, .36, 1)",
+        "purpose": "Arrival and mobile drawer easing."
+      },
+      {
+        "name": "control-transition",
+        "value": ".18s",
+        "purpose": "Button background and pressed transform; disabled for reduced motion."
+      },
+      {
+        "name": "content-arrival",
+        "value": ".35s",
+        "purpose": "5px arrival only under no-preference."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "workspace-stack",
+        "value": "1250px"
+      },
+      {
+        "name": "wallet-directory-stack",
+        "value": "1100px"
+      },
+      {
+        "name": "navigation-drawer",
+        "value": "900px"
+      },
+      {
+        "name": "mobile",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Dashboard create/setup action.",
+      "html": "<button class=\"ds-primary\">Create payment</button>",
+      "css": ".ds-primary{font-family:Manrope,system-ui,sans-serif;display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:9px 14px;border:1px solid transparent;border-radius:9px;background:linear-gradient(135deg,#d0f9e6,#9cdec9);color:#14372e;font-size:12px;font-weight:600;transition:background .18s,transform .18s}.ds-primary:hover{background:linear-gradient(135deg,#ddfff0,#b0ebd8)}.ds-primary:focus-visible{outline:2px solid #b9f3d9;outline-offset:4px;}.ds-primary:active{transform:translateY(1px)}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
+    },
+    {
+      "name": "Quiet button",
+      "kind": "button",
+      "refersTo": "",
+      "description": "Secondary dashboard control.",
+      "html": "<button class=\"ds-quiet\">Refresh</button>",
+      "css": ".ds-quiet{font-family:Manrope,system-ui,sans-serif;min-height:36px;padding:8px 12px;border:1px solid rgba(191,224,225,.13);border-radius:9px;background:#d2ebec06;color:#a9b9bd;font-size:12px;font-weight:500}.ds-quiet:hover{color:#f1f6f5;background:#b9f3d90b}.ds-quiet:focus-visible{outline:2px solid #b9f3d9;outline-offset:4px;}"
+    },
+    {
+      "name": "Payment search",
+      "kind": "input",
+      "refersTo": "search",
+      "description": "Search control with wrapper focus.",
+      "html": "<label class=\"ds-search\"><input type=\"search\" aria-label=\"Search payments\" placeholder=\"Search payments...\"></label>",
+      "css": ".ds-search{display:flex;padding:8px 10px;border:1px solid rgba(191,224,225,.13);border-radius:7px;background:#07111733;max-width:190px}.ds-search input{font-family:Manrope,system-ui,sans-serif;width:100%;min-width:0;border:0;background:transparent;color:#f1f6f5;font-size:13px;outline:none}.ds-search input::placeholder{color:#a9b9bd;opacity:1}.ds-search:focus-within{outline:2px solid #b9f3d9;outline-offset:3px}"
+    },
+    {
+      "name": "Selected navigation",
+      "kind": "nav",
+      "refersTo": "",
+      "description": "Current dashboard location.",
+      "html": "<nav aria-label=\"Dashboard\"><button class=\"ds-nav\" aria-current=\"page\">Overview</button></nav>",
+      "css": ".ds-nav{font-family:Manrope,system-ui,sans-serif;min-height:43px;padding:10px 12px;border:0;border-radius:8px;font-size:13px;font-weight:500;background:linear-gradient(100deg,#b9f3d91c,#b9f3d908);color:#b9f3d9}.ds-nav:hover{background:#b9f3d90a;color:#f1f6f5}.ds-nav:focus-visible{outline:2px solid #b9f3d9;outline-offset:4px;}"
+    },
+    {
+      "name": "Verified status",
+      "kind": "chip",
+      "refersTo": "verified-status",
+      "description": "Visible transfer-status label.",
+      "html": "<span class=\"ds-status\">Verified</span>",
+      "css": ".ds-status{font-family:Manrope,system-ui,sans-serif;display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:5px;color:#b9f3d9;background:#b9f3d90e;font-size:12px;font-weight:500}.ds-status::before{content:\"\";width:4px;height:4px;background:currentColor;border-radius:50%}"
+    },
+    {
+      "name": "Glass panel",
+      "kind": "card",
+      "refersTo": "glass-panel",
+      "description": "Operational panel material.",
+      "html": "<section class=\"ds-panel\"><h2>Recent payments</h2><p>Order-linked payment activity</p></section>",
+      "css": ".ds-panel{font-family:Manrope,system-ui,sans-serif;padding:23px 24px 17px;background:rgba(24,36,43,.65);border:1px solid rgba(191,224,225,.13);border-radius:16px;backdrop-filter:blur(24px);color:#f1f6f5}.ds-panel h2{margin:0;font-size:15px;font-weight:600;line-height:1.5;letter-spacing:-.02em}.ds-panel p{margin:4px 0 0;color:#a9b9bd;font-size:13px}@supports not(backdrop-filter:blur(1px)){.ds-panel{background:#19282e}}"
+    },
+    {
+      "name": "Receiving wallet material",
+      "kind": "card",
+      "refersTo": "",
+      "description": "Lavender-tinted receiving destination context.",
+      "html": "<section class=\"ds-wallet\"><h2>Receiving wallet</h2><p>Seller receiving destination · Arc</p></section>",
+      "css": ".ds-wallet{font-family:Manrope,system-ui,sans-serif;padding:23px;border-radius:16px;border:1px solid rgba(191,224,225,.13);background:linear-gradient(145deg,#bccaf01c,#bccaf008 43%,#b9f3d911);backdrop-filter:blur(24px);color:#f1f6f5}.ds-wallet h2{margin:0;font-size:15px;font-weight:600;line-height:1.5}.ds-wallet p{margin:5px 0 18px;color:#a9b9bd;font-size:13px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Approved dark-glass workspace",
+    "overview": "The approved dark-glass dashboard puts payment records, receiving destinations and merchant configuration in a compact workspace. Charcoal, translucent slate and mint carry the hierarchy; a restrained lavender material distinguishes receiving-wallet context. Manrope and tabular figures keep operational information readable.",
+    "keyCharacteristics": [
+      "Charcoal workspace with translucent slate panels.",
+      "Mint actions and verification states; lavender wallet material.",
+      "Payment records lead, with responsive navigation and horizontal table access."
+    ],
+    "rules": [
+      {
+        "name": "The Evidence Rule",
+        "body": "Status color accompanies a visible status word; verified payment status requires recorded transfer evidence, while wallet ownership is a separate concept.",
+        "section": "colors"
+      },
+      {
+        "name": "The Scoped Material Rule",
+        "body": "Preserve the approved glass and gradients inside this workspace; treat their scope as part of the system.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do preserve the approved glass and gradient material within dashboard scope.",
+      "Do use visible status words with color, tabular amounts and explicit USDC units.",
+      "Do retain keyboard focus, reduced-motion behavior and opaque glass fallbacks."
+    ],
+    "donts": [
+      "Don't apply this dashboard system to landing or checkout without a separate brief.",
+      "Don't turn sample figures, wallet ownership or endpoint counts into balance, identity, delivery or compliance claims.",
+      "Don't add speculative charts or unavailable modules."
+    ]
+  }
+}

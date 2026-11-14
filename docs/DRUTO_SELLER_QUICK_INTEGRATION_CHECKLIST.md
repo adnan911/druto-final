@@ -1,10 +1,10 @@
 # Druto Seller Quick Integration Checklist
 
-Use this checklist to connect a marketplace or online store to Druto and send buyers to the hosted Druto payment page.
+Updated 12 October 2026 for the Cloudflare-hosted `0.2.0-testnet.3` SDK. Scope: Arc Testnet USDC, direct seller wallet, 0% fee, one verified seller per payment. [Package integration evidence and limits](SDK_PACKAGE_INTEGRATION_2026-10-12.md). [Workers receiver fix and independent starter verification](STARTER_INDEPENDENT_INSTALL_2026-10-12.md).
 
 ## 1. Open the Druto dashboard
 
-- [ ] Open the Druto dashboard URL provided by the Druto administrator.
+- [ ] Open [Druto Testnet dashboard](https://druto-d1-testnet.robobq.workers.dev/dashboard).
 - [ ] Click **Connect wallet** and connect the wallet that owns the seller workspace.
 - [ ] Sign the domain-bound, off-chain message.
 - [ ] Confirm that no private key, seed phrase, gas transaction, or USDC transfer is requested for login.
@@ -29,7 +29,7 @@ In **API Keys / Seller setup**, create the seller workspace using stable identif
 
 - [ ] Copy the one-time Druto API key.
 - [ ] Copy the one-time webhook secret.
-- [ ] Store both in your server or Vercel project environment variables.
+- [ ] Store both in your server secret store or Cloudflare Worker secrets.
 - [ ] Never put either value in a `NEXT_PUBLIC_` variable, browser JavaScript, GitHub, screenshots, or chat.
 
 ## 4. Configure environment variables
@@ -38,27 +38,26 @@ In **API Keys / Seller setup**, create the seller workspace using stable identif
 # Server-only
 DRUTO_API_KEY=your_druto_api_key
 DRUTO_WEBHOOK_SECRET=your_druto_webhook_secret
-DRUTO_CHECKOUT_BASE_URL=https://YOUR-DRUTO-DOMAIN
-DRUTO_CREATE_INTENT_ENDPOINT=/api/trpc/payments.createIntent
+DRUTO_BASE_URL=https://druto-d1-testnet.robobq.workers.dev
 
 # Public identifiers and URLs
-NEXT_PUBLIC_DRUTO_MARKETPLACE_ID=your_marketplace_id
-NEXT_PUBLIC_DRUTO_SELLER_ID=your_seller_id
-NEXT_PUBLIC_DRUTO_DASHBOARD_URL=https://YOUR-DRUTO-DOMAIN/dashboard
-NEXT_PUBLIC_SHOP_URL=https://YOUR-SHOP-DOMAIN
+DRUTO_MARKETPLACE_ID=your_marketplace_id
+DRUTO_SELLER_ID=your_seller_id
+DRUTO_MERCHANT_ACCOUNT_ID=your_merchant_account_id
+SHOP_URL=https://YOUR-SHOP-DOMAIN
 ```
 
-`DRUTO_CREATE_INTENT_ENDPOINT` is a fixed Druto route. The `DRUTO_CHECKOUT_BASE_URL` is the root URL of the Druto platform that issued the API key. Do not append the API route to the base URL.
+These names are application configuration; the SDK does not automatically read environment variables. Pass them explicitly below. Worker handlers use their `env` bindings instead of `process.env`. Keep seller routing server-controlled even though the identifiers are not secrets.
 
 ## 5. Install the integration package
 
-For the standalone SDK:
+Download the [SDK ZIP](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.3.zip), compare its SHA-256 against the [checksum](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.3.zip.sha256), and unzip it. In your server project, install the extracted directory:
 
 ```bash
-pnpm add @druto/sdk
+npm install ./druto-sdk
 ```
 
-The API key must be used only from a server route. The browser should call your own `/api/druto/create-payment` route instead of calling Druto directly.
+The package is not published to the npm registry. Use Node.js 20+ or an ESM-capable Worker. The API key must be used only from a server route. The browser calls your own `/api/druto/create-payment` route.
 
 ## 6. Create the server Payment Intent route
 
@@ -67,26 +66,31 @@ Your server route should:
 - [ ] Authenticate or authorize the order request where appropriate.
 - [ ] Recalculate the total from your trusted product catalog.
 - [ ] Reject client-supplied receiving wallets and untrusted totals.
-- [ ] Send `externalOrderId`, `idempotencyKey`, `itemName`, `amount`, `buyerEmail`, `returnUrl`, and the seller identifiers to Druto.
+- [ ] Persist a pending order with immutable server-calculated amount and seller routing before calling Druto.
+- [ ] Send `externalOrderId`, `idempotencyKey`, `itemName`, a decimal-string `amount`, `returnUrl`, and seller identifiers. Optional buyer/shipping data uses the SDK's `orderContext` shape, not a top-level `buyerEmail`.
 - [ ] Keep the API key in the server-side `Authorization: Bearer ...` header.
-- [ ] Return the Druto `checkoutUrl` to the browser without returning secrets.
+- [ ] Bind the returned intent ID to that order before returning the checkout URL. Reuse the same idempotency key after an uncertain response.
 
 Example server-side request shape:
 
 ```ts
+import { Druto } from '@druto/sdk';
+const druto = new Druto({ apiKey: process.env.DRUTO_API_KEY!, baseUrl: process.env.DRUTO_BASE_URL });
+// order and trustedTotal come from authorized, persisted server-side data.
 const session = await druto.createPayment({
-  orderId: order.id,
+  externalOrderId: order.id,
   itemName: order.title,
-  amount: trustedTotal,
-  buyerEmail: order.email,
+  amount: trustedTotal, // decimal string, e.g. '2.00'; no floating-point calculation
   seller: {
-    marketplaceId: process.env.NEXT_PUBLIC_DRUTO_MARKETPLACE_ID!,
-    sellerId: process.env.NEXT_PUBLIC_DRUTO_SELLER_ID!,
+    marketplaceId: process.env.DRUTO_MARKETPLACE_ID!,
+    sellerId: process.env.DRUTO_SELLER_ID!,
+    merchantAccountId: process.env.DRUTO_MERCHANT_ACCOUNT_ID!,
   },
-  returnUrl: `${process.env.NEXT_PUBLIC_SHOP_URL}/orders/${order.id}/paid`,
+  returnUrl: `${process.env.SHOP_URL}/orders/${order.id}`,
   idempotencyKey: `order-${order.id}`,
 });
 
+await bindIntentToOrder(order.id, session.id); // implement with durable DB checks
 return Response.json({ checkoutUrl: session.checkoutUrl });
 ```
 
@@ -99,16 +103,7 @@ async function payWithDruto() {
   const response = await fetch("/api/druto/create-payment", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      orderId: order.id,
-      itemName: order.title,
-      amount: order.total,
-      buyerEmail: order.email,
-      marketplaceId: "your_marketplace_id",
-      sellerId: "your_seller_id",
-      items: order.items,
-      returnUrl: `${window.location.origin}/orders/${order.id}/paid`,
-    }),
+    body: JSON.stringify({ orderId: order.id }),
   });
 
   const session = await response.json();
@@ -122,19 +117,24 @@ async function payWithDruto() {
 
 The expected buyer flow is:
 
-> **Click Pay with Druto → create Payment Intent on your server → redirect to hosted Druto checkout → connect wallet or use QR → approve Arc Testnet USDC transfer.**
+> **Click Pay with Druto → create/bind Payment Intent on your server → hosted checkout → connect a tested Arc Testnet wallet → approve USDC transfer.**
+
+QR/mobile-wallet compatibility requires its own test; do not promise arbitrary-wallet support based on the SDK integration test.
 
 ## 8. Register and implement the webhook
 
 - [ ] Deploy your shop so it has a public HTTPS URL.
 - [ ] Register `https://YOUR-SHOP-DOMAIN/api/webhooks/druto` in the Druto dashboard.
+- [ ] Have the Druto operator allow the exact HTTPS webhook origin; registration alone does not enable every destination.
 - [ ] Save the generated webhook secret.
 - [ ] Read the raw request body before parsing JSON.
 - [ ] Verify the Druto signature with `DRUTO_WEBHOOK_SECRET`.
 - [ ] Reject invalid, expired, or malformed events.
 - [ ] Deduplicate by Druto event ID.
 - [ ] Process `payment.verified` only after signature validation.
-- [ ] Mark the matching order paid or fulfill it exactly once.
+- [ ] Compare intent/order, seller/account, recipient, atomic amount, asset, network and transaction identity with the stored order.
+- [ ] In one transaction, store a unique event ID, change an unpaid order to paid and enqueue one fulfillment job. The fulfillment worker must also be idempotent.
+- [ ] Return 2xx only after durable acceptance. Return non-2xx on a processing failure so Druto retries. See the [SDK webhook example](../sdk/druto-sdk/README.md#verify-payment-before-fulfillment); implement its database helper in your own application.
 - [ ] Do not mark an order paid only because the buyer returned to your site or supplied a transaction hash.
 
 ## 9. Test on Arc Testnet
@@ -145,7 +145,7 @@ The expected buyer flow is:
 - [ ] Create a real small test order from the storefront.
 - [ ] Click **Pay with Druto**.
 - [ ] Confirm the hosted Druto page opens.
-- [ ] Confirm the page shows the exact amount, Arc Testnet, USDC, seller, wallet, and QR option.
+- [ ] Confirm the page shows the exact amount, Arc Testnet, USDC and expected seller wallet.
 - [ ] Approve the transfer from the buyer wallet.
 - [ ] Wait for Druto verification and finality.
 - [ ] Open the transaction in Arcscan.
@@ -156,7 +156,7 @@ The expected buyer flow is:
 ## 10. Before making the shop public
 
 - [ ] Use HTTPS for the shop, webhook, and return URL.
-- [ ] Configure Production variables separately from Preview variables in Vercel.
+- [ ] Separate Cloudflare Testnet configuration/secrets from any future live environment.
 - [ ] Redeploy after changing environment variables.
 - [ ] Rotate any credential that was exposed in a public repository, screenshot, or chat.
 - [ ] Add rate limiting and request validation to your Payment Intent route.
@@ -168,9 +168,9 @@ The expected buyer flow is:
 
 | Symptom | Likely cause | Check |
 |---|---|---|
-| `Unable to create Druto payment` | Missing host or server credential | Check `DRUTO_CHECKOUT_BASE_URL`, `DRUTO_API_KEY`, and the server logs |
+| `Unable to create Druto payment` | Missing host or server credential | Check explicitly passed `baseUrl`, `apiKey`, and sanitized server errors |
 | `Seller is not onboarded or active` | Seller account is missing, pending, or unverified | Complete wallet ownership verification and activation in Druto |
-| No wallet or QR option appears | The hosted checkout was never opened | Confirm the server returned `checkoutUrl` and the browser redirects to it |
+| Wallet connection does not appear | Unsupported provider, network or wrong page | Confirm hosted checkout, supported extension and Arc Testnet; QR support is a separate test |
 | Webhook returns 401/400 | Wrong secret, parsed body, or invalid signature handling | Use the exact one-time webhook secret and verify the raw body |
 | Payment appears twice | Missing idempotency or event deduplication | Use a stable order idempotency key and store processed event IDs |
 | Buyer return says paid but dashboard is not paid | Browser return was trusted | Wait for Druto’s verified event and onchain reconciliation |

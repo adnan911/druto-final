@@ -6,7 +6,7 @@ export const druto = new DrutoCheckout({
   asset: "USDC",
   checkoutBaseUrl: process.env.DRUTO_CHECKOUT_BASE_URL!,
   createPayment: async (request: PaymentIntentRequest): Promise<PaymentSession> => {
-    const endpoint = process.env.DRUTO_CREATE_INTENT_ENDPOINT ?? "/api/trpc/payments.createIntent";
+    const endpoint = new URL(process.env.DRUTO_CREATE_INTENT_ENDPOINT ?? "/api/trpc/payments.createIntent", requireServerEnv("DRUTO_CHECKOUT_BASE_URL"));
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {

@@ -1,21 +1,36 @@
 // Ledger Light reminder: editorial Swiss structure, warm white surfaces, graphite text, cobalt actions, Druto Sea Glass finality, IBM Plex Mono for identifiers, and restrained motion.
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { getDashboardDateRangeStart, isWithinDashboardDateRange, type DashboardDateRange } from "@/lib/dashboardFilters";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../server/routers";
 import { Link, useLocation } from "wouter";
 import { buildMarketplaceCheckoutPayload, calculateMarketplaceTotals, getNextMarketplaceCheckout, parseMarketplaceOrderContext, prepareMarketplaceSellerPayments, MarketplacePaymentQueueError, splitMarketplaceCartBySeller, updateMarketplaceQuantity, type MarketplaceCartLine, type MarketplacePaymentQueue } from "@/lib/marketplace";
 import { developerSdkSnippet } from "@/lib/developer";
 import AccountLoginCard from "@/components/AccountLoginCard";
+import DashboardOverview from "@/components/DashboardOverview";
+import DashboardWallets from "@/components/DashboardWallets";
+import DashboardWebhooks from "@/components/DashboardWebhooks";
+import DashboardDevelopers from "@/components/DashboardDevelopers";
+import FluidSurface from "@/components/FluidSurface";
+import { useDashboardTheme } from "@/lib/dashboardTheme";
+import "@/styles/dashboard-theme.css";
 import ApiKeyManager from "@/components/ApiKeyManager";
 import SellerOnboarding from "@/components/SellerOnboarding";
 import WalletConnectButton from "@/components/WalletConnectButton";
 import { buildReceiptSummary, copyReceiptValue, truncateHash } from "@/lib/receipt";
+import { safeMarketplaceReturnUrl } from "@/lib/checkoutLinks";
 import { dashboardAccessState } from "@/lib/access";
-import { ARC_CHAIN_ID, ARC_CHAIN_ID_HEX, ARC_RPC_URL, ARC_USDC_ADDRESS, CIRCLE_FAUCET_URL, fetchArcUsdcBalance, encodeArcUsdcTransfer } from "@/lib/arcChain";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { ARC_CHAIN_ID, ARC_CHAIN_ID_HEX, ARC_RPC_URL, ARC_TESTNET_EXPLORER_URL, ARC_USDC_ADDRESS, CIRCLE_FAUCET_URL, fetchArcUsdcBalance, encodeArcUsdcTransfer } from "@/lib/arcChain";
 import { toast } from "sonner";
-import { usePrivy } from "@privy-io/react-auth";
-import { useAccount, useConnect, useSignMessage } from "wagmi";
+import { signPaymentConfirmation } from "@/lib/paymentProof";
+import { checkoutWalletError } from "@/lib/walletError";
+import QRCode from "qrcode";
+const DevDashboardPreview = import.meta.env.DEV ? lazy(() => import("@/dev/DashboardPreview")) : null;
+const D1_WALLET_ONLY = import.meta.env.VITE_D1_WALLET_ONLY === "true";
 import {
-  Activity, AlertCircle, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, ChevronUp, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileCheck2, FileText, Gauge, GitBranch, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, ListFilter, LockKeyhole, LogOut, Mail, MapPin, Menu, MoreHorizontal, Network, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Rocket, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Terminal, Timer, TrendingUp, UserRound, UsersRound, Wallet, WalletCards, X, Zap
+  Activity, AlertCircle, AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Bell, BookOpen, Box, Check, ChevronDown, ChevronUp, CircleDollarSign, Clipboard, Code2, Copy, CreditCard, Database, ExternalLink, FileText, Gauge, HelpCircle, Home as HomeIcon, KeyRound, Layers, LayoutGrid, LifeBuoy, Link2, LockKeyhole, LogOut, Mail, MapPin, Menu, Moon, Sun, MoreHorizontal, PauseCircle, Plus, Printer, ReceiptText, RefreshCw, Rocket, Search, Send, Settings2, ShieldCheck, Sparkles, Table2, Timer, TrendingUp, UserRound, UsersRound, Wallet, WalletCards, X, Zap
 } from "lucide-react";
 
 const logo = "/DRUTO_D_logo.svg";
@@ -23,6 +38,7 @@ const logoFull = "/druto_logo_full.png";
 const heroVisual = "/manus-storage/druto-editorial-network_c7fbc025.jpg";
 const flowVisual = "/manus-storage/druto-payment-flow_17da128c.jpg";
 const settleVisual = "/manus-storage/druto-settlement-abstract_ac9457d1.jpg";
+type VerifiedPaymentRow = inferRouterOutputs<AppRouter>["payments"]["verifiedPaymentsPage"]["items"][number];
 
 export interface ModuleToggles {
   paymentLinks: boolean;
@@ -81,14 +97,6 @@ function Mark({ full = false }: { full?: boolean }) {
   return <img src={full ? logoFull : logo} alt="Druto" className={full ? "brand-logo-full" : "brand-mark"} />;
 }
 
-function privyIdentityLabel(privyUser: ReturnType<typeof usePrivy>["user"]) {
-  if (!privyUser) return null;
-  if (privyUser.email?.address) return privyUser.email.address;
-  if (privyUser.google?.email || privyUser.google?.name) return privyUser.google.email ?? privyUser.google.name;
-  if (privyUser.github?.username || privyUser.github?.email) return privyUser.github.username ?? privyUser.github.email;
-  return null;
-}
-
 function ProfileEditModal({ user, onClose }: { user: { name?: string | null; profileImage?: string | null }; onClose: () => void }) {
   const [name, setName] = useState(user.name || "");
   const [profileImage, setProfileImage] = useState(user.profileImage || "");
@@ -108,103 +116,41 @@ function ProfileEditModal({ user, onClose }: { user: { name?: string | null; pro
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div className="card" onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: "400px", padding: "20px" }}>
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent aria-describedby={undefined} className="dashboard-payment-detail max-h-[90dvh] overflow-y-auto sm:max-w-[400px]">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          <h3 style={{ margin: 0 }}>Edit Profile</h3>
-          <button className="icon-button" onClick={onClose}><X size={16} /></button>
+          <DialogTitle>Edit Profile</DialogTitle>
         </div>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <div>
-            <label style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }}>Name</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
+            <label htmlFor="profile-name" style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }}>Name</label>
+            <input id="profile-name" type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
           </div>
           <div>
-            <label style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }}>Profile Image URL</label>
-            <input type="text" value={profileImage} onChange={e => setProfileImage(e.target.value)} placeholder="https://example.com/avatar.png" style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
+            <label style={{ display: "block", fontSize: "12px", marginBottom: "4px", color: "var(--text-secondary)" }} htmlFor="profile-image">Profile Image URL</label>
+            <input id="profile-image" type="url" value={profileImage} onChange={e => setProfileImage(e.target.value)} placeholder="https://example.com/avatar.png" style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid var(--border-subtle, #d3e1d8)" }} />
           </div>
           <button type="submit" className="button button-primary" disabled={updateProfile.isPending} style={{ marginTop: "8px", justifyContent: "center" }}>
             {updateProfile.isPending ? "Saving..." : "Save Changes"}
           </button>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggles }: { active: string; setActive: (value: string) => void; collapsed: boolean; setCollapsed: (value: boolean) => void; user: { name?: string | null; openId?: string | null; profileImage?: string | null }; moduleToggles: ModuleToggles }) {
-  const { user: privyUser, authenticated: privyAuthenticated, logout: privyLogout } = usePrivy();
+function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggles, onExitPreview, mobileOpen = false, onCloseMobile }: { mobileOpen?: boolean; onCloseMobile?: () => void; onExitPreview?: () => void; active: string; setActive: (value: string) => void; collapsed: boolean; setCollapsed: (value: boolean) => void; user: { name?: string | null; openId?: string | null; profileImage?: string | null }; moduleToggles: ModuleToggles }) {
   const drutoLogout = trpc.auth.logout.useMutation();
-  const createChallenge = trpc.auth.createWalletChallenge.useMutation();
-  const bindWallet = trpc.auth.bindWallet.useMutation();
   const utils = trpc.useUtils();
   const [profileOpen, setProfileOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [isBinding, setIsBinding] = useState(false);
-  const isPrivy = user.openId?.startsWith("privy:") === true;
-  const identity = isPrivy ? privyIdentityLabel(privyUser) : null;
-  const { address, isConnected } = useAccount();
-  const { connectAsync, connectors } = useConnect();
-  const { signMessageAsync } = useSignMessage();
-
-  const navGroups = useMemo(() => [
-    {
-      label: "Operate",
-      items: [
-        "Overview",
-        "Payments",
-        ...(moduleToggles.paymentLinks ? ["Payment Links"] : []),
-        ...(moduleToggles.invoices ? ["Invoices"] : []),
-        ...(moduleToggles.subscriptions ? ["Subscriptions"] : []),
-      ],
-    },
-    {
-      label: "Understand",
-      items: [
-        "Customers",
-        "Balances",
-        "Settlements",
-        ...(moduleToggles.reports ? ["Reports"] : []),
-      ],
-    },
-    {
-      label: "Control",
-      items: ["Risk & compliance", "Developers", "API Keys", "Settings"],
-    },
-  ], [moduleToggles]);
-
-  const handleBindWallet = async () => {
-    setIsBinding(true);
-    try {
-      let activeAddress = address;
-      if (!isConnected || !activeAddress) {
-        const connector = connectors[0];
-        if (!connector) throw new Error("No EVM wallet detected (e.g. MetaMask).");
-        const connectResult = await connectAsync({ connector });
-        activeAddress = connectResult.accounts[0];
-      }
-      if (!activeAddress) throw new Error("Could not detect wallet address.");
-      const challenge = await createChallenge.mutateAsync({ walletAddress: activeAddress });
-      const signature = await signMessageAsync({ message: challenge.message });
-      await bindWallet.mutateAsync({
-        challengeId: challenge.challengeId,
-        walletAddress: activeAddress,
-        signature,
-      });
-      await utils.auth.me.invalidate();
-      toast.success(`Wallet ${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)} bound to your account!`);
-      setProfileOpen(false);
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Failed to bind wallet");
-    } finally {
-      setIsBinding(false);
-    }
-  };
-
+  const navGroups = [
+    { label: "Workspace", items: ["Overview", "Payments", "Sellers"] },
+    { label: "Manage", items: ["Receiving wallets", "Developers", "API Keys", "Webhooks", "Settings"] },
+  ];
   const logout = async () => {
+    if (onExitPreview) return onExitPreview();
     try {
-      if (privyAuthenticated) await privyLogout();
       await drutoLogout.mutateAsync();
       utils.auth.me.setData(undefined, null);
       window.location.href = "/dashboard";
@@ -212,17 +158,17 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggl
       toast.error(error instanceof Error ? error.message : "Could not log out");
     }
   };
-  return <aside className={classNames("sidebar", collapsed && "sidebar-collapsed")}>
+  return <aside id="druto-dashboard-sidebar" aria-label="Main navigation" className={classNames("sidebar", collapsed && "sidebar-collapsed", mobileOpen && "dashboard-mobile-open")}>
     <div className="brand-row">
       <div className="brand-lockup">
-        <Mark full={!collapsed} />
+        <Mark /><span className="dg-brand-name">Druto</span>
       </div>
-      <button className="icon-button sidebar-toggle" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle navigation">
-        <Menu size={17} />
+      <button className="icon-button sidebar-toggle" onClick={() => mobileOpen ? onCloseMobile?.() : setCollapsed(!collapsed)} aria-label={mobileOpen ? "Close navigation" : "Toggle navigation"}>
+        {mobileOpen ? <X size={17} /> : <Menu size={17} />}
       </button>
     </div>
-    <div className="environment-switch"><span className="live-dot" /> <span>Test environment</span><ChevronDown size={13} /></div>
-    <nav className="side-nav">{navGroups.map(group => <div key={group.label} className="nav-group"><div className="nav-label">{group.label}</div>{group.items.map(item => <button key={item} onClick={() => item === "Developers" ? window.location.href = "/developers" : setActive(item)} className={classNames("nav-item", active === item && "nav-active")}><NavIcon item={item} /><span>{item}</span></button>)}</div>)}</nav>
+    <div className="environment-switch"><span className="dg-workspace-avatar">DR</span><span className="dg-workspace-copy"><strong>{onExitPreview ? "Demo workspace" : user.name || "My workspace"}</strong><small>Arc Testnet · USDC</small></span></div>
+    <nav className="side-nav"><FluidSurface value={active} selector='[aria-current="page"]' className="dg-fluid-navigation">{navGroups.map(group => <div key={group.label} className="nav-group"><div className="nav-label">{group.label}</div>{group.items.map(item => <button key={item} onClick={() => setActive(item)} aria-current={active === item ? "page" : undefined} className={classNames("nav-item", active === item && "nav-active")}><NavIcon item={item} /><span>{item}</span></button>)}</div>)}</FluidSurface></nav>
     <div className="sidebar-bottom">
       <button className={classNames("nav-item", active === "Support" && "nav-active")} onClick={() => setActive("Support")}><LifeBuoy size={17} /><span>Support & Guides</span></button>
       <div className={classNames("profile-wrap", profileOpen && "profile-open")}>
@@ -232,22 +178,16 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggl
           </div>
           <div className="user-meta">
             <strong>{user.name || "Workspace"}</strong>
-            <span>{isPrivy ? "Signed in with Privy" : "Workspace owner"}</span>
+            <span>{onExitPreview ? "Sample account" : "Signed-in account"}</span>
           </div>
           <MoreHorizontal size={16} />
         </button>
         {profileOpen && <div className="profile-menu">
-          {identity && (
-            <div className="profile-menu-heading">
-              <strong>{isPrivy ? "Signed in with Privy" : "Signed in"}</strong>
-              <span>{identity}</span>
-            </div>
-          )}
           <button className="profile-logout" onClick={() => { setEditModalOpen(true); setProfileOpen(false); }} style={{ borderBottom: "1px solid var(--border-subtle, rgba(0,0,0,0.08))", marginBottom: "0.25rem", borderRadius: "0", color: "inherit" }}>
             <Settings2 size={15} /> Edit Profile
           </button>
           <button className="profile-logout" onClick={() => void logout()} disabled={drutoLogout.isPending}>
-            <LogOut size={15} />{drutoLogout.isPending ? "Logging out…" : "Logout"}
+            <LogOut size={15} />{onExitPreview ? "Exit preview" : drutoLogout.isPending ? "Logging out…" : "Sign out"}
           </button>
         </div>}
       </div>
@@ -257,188 +197,108 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggl
 }
 
 function NavIcon({ item }: { item: string }) {
-  const icons: Record<string, any> = { Overview: HomeIcon, Payments: CreditCard, "Payment Links": Link2, Invoices: ReceiptText, Subscriptions: RefreshCw, Customers: UsersRound, Balances: WalletCards, Settlements: Send, Reports: Table2, "Risk & compliance": ShieldCheck, Developers: Code2, "API Keys": KeyRound, Settings: Settings2 };
+  const icons: Record<string, any> = { Overview: LayoutGrid, Payments: CreditCard, Sellers: UsersRound, "Receiving wallets": WalletCards, "Payment Links": Link2, Invoices: ReceiptText, Subscriptions: RefreshCw, Customers: UsersRound, "Seller transfers": WalletCards, "Direct settlement": Send, Reports: Table2, "Risk controls & limitations": ShieldCheck, Webhooks: Activity, Developers: Code2, "API Keys": KeyRound, Settings: Settings2 };
   const Icon = icons[item] || Box; return <Icon size={17} />;
 }
 
-function Topbar({ title, onCreate }: { title: string; onCreate: () => void }) {
-  let privy: any = null;
-  try {
-    privy = usePrivy();
-  } catch {
-    privy = null;
-  }
+function Topbar({ title, onCreate, onExitPreview, overview, onSearch, onOpenNavigation, theme, onToggleTheme }: {
+  title: string; onCreate: () => void; onExitPreview?: () => void; overview?: boolean; onSearch: () => void; onOpenNavigation: () => void; theme: "light" | "dark"; onToggleTheme: () => void;
+}) {
   const logout = trpc.auth.logout.useMutation();
   const utils = trpc.useUtils();
-  const syncMutation = trpc.payments.syncArcPayments.useMutation();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleSyncArcScan = async () => {
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true);
     try {
-      const res = await syncMutation.mutateAsync();
-      await utils.payments.summary.invalidate();
-      await utils.payments.verifiedPayments.invalidate();
-      if (res.newlySynced > 0) {
-        toast.success(`Synced ${res.newlySynced} new payment${res.newlySynced === 1 ? "" : "s"} from ArcScan!`);
-      } else {
-        toast.info(`ArcScan sync complete (${res.scannedCount} recent transfers scanned, all up-to-date)`);
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "ArcScan sync failed");
-    }
+      await Promise.all([utils.payments.listIntents.invalidate(), utils.payments.verifiedPayments.invalidate(), utils.payments.verifiedPaymentsPage.invalidate(), utils.payments.summary.invalidate(), utils.merchantAccounts.listMine.invalidate(), utils.merchantAccounts.webhookConsole.invalidate()]);
+    } finally { setRefreshing(false); }
   };
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await utils.payments.summary.invalidate();
-      await utils.payments.verifiedPayments.invalidate();
-      toast.success("Live Arc activity refreshed");
-    } finally {
-      setTimeout(() => setIsRefreshing(false), 500);
-    }
-  };
-
   const disconnect = async () => {
+    if (onExitPreview) return onExitPreview();
     try {
-      if (privy?.authenticated) await privy.logout();
-    } catch (e) {
-      console.error("Privy logout failed", e);
-    }
-    await logout.mutateAsync();
-    utils.auth.me.setData(undefined, null);
-    window.location.href = "/";
+      await logout.mutateAsync();
+      utils.auth.me.setData(undefined, null);
+      window.location.href = "/dashboard";
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not sign out. Try again."); }
   };
-
-  return (
-    <header className="topbar">
-      <div className="topbar-title">
-        <div className="breadcrumb">Workspace <span>/</span> Operations</div>
-        <h1>{title}</h1>
-      </div>
-      <div className="topbar-actions">
-        <div className="search-field">
-          <Search size={15} />
-          <input placeholder="Search anything" aria-label="Search" />
-          <kbd>⌘ K</kbd>
-        </div>
-        <button
-          className="icon-button"
-          title="Refresh"
-          aria-label="Refresh"
-          onClick={handleRefresh}
-        >
-          <RefreshCw size={17} className={isRefreshing ? "animate-spin" : ""} />
-        </button>
-        <button
-          className="button button-sync-light"
-          onClick={handleSyncArcScan}
-          disabled={syncMutation.isPending}
-          title="Sync latest onchain ArcScan transfers"
-        >
-          {syncMutation.isPending ? "Syncing Arc…" : "Sync ArcScan"}
-        </button>
-        <button className="icon-button" title="Notifications" aria-label="Notifications">
-          <Bell size={17} />
-          <i className="notification-dot" />
-        </button>
-        <WalletConnectButton />
-        <button className="button button-quiet" onClick={() => void disconnect()} disabled={logout.isPending}>
-          {logout.isPending ? "Signing out…" : "Sign out"}
-        </button>
-      </div>
-    </header>
-  );
-}
-
-function Overview({ setActive, onCreate }: { setActive: (v: string) => void; onCreate: () => void }) {
-  const [period, setPeriod] = useState("Last 30 days");
-  const utils = trpc.useUtils();
-  const summary = trpc.payments.summary.useQuery(undefined, { refetchInterval: 5000 });
-  const liveIntents = trpc.payments.verifiedPayments.useQuery(undefined, { refetchInterval: 5000 });
-
-  const latestSale = [...(liveIntents.data ?? [])].sort(
-    (a, b) => new Date(b.finalizedAt ?? b.createdAt ?? Date.now()).getTime() - new Date(a.finalizedAt ?? a.createdAt ?? Date.now()).getTime()
-  )[0];
-
-  return (
-    <div className="page-content overview-page">
-      <div className="live-ledger-strip">
-        <div>
-          <span className="eyebrow"><span className="live-dot" /> Live Arc ledger</span>
-          <strong>{summary.data ? `$${summary.data.availableUsdc} USDC` : "No verified USDC yet"}</strong>
-          <small>{summary.data ? `${summary.data.successfulCount} verified · ${summary.data.pendingCount} pending` : "Create a Payment Intent to begin a testnet payment"}</small>
-        </div>
-        <div>
-          <span className="eyebrow">Latest sold item</span>
-          <strong>{latestSale?.itemName ?? "Awaiting first sale"}</strong>
-          <small>{latestSale ? `Succeeded · ${Number(latestSale.amountAtomic) / 1_000_000} USDC · ${latestSale.transactionHash.slice(0, 10)}…` : "Seller activity will appear here after verification"}</small>
-        </div>
-      </div>
-
-      <section className="metric-grid"><Metric label="Gross payments" value={summary.data ? `$${summary.data.grossUsdc}` : "—"} delta={summary.data ? `${summary.data.totalCount} intents` : "Awaiting verified data"} positive icon={<ArrowUpRight size={14} />} /><Metric label="Successful payments" value={summary.data && summary.data.totalCount > 0 ? `${Math.round((summary.data.successfulCount / summary.data.totalCount) * 100)}%` : "—"} delta={summary.data ? `${summary.data.successfulCount} verified` : "Awaiting first verified payment"} positive icon={<TrendingUp size={14} />} /><Metric label="Available balance" value={summary.data ? `$${summary.data.availableUsdc}` : "—"} delta="USDC · verified only" icon={<WalletCards size={14} />} /><Metric label="To settle" value={summary.data ? `$${summary.data.availableUsdc}` : "—"} delta="Verified USDC only" icon={<Send size={14} />} /></section>
-    <section className="overview-grid"><div className="card revenue-card"><div className="card-heading"><div><span className="eyebrow">{summary.data ? "Verified volume" : "Demo visual · awaiting verified activity"}</span><h3>Payment activity</h3></div><button className="select-button" onClick={() => setPeriod(period === "Last 30 days" ? "Last 7 days" : "Last 30 days")}>{period}<ChevronDown size={14} /></button></div>{!summary.data?.successfulCount && <div className="chart-empty-state"><div className="empty-icon"><TrendingUp size={18} /></div><strong>No verified activity yet</strong><span>Complete an Arc Testnet USDC checkout to populate this analytics view.</span></div>}<div className="chart-wrap" style={{ display: summary.data?.successfulCount ? undefined : "none" }}><div className="chart-y"><span>{summary.data ? `$${summary.data.grossUsdc}` : "—"}</span><span>{summary.data ? `$${summary.data.pendingUsdc}` : "—"}</span><span>USDC</span><span>0</span></div><div className="chart"><div className="chart-grid"><i /><i /><i /><i /></div><svg viewBox="0 0 700 210" preserveAspectRatio="none" aria-label="Payment activity chart"><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#1e9b83" stopOpacity=".26" /><stop offset="1" stopColor="#1e9b83" stopOpacity="0" /></linearGradient></defs><path d="M0,175 C42,166 58,128 96,145 S151,102 190,123 S240,96 275,109 S321,49 358,82 S407,72 438,98 S489,58 520,68 S570,24 604,56 S661,28 700,38 L700,210 L0,210 Z" fill="url(#chartFill)" /><path d="M0,175 C42,166 58,128 96,145 S151,102 190,123 S240,96 275,109 S321,49 358,82 S407,72 438,98 S489,58 520,68 S570,24 604,56 S661,28 700,38" fill="none" stroke="#1e9b83" strokeWidth="3" /></svg><div className="chart-x"><span>01 Aug</span><span>08 Aug</span><span>15 Aug</span><span>22 Aug</span><span>Today</span></div></div></div><div className="chart-summary"><span><i className="legend-dot sea" /> Verified payments <strong>{summary.data ? `$${summary.data.grossUsdc}` : "—"}</strong></span><span><i className="legend-dot blue" /> Platform fees <strong>N/A</strong></span><span className="chart-summary-note">{summary.data ? "Verified Arc activity" : "Demo visual only · no live transfers yet"}</span></div></div><div className="card flow-card"><div className="card-heading"><div><span className="eyebrow">Settlement rail</span><h3>Payment flow</h3></div></div><div className="simple-flow-list"><div className="simple-flow-row"><div className="simple-flow-num">01</div><div className="simple-flow-info"><strong>Request</strong><small>{summary.data ? `${summary.data.totalCount} intents` : "Ready"}</small></div><span className="simple-flow-tag">Intent</span></div><div className="simple-flow-divider" /><div className="simple-flow-row"><div className="simple-flow-num">02</div><div className="simple-flow-info"><strong>Verify</strong><small>{summary.data ? `${summary.data.successfulCount} verified` : "Instant"}</small></div><span className="simple-flow-tag">Arc L1</span></div><div className="simple-flow-divider" /><div className="simple-flow-row"><div className="simple-flow-num">03</div><div className="simple-flow-info"><strong>Settle</strong><small>{summary.data ? `$${summary.data.availableUsdc} USDC` : "$0.00"}</small></div><span className="simple-flow-tag">Liquid</span></div></div></div></section>
-    <section className="lower-grid"><div className="card table-card"><div className="card-heading"><div><span className="eyebrow">Latest activity</span><h3>Recent payments</h3></div><button className="text-button" onClick={() => setActive("Payments")}>View all <ArrowUpRight size={14} /></button></div><PaymentTable compact /></div><div className="card queue-card"><div className="card-heading"><div><span className="eyebrow">Live operations</span><h3>Operations queue</h3></div></div>{summary.data?.pendingCount ? <QueueItem icon={<RefreshCw />} title="Payment verification pending" detail={`${summary.data.pendingCount} intent${summary.data.pendingCount === 1 ? "" : "s"} awaiting Arc confirmation`} action="Open payments" tone="warning" /> : <div className="queue-empty"><ShieldCheck size={17} /><span>No live operations items from verified Arc data.</span></div>}</div></section>
+  return <header className="topbar">
+    <div className="topbar-title">
+      <button type="button" className="icon-button dg-mobile-menu" aria-label="Open navigation" aria-controls="druto-dashboard-sidebar" onClick={onOpenNavigation}><Menu size={18} /></button>
+      <div className="breadcrumb">Workspace <span>/</span> <strong>{title}</strong></div>
+      {!overview && title !== "Webhooks" && title !== "API Keys" && title !== "Developers" && <h1>{title}</h1>}
     </div>
-  );
+    <div className="topbar-actions">
+      <span className="dg-environment">{onExitPreview ? "Demo workspace" : "Arc Testnet"}</span>
+      <button type="button" className="icon-button dg-theme-toggle" onClick={onToggleTheme} aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}>
+        {theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
+      </button>
+      <button className="dg-header-search" onClick={onSearch}><Search size={15} />Search payments<kbd>Ctrl K</kbd></button>
+      <button type="button" className="icon-button" aria-label="Refresh dashboard" onClick={() => void refresh()} disabled={refreshing}><RefreshCw size={17} className={refreshing ? "animate-spin" : undefined} /></button>
+      <button className="button button-quiet" onClick={() => void disconnect()} disabled={logout.isPending}>{onExitPreview ? "Exit preview" : logout.isPending ? "Signing out…" : "Sign out"}</button>
+    </div>
+  </header>;
 }
 
 function Metric({ label, value, delta, positive, icon }: { label: string; value: string; delta: string; positive?: boolean; icon?: React.ReactNode }) { return <div className="metric-card"><div className="metric-top"><span>{label}</span></div><strong>{value}</strong><div className={classNames("metric-delta", positive && "positive")}>{positive && <ArrowUpRight size={13} />}{delta}</div></div>; }
 function FlowStep({ n, label, value, done }: { n: string; label: string; value: string; done?: boolean }) { return <div className="flow-step"><span className={classNames("flow-number", done && "flow-done")}>{done ? <Check size={12} /> : n}</span><span><strong>{label}</strong><small>{value}</small></span></div>; }
-function QueueItem({ icon, title, detail, action, tone }: { icon: React.ReactNode; title: string; detail: string; action: string; tone: string }) { return <div className="queue-item"><span className={classNames("queue-icon", `queue-${tone}`)}>{icon}</span><span className="queue-copy"><strong>{title}</strong><small>{detail}</small></span><button className="small-link" onClick={() => toast.info(`${action} is available in the full operations console.`)}>{action}</button></div>; }
+function QueueItem({ icon, title, detail, action, tone, onAction }: { icon: React.ReactNode; title: string; detail: string; action: string; tone: string; onAction: () => void }) { return <div className="queue-item"><span className={classNames("queue-icon", `queue-${tone}`)}>{icon}</span><span className="queue-copy"><strong>{title}</strong><small>{detail}</small></span><button className="small-link" onClick={onAction}>{action}</button></div>; }
 
-function PaymentTable({ compact = false }: { compact?: boolean }) {
-  const liveQuery = trpc.payments.verifiedPayments.useQuery(undefined, { refetchInterval: 5000 });
-  const liveRows = (liveQuery.data ?? []).map(row => ({ id: row.paymentIntentId, customer: row.itemName, amount: `$${(Number(row.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, status: "Verified", time: new Date(row.finalizedAt ?? row.createdAt ?? Date.now()).toLocaleString(), hash: row.transactionHash, tone: "success", verified: true }));
-  const rows = liveRows;
-  return <div className="table-wrap"><table><thead><tr><th>Payment</th><th>Customer / item</th><th>Amount</th><th>Status</th><th>Received</th></tr></thead><tbody>{rows.slice(0, compact ? 4 : rows.length).map(row => <tr key={row.id}><td><span className="mono-id">{row.id}</span><small className="table-sub"><span className="mini-arc" />{row.hash}</small></td><td>{row.customer}</td><td className="amount-cell">{row.amount}<small>USDC</small></td><td><StatusPill status={row.status} tone={row.tone} verified={row.verified} txHash={row.hash} /></td><td className="muted-cell">{row.time}</td></tr>)}</tbody></table></div>;
+function PaymentTable({ compact = false, useExternalData = false, rows: suppliedRows, loading: suppliedLoading, error: suppliedError, onRetry }: { compact?: boolean; useExternalData?: boolean; rows?: VerifiedPaymentRow[]; loading?: boolean; error?: unknown; onRetry?: () => void }) {
+  const ownQuery = trpc.payments.verifiedPaymentsPage.useQuery({ limit: compact ? 4 : 25 }, { enabled: !useExternalData });
+  const rows = suppliedRows ?? ownQuery.data?.items ?? [];
+  const loading = suppliedLoading ?? ownQuery.isLoading;
+  const error = suppliedError ?? ownQuery.error;
+  const retry = onRetry ?? (() => void ownQuery.refetch());
+  const visibleRows = compact ? rows.slice(0, 4) : rows;
+
+  if (error && rows.length === 0) return <div className="dashboard-data-message is-error" role="alert"><span>Verified payments could not be loaded.</span><button className="small-link" onClick={retry}>Try again</button></div>;
+  if (loading && rows.length === 0) return <div className="dashboard-data-message" role="status">Loading verified payments…</div>;
+  if (!loading && !error && rows.length === 0) return <div className="history-empty"><div className="empty-icon"><Search size={19} /></div><h3>No verified Arc transfers yet</h3><p>Complete an Arc Testnet USDC checkout to see its verified transfer here.</p></div>;
+
+  return <div className="table-wrap">{error && <div className="dashboard-data-message is-error" role="alert"><span>Showing saved data. Refresh failed.</span><button className="small-link" onClick={retry}>Retry</button></div>}<table><thead><tr><th>Payment</th><th>Buyer / item</th><th>Amount</th><th>Status</th><th>Received</th></tr></thead><tbody>{visibleRows.map(row => {
+    const created = new Date(row.finalizedAt ?? row.createdAt);
+    const buyer = row.buyerLabel || (row.fromAddress ? `${row.fromAddress.slice(0, 8)}…${row.fromAddress.slice(-6)}` : "Wallet buyer");
+    return <tr key={row.paymentIntentId}><td><span className="mono-id">{row.paymentIntentId}</span><small className="table-sub"><span className="mini-arc" />{row.transactionHash}</small></td><td><div className="buyer-item-cell"><span>{buyer}</span><small>{row.itemName || "—"}</small></div></td><td className="amount-cell">${(Number(row.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2 })}<small>USDC</small></td><td><StatusPill status="Verified" tone="success" verified txHash={row.transactionHash} /></td><td className="muted-cell">{Number.isFinite(created.getTime()) ? created.toLocaleString() : "—"}</td></tr>;
+  })}</tbody></table></div>;
 }
 
 function TransactionHistory() {
-  const [dateRange, setDateRange] = useState("All dates");
-  const [status, setStatus] = useState("All statuses");
-  const [method, setMethod] = useState("All methods");
-  const [sortKey, setSortKey] = useState<"date" | "amount" | "status" | "method">("date");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [dateRange, setDateRange] = useState<DashboardDateRange>("All dates");
+  const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const liveQuery = trpc.payments.verifiedPayments.useQuery();
-  const liveRows = (liveQuery.data ?? []).map(row => {
-    const created = new Date(row.finalizedAt ?? row.createdAt ?? Date.now());
-    return { id: row.paymentIntentId, date: created.toISOString().slice(0, 10), time: created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), customer: row.itemName, amount: Number(row.amountAtomic) / 1_000_000, status: "Succeeded", method: "Wallet transfer", hash: row.transactionHash, network: "Arc Testnet", tone: "success" };
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchQuery(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  const fromTimestamp = useMemo(() => getDashboardDateRangeStart(dateRange), [dateRange]);
+  const liveQuery = trpc.payments.verifiedPaymentsPage.useInfiniteQuery(
+    { limit: 25, fromTimestamp, search: searchQuery || undefined },
+    { getNextPageParam: lastPage => lastPage.nextCursor ?? undefined },
+  );
+  const liveRows = liveQuery.data?.pages.flatMap(page => page.items) ?? [];
+  const rows = liveRows.map(row => {
+    const rawCreatedAt = row.finalizedAt ?? row.createdAt;
+    const created = rawCreatedAt instanceof Date ? rawCreatedAt : new Date(rawCreatedAt);
+    const timestamp = created.getTime();
+    const buyer = row.buyerLabel || (row.fromAddress ? `${row.fromAddress.slice(0, 8)}…${row.fromAddress.slice(-6)}` : "Wallet buyer");
+    return { id: row.paymentIntentId, dbId: row.id, date: created.toLocaleDateString(), time: created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), timestamp, buyer, itemName: row.itemName || "—", amount: Number(row.amountAtomic) / 1_000_000, status: "Verified", method: "Wallet transfer", hash: row.transactionHash, fromAddress: row.fromAddress ?? "", tone: "success" };
   });
-  const rows = liveRows;
-
-  const filteredRows = useMemo(() => {
-    const filtered = rows.filter(row => {
-      const dateMatch = dateRange === "All dates" || (dateRange === "Today" ? row.date === "2026-08-21" : dateRange === "Last 7 days" ? row.date >= "2026-08-15" : row.date >= "2026-08-01");
-      return dateMatch && (status === "All statuses" || row.status === status) && (method === "All methods" || row.method === method);
-    });
-    return [...filtered].sort((a, b) => {
-      let comparison = 0;
-      if (sortKey === "amount") comparison = a.amount - b.amount;
-      else if (sortKey === "date") comparison = `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`);
-      else if (sortKey === "status") comparison = a.status.localeCompare(b.status);
-      else comparison = a.method.localeCompare(b.method);
-      return sortDirection === "asc" ? comparison : -comparison;
-    });
-  }, [dateRange, status, method, sortKey, sortDirection, liveQuery.data]);
-
-  const updateSort = (key: "date" | "amount" | "status" | "method") => {
-    if (sortKey === key) setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDirection(key === "date" ? "desc" : "asc"); }
-  };
-  const reset = () => { setDateRange("All dates"); setStatus("All statuses"); setMethod("All methods"); };
-  const sortIcon = (key: string) => sortKey === key ? (sortDirection === "asc" ? "↑" : "↓") : "↕";
+  const filteredRows = useMemo(() => [...rows].filter(row => isWithinDashboardDateRange(row.timestamp, dateRange))
+    .sort((a, b) => b.timestamp - a.timestamp || b.dbId - a.dbId), [rows, dateRange]);
+  const reset = () => { setDateRange("All dates"); setSearch(""); };
 
   return <>
     <div className="transaction-toolbar">
-      <div className="filter-control"><label>Date range</label><select value={dateRange} onChange={e => setDateRange(e.target.value)}><option>All dates</option><option>Today</option><option>Last 7 days</option><option>This month</option></select></div>
-      <div className="filter-control"><label>Status</label><select value={status} onChange={e => setStatus(e.target.value)}><option>All statuses</option><option>Succeeded</option><option>Verifying</option><option>Underpaid</option><option>Risk review</option><option>Expired</option></select></div>
-      <div className="filter-control"><label>Payment method</label><select value={method} onChange={e => setMethod(e.target.value)}><option>All methods</option><option>Wallet transfer</option><option>Hosted checkout</option><option>Payment link</option><option>API</option></select></div>
+      <div className="filter-control"><label htmlFor="payment-date-range">Date range</label><select id="payment-date-range" value={dateRange} onChange={e => setDateRange(e.target.value as DashboardDateRange)}><option>All dates</option><option>Today</option><option>Last 7 days</option><option>This month</option></select></div>
+      <label className="search-field transaction-search"><Search size={15} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search buyer, item, intent or hash" aria-label="Search payments" /></label>
+      <span className="history-scope">Verified Arc Testnet · USDC · Wallet transfer</span>
       <button className="button button-quiet reset-filter" onClick={reset}><RefreshCw size={14} /> Reset</button>
     </div>
-    <div className="history-summary"><span><strong>{filteredRows.length}</strong> of {rows.length} transactions</span></div>
-    <div className="card table-card full-table transaction-table"><div className="table-wrap"><table><thead><tr><th><button className="sort-button" onClick={() => updateSort("date")}>Date / time <span>{sortIcon("date")}</span></button></th><th>Transaction</th><th>Customer</th><th><button className="sort-button" onClick={() => updateSort("amount")}>Amount <span>{sortIcon("amount")}</span></button></th><th><button className="sort-button" onClick={() => updateSort("status")}>Status <span>{sortIcon("status")}</span></button></th><th><button className="sort-button" onClick={() => updateSort("method")}>Payment method <span>{sortIcon("method")}</span></button></th><th /></tr></thead><tbody>{filteredRows.map(row => <tr key={row.id} onClick={() => setSelectedId(row.id)} className="clickable-row"><td><strong>{row.date}</strong><small className="table-sub">{row.time}</small></td><td><span className="mono-id">{row.id}</span><small className="table-sub"><span className="mini-arc" />{row.hash}</small></td><td>{row.customer}</td><td className="amount-cell">${row.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}<small>USDC</small></td><td><StatusPill status={row.status} tone={row.tone} /></td><td><span className="method-label"><span className="method-glyph">{row.method === "API" ? "{/}" : row.method === "Payment link" ? "↗" : row.method === "Hosted checkout" ? "□" : "⌁"}</span>{row.method}</span></td><td><button className="icon-button" aria-label={`Open ${row.id}`} onClick={e => { e.stopPropagation(); setSelectedId(row.id); }}><ArrowUpRight size={15} /></button></td></tr>)}</tbody></table>{filteredRows.length === 0 && <div className="history-empty"><div className="empty-icon"><Search size={19} /></div><h3>{liveRows.length === 0 ? "No verified Arc transfers yet" : "No matching transactions"}</h3><p>{liveRows.length === 0 ? "Complete a real Arc Testnet USDC checkout and the verified payment will appear here." : "Try widening the date range or resetting one of the filters."}</p><button className="button button-quiet" onClick={reset}>Reset filters</button></div>}</div></div>
+    <div className="history-summary"><span><strong>{rows.length}</strong> loaded verified transfer{rows.length === 1 ? "" : "s"}{liveQuery.hasNextPage ? " · more available" : ""}</span><button className="small-link" onClick={() => void liveQuery.refetch()} disabled={liveQuery.isFetching}>{liveQuery.isFetching ? "Refreshing…" : "Refresh"}</button></div>
+    {liveQuery.error && <div className="dashboard-data-message is-error" role="alert"><span>{liveQuery.isFetchNextPageError ? "Could not load the next page" : "Payment history could not be refreshed"}{rows.length ? "; showing loaded records" : ""}.</span><button className="small-link" onClick={() => void (liveQuery.isFetchNextPageError ? liveQuery.fetchNextPage() : liveQuery.refetch())}>Try again</button></div>}
+    <div className="card table-card full-table transaction-table"><div className="table-wrap">{liveQuery.isLoading && !rows.length ? <div className="dashboard-data-message" role="status">Loading verified transfers…</div> : liveQuery.error && !rows.length ? null : filteredRows.length === 0 ? <div className="history-empty"><div className="empty-icon"><Search size={19} /></div><h3>{rows.length === 0 ? "No verified Arc transfers yet" : "No matching transactions"}</h3><p>{rows.length === 0 ? "Complete an Arc Testnet USDC checkout to see its verified transfer here." : "Adjust your date range or search, or reset the filters."}</p><button className="button button-quiet" onClick={reset}>Reset filters</button></div> : <table><thead><tr><th>Date / time</th><th>Transaction</th><th>Buyer / item</th><th>Amount</th><th>Status</th><th>Payment method</th><th /></tr></thead><tbody>{filteredRows.map(row => <tr key={row.id} onClick={() => setSelectedId(row.id)} className="clickable-row"><td><strong>{row.date}</strong><small className="table-sub">{row.time}</small></td><td><span className="mono-id">{row.id}</span><small className="table-sub"><span className="mini-arc" />{row.hash}</small></td><td><div className="buyer-item-cell"><span>{row.buyer}</span><small>{row.itemName}</small></div></td><td className="amount-cell">${row.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}<small>USDC</small></td><td><StatusPill status={row.status} tone={row.tone} verified /></td><td><span className="method-label"><span className="method-glyph">⌁</span>{row.method}</span></td><td><button className="icon-button" aria-label={`Open ${row.id}`} onClick={e => { e.stopPropagation(); setSelectedId(row.id); }}><ArrowUpRight size={15} /></button></td></tr>)}</tbody></table>}</div></div>
+    {liveQuery.hasNextPage && <div className="history-load-more"><button className="button button-quiet" onClick={() => void liveQuery.fetchNextPage()} disabled={liveQuery.isFetchingNextPage}>{liveQuery.isFetchingNextPage ? "Loading more…" : "Load more transfers"}</button></div>}
     {selectedId && <DetailDrawer id={selectedId} close={() => setSelectedId(null)} />}
   </>;
 }
@@ -530,28 +390,28 @@ function SupportGuidelinesPage() {
           tip: "Customer records respect user privacy while giving merchants reliable spending history."
         },
         {
-          title: "Balances",
-          badge: "Treasury Ledger",
+          title: "Seller transfers",
+          badge: "Verified activity",
           icon: <WalletCards size={18} className="text-[var(--primary)]" />,
-          summary: "Real-time ledger of available, pending, and liquid USDC balances held in your merchant recipient address.",
+          summary: "View verified and pending USDC payments sent directly to the seller wallet. Druto does not hold a merchant balance.",
           points: [
-            "Available Balance: Real-time onchain USDC funds ready for immediate merchant transfer or payout.",
-            "Pending Balance: Unconfirmed transactions currently awaiting miner inclusion or validation.",
-            "Multi-Asset Ready: Structured for Arc native USDC with future support for multi-chain stablecoins."
+            "Verified Transfers: Amounts confirmed on Arc and matched to a payment intent.",
+            "Pending Verification: Intents that have not yet reached a verified payment state.",
+            "No Custody: The seller receives funds directly in its own Arc wallet."
           ],
-          tip: "Funds in your merchant wallet belong solely to you—Druto is non-custodial and holds zero client funds."
+          tip: "This view reports payment activity; it is not a custodial balance or payout ledger."
         },
         {
-          title: "Settlements",
-          badge: "Direct Routing",
+          title: "Direct settlement",
+          badge: "Buyer to seller",
           icon: <Send size={18} className="text-[var(--primary)]" />,
-          summary: "Non-custodial payout coordination and multi-seller marketplace cart splitting logic.",
+          summary: "The buyer's wallet sends USDC directly to the registered seller wallet; Druto verifies and reports the transfer.",
           points: [
-            "Zero Intermediate Custody: Money moves wallet-to-wallet directly from buyer to merchant recipient.",
-            "Multi-Seller Parallel Splits: For marketplace carts containing items from multiple merchants, Druto handles clean parallel disbursements.",
-            "Settlement Audit Logs: Trace every fee split and merchant disbursement with exact transaction references."
+            "Direct Transfer: Funds move from buyer wallet to seller wallet without Druto custody.",
+            "One Seller per Intent: Multi-seller carts require separate payment intents; automatic splitting is not available.",
+            "Payment Record: Verified payments include their onchain transaction reference."
           ],
-          tip: "Multi-seller cart splitting eliminates complex escrow and escrow licensing overhead."
+          tip: "Druto verifies the transfer; it does not hold funds or execute a later seller payout."
         },
         {
           title: "Reports",
@@ -572,17 +432,17 @@ function SupportGuidelinesPage() {
       color: "var(--destructive)",
       items: [
         {
-          title: "Risk & compliance",
-          badge: "Security Engine",
+          title: "Risk controls & limitations",
+          badge: "Testnet scope",
           icon: <ShieldCheck size={18} className="text-[var(--primary)]" />,
-          summary: "Transaction heuristics, sanctioned address filtering, velocity controls, and single-use intent verification.",
+          summary: "Testnet payment verification only. This interface does not provide sanctions, identity, fraud, or country-eligibility screening.",
           points: [
-            "Replay Protection: Cryptographic intent nonces ensure each checkout session can only be submitted once.",
-            "Contract Conformance: Strictly validates transfers against the official Arc Testnet USDC contract (0x3600...).",
-            "Destination Allowlisting: Prevents rogue payments by enforcing verified merchant destination addresses.",
-            "Review Queue: Flags anomalous velocity spikes or address mismatches for operator review."
+            "Payment Matching: A verified state means the onchain transfer was matched to its payment intent.",
+            "Testnet Only: Current release is configured for Arc Testnet USDC.",
+            "No Compliance Decision: This view does not establish whether a person, wallet, or marketplace may legally transact.",
+            "Production Controls: Seller review, sanctions screening, fraud operations, and jurisdiction policy are not represented here."
           ],
-          tip: "Allowlist protection ensures buyers can never be tricked into sending funds to unapproved addresses."
+          tip: "Do not treat Testnet payment verification as KYC, sanctions screening, or a compliance approval."
         },
         {
           title: "Developers",
@@ -657,22 +517,22 @@ function SupportGuidelinesPage() {
           <button
             onClick={expandAll}
             className="button button-quiet"
-            style={{ padding: "6px 14px", fontSize: "12.5px" }}
+            style={{ padding: "6px 14px", fontSize: "12px" }}
           >
             Expand all
           </button>
           <button
             onClick={collapseAll}
             className="button button-quiet"
-            style={{ padding: "6px 14px", fontSize: "12.5px" }}
+            style={{ padding: "6px 14px", fontSize: "12px" }}
           >
             Minimize all
           </button>
           <a className="button button-quiet" href="/developers" target="_blank" rel="noreferrer">
             <Code2 size={15} /> Developer Docs
           </a>
-          <a className="button button-primary" href="https://testnet.arcscan.app" target="_blank" rel="noreferrer">
-            <ExternalLink size={15} /> ArcScan Explorer
+          <a className="button button-primary" href={ARC_TESTNET_EXPLORER_URL} target="_blank" rel="noreferrer">
+            <ExternalLink size={15} /> Arc Testnet Explorer
           </a>
         </div>
       </div>
@@ -740,7 +600,7 @@ function SupportGuidelinesPage() {
                         <div className="empty-icon" style={{ width: "36px", height: "36px", minWidth: "36px" }}>
                           {item.icon}
                         </div>
-                        <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 750, color: "var(--foreground)" }}>
+                        <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--foreground)" }}>
                           {item.title}
                         </h3>
                       </div>
@@ -770,7 +630,7 @@ function SupportGuidelinesPage() {
                     {isExpanded && (
                       <div style={{ padding: "20px", borderTop: "1px solid var(--border)", background: "var(--background)", animation: "fadeIn 0.2s ease" }}>
                         {/* Summary Description */}
-                        <p style={{ fontSize: "13.5px", color: "var(--foreground)", lineHeight: "1.6", marginBottom: "16px" }}>
+                        <p style={{ fontSize: "14px", color: "var(--foreground)", lineHeight: "1.6", marginBottom: "16px" }}>
                           {item.summary}
                         </p>
 
@@ -787,7 +647,7 @@ function SupportGuidelinesPage() {
                                 background: "var(--card)", 
                                 border: "1px solid var(--border)", 
                                 borderRadius: "8px", 
-                                fontSize: "12.5px", 
+                                fontSize: "12px",
                                 lineHeight: "1.5" 
                               }}
                             >
@@ -828,7 +688,7 @@ function SupportGuidelinesPage() {
       <div className="card" style={{ marginTop: "36px", padding: "26px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "18px" }}>
         <div>
           <strong style={{ fontSize: "15px", display: "block", color: "var(--foreground)" }}>Need direct integration or contract assistance?</strong>
-          <span style={{ fontSize: "12.5px", color: "var(--muted-foreground)" }}>Our engineering team assists with multi-seller contract verification, SDK setup, and custom marketplace deployments.</span>
+          <span style={{ fontSize: "12px", color: "var(--muted-foreground)" }}>Our engineering team assists with multi-seller contract verification, SDK setup, and custom marketplace deployments.</span>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
           <a className="button button-quiet" href="mailto:support@druto.xyz">
@@ -843,143 +703,38 @@ function SupportGuidelinesPage() {
   );
 }
 
-function SettingsPage({
-  moduleToggles,
-  onToggleModule,
-  user,
-}: {
-  moduleToggles: ModuleToggles;
-  onToggleModule: (key: keyof ModuleToggles, val: boolean) => void;
-  user: { name?: string | null; openId?: string | null; email?: string | null };
-}) {
-  const modulesList: Array<{
-    key: keyof ModuleToggles;
-    name: string;
-    group: string;
-    icon: any;
-    description: string;
-  }> = [
-    {
-      key: "paymentLinks",
-      name: "Payment Links",
-      group: "Operate",
-      icon: Link2,
-      description: "Generate instant hosted checkout links for direct Arc USDC payments without an integrated shopping cart.",
-    },
-    {
-      key: "invoices",
-      name: "Invoices",
-      group: "Operate",
-      icon: ReceiptText,
-      description: "Create and dispatch onchain payment requests with line-item totals, tax calculation, and Arc receipts.",
-    },
-    {
-      key: "subscriptions",
-      name: "Subscriptions",
-      group: "Operate",
-      icon: RefreshCw,
-      description: "Manage recurring billing schedules, customer subscription lifecycles, and automated settlement streams.",
-    },
-    {
-      key: "reports",
-      name: "Reports",
-      group: "Understand",
-      icon: Table2,
-      description: "Export financial summaries, audited ledger reconciliations, CSV balance statements, and tax reports.",
-    },
-  ];
-
-  return (
-    <div className="page-content">
-      <div className="page-header" style={{ marginBottom: "20px" }}>
-        <div>
-          <h2>Settings</h2>
-        </div>
-      </div>
-
-      <div className="settings-section">
-        <div className="card settings-card">
-          <div className="settings-card-head">
-            <div>
-              <span className="eyebrow">Sidebar navigation</span>
-              <h3>Optional Dashboard Modules</h3>
-            </div>
-          </div>
-
-          <div className="module-toggle-list">
-            {modulesList.map(({ key, name, group, icon: Icon, description }) => {
-              const isEnabled = moduleToggles[key];
-              return (
-                <div
-                  key={key}
-                  className={classNames("module-toggle-item", isEnabled && "is-enabled")}
-                >
-                  <div className="module-toggle-left">
-                    <div className="module-toggle-icon">
-                      <Icon size={18} />
-                    </div>
-                    <div className="module-toggle-text">
-                      <strong>
-                        {name}
-                        <span className="module-group-tag">{group}</span>
-                      </strong>
-                      <small>{description}</small>
-                    </div>
-                  </div>
-                  <label className="ui-switch" aria-label={`Toggle ${name}`}>
-                    <input
-                      type="checkbox"
-                      checked={isEnabled}
-                      onChange={(e) => onToggleModule(key, e.target.checked)}
-                    />
-                    <span className="ui-switch-slider" />
-                  </label>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="card settings-card">
-          <div className="settings-card-head">
-            <div>
-              <h3>Network Configuration</h3>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-            <div className="p-3 border rounded-lg bg-background/50">
-              <span className="text-xs text-muted-foreground block">Active Network</span>
-              <strong className="text-sm font-semibold text-foreground flex items-center gap-1.5 mt-1">
-                <span className="live-dot" /> Arc Testnet
-              </strong>
-            </div>
-            <div className="p-3 border rounded-lg bg-background/50">
-              <span className="text-xs text-muted-foreground block">EVM Chain ID</span>
-              <strong className="text-sm font-semibold font-mono text-foreground mt-1 block">5042002</strong>
-            </div>
-            <div className="p-3 border rounded-lg bg-background/50">
-              <span className="text-xs text-muted-foreground block">Settlement Asset</span>
-              <strong className="text-sm font-semibold text-primary mt-1 block">Native USDC</strong>
-            </div>
-            <div className="p-3 border rounded-lg bg-background/50">
-              <span className="text-xs text-muted-foreground block">RPC Verification</span>
-              <strong className="text-sm font-semibold text-emerald-700 mt-1 block">Operational</strong>
-            </div>
-          </div>
-        </div>
-      </div>
+function SettingsPage({ user }: { moduleToggles: ModuleToggles; onToggleModule: (key: keyof ModuleToggles, val: boolean) => void; user: { name?: string | null; openId?: string | null; email?: string | null } }) {
+  const [editing, setEditing] = useState(false);
+  return <div className="page-content">
+    <div className="dg-section-intro"><h2>Workspace settings</h2><p>Your account identity and the capabilities available in this release.</p></div>
+    <div className="dg-settings-grid">
+      <section className="card dg-settings-card"><h3>Account</h3>
+        <div className="dg-settings-row"><span>Name</span><strong>{user.name || "Not provided"}</strong></div>
+        <div className="dg-settings-row"><span>Email</span><strong>{user.email || "Not provided"}</strong></div>
+        <div className="dg-settings-row"><span>Environment</span><strong>Arc Testnet · USDC</strong></div>
+        <p className="dg-settings-note">Your login identity and your seller receiving wallet are managed separately.</p>
+        <button type="button" className="dg-text-button" onClick={() => setEditing(true)}>Edit profile <ArrowUpRight size={15} /></button>
+      </section>
+      <section className="card dg-settings-card"><h3>Payment capabilities</h3>
+        <div className="dg-settings-row"><span>Seller settlement</span><strong>Direct to receiving wallet</strong></div>
+        <div className="dg-settings-row"><span>Platform fee</span><strong>0% direct-payment MVP</strong></div>
+        <div className="dg-settings-row"><span>Integration</span><strong>Server SDK + signed webhooks</strong></div>
+        <p className="dg-settings-note">Standalone payment links, invoices, recurring subscriptions and custodial payouts are not enabled in this release.</p>
+      </section>
     </div>
-  );
+    {editing && <ProfileEditModal user={user} onClose={() => setEditing(false)} />}
+  </div>;
 }
 
 function PagePanel({
   active,
   onCreate,
+  onNavigate,
   moduleToggles,
   onToggleModule,
   user,
 }: {
+  onNavigate: (section: string) => void;
   active: string;
   onCreate: () => void;
   moduleToggles: ModuleToggles;
@@ -988,25 +743,28 @@ function PagePanel({
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const headings: Record<string, string> = { Payments: "Payments", "Payment Links": "Payment Links", Invoices: "Invoices", Subscriptions: "Subscriptions", Customers: "Customers", Balances: "Balances", Settlements: "Settlements", Reports: "Reports", "Risk & compliance": "Risk & compliance", Developers: "Developers", "API Keys": "API Keys", Settings: "Settings", Support: "Support & Guides" };
+  const headings: Record<string, string> = { Payments: "Payments", "Payment Links": "Payment Links", Invoices: "Invoices", Subscriptions: "Subscriptions", Customers: "Customers", "Seller transfers": "Seller transfers", "Direct settlement": "Direct settlement", Reports: "Reports", "Risk controls & limitations": "Risk controls & limitations", Developers: "Developers", "API Keys": "API Keys", Settings: "Settings", Support: "Support & Guides" };
   const title = headings[active] || active;
   if (active === "Support") return <SupportGuidelinesPage />;
   if (active === "Settings") return <SettingsPage moduleToggles={moduleToggles} onToggleModule={onToggleModule} user={user} />;
-  if (active === "Payments") return <div className="page-content"><PageHeader eyebrow="Ledger activity" title="Transaction history" description="Every payment intent, observed transaction, and final ledger posting in one place." action="Create payment" onAction={onCreate} /><TransactionHistory /></div>;
-  if (active === "Balances") return <BalancesPage />;
-  if (active === "Settlements") return <SettlementsPage />;
-  if (active === "Risk & compliance") return <RiskPage />;
-  if (active === "Developers") return <DeveloperIntegrationPage />;
-  if (active === "API Keys") return <SellerOnboarding />;
+  if (active === "Payments") return <div className="page-content"><PageHeader eyebrow="Ledger activity" title="Transaction history" description="Verified Arc Testnet USDC transfers, with buyer, item, and transaction details." action="Create payment" onAction={onCreate} /><TransactionHistory /></div>;
+  if (active === "Seller transfers") return <BalancesPage />;
+  if (active === "Direct settlement") return <SettlementsPage />;
+  if (active === "Risk controls & limitations") return <RiskPage />;
+  if (active === "Webhooks") return <DashboardWebhooks onSetup={() => onNavigate("Sellers")} readOnly={import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "dashboard"} />;
+  if (active === "Developers") return <DashboardDevelopers onNavigate={onNavigate} readOnly={import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "dashboard"} />;
+  if (active === "API Keys") return <ApiKeyManager onSellerSetup={() => onNavigate("Sellers")} readOnly={import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "dashboard"} />;
+  if (active === "Sellers") return <SellerOnboarding />;
+  if (active === "Receiving wallets") return <DashboardWallets />;
   if (active === "Customers") return <CustomersPage />;
   return (
     <div className="page-content">
-      <PageHeader title={title} action={active === "Settlements" ? "Request settlement" : "Create new"} onAction={onCreate} />
+      <PageHeader title={title} action={active === "Direct settlement" ? "View payments" : "Create new"} onAction={onCreate} />
       <div className="empty-feature card">
         <h3>{title} workspace</h3>
         <div className="empty-actions">
           <button className="button button-primary" onClick={onCreate}>
-            <Plus size={16} /> {active === "Settlements" ? "Request settlement" : "Create record"}
+            <Plus size={16} /> {active === "Direct settlement" ? "View payments" : "Create record"}
           </button>
           <button className="button button-quiet" onClick={() => toast.info("This is a frontend-only test environment.")}>
             <BookOpen size={16} /> Read implementation notes
@@ -1028,16 +786,13 @@ function PageHeader({ action, onAction }: { eyebrow?: string; title?: string; de
     </div>
   ); 
 }
-function BalancesPage() { const summary = trpc.payments.summary.useQuery(); return <div className="page-content"><PageHeader title="Balances" action="View payments" onAction={() => window.location.href = "/payments"} /><div className="balance-hero card"><div><span className="eyebrow">Available USDC</span><strong>${summary.data?.availableUsdc ?? "0.00"}</strong><p><span className="live-dot" /> Arc Testnet · verified onchain transfers</p></div><img src={settleVisual} alt="Settlement abstraction" /></div><div className="balance-grid"><Metric label="Available" value={`$${summary.data?.availableUsdc ?? "0.00"}`} delta="Verified USDC" positive icon={<Check size={14} />} /><Metric label="Pending" value={`$${summary.data?.pendingUsdc ?? "0.00"}`} delta={`${summary.data?.pendingCount ?? 0} intents`} icon={<Timer size={14} />} /><Metric label="Reserved" value="N/A" delta="Not configured in direct-wallet demo" icon={<LockKeyhole size={14} />} /></div><div className="card table-card"><div className="card-heading"><div><span className="eyebrow">Verified movements</span><h3>Recent Arc transfers</h3></div><button className="text-button" onClick={() => toast.info("CSV export will be added with the reporting API.")}>Export CSV <ArrowDownRight size={14} /></button></div><PaymentTable compact /></div></div>; }
-function SettlementsPage() { const summary = trpc.payments.summary.useQuery(); const verified = trpc.payments.verifiedPayments.useQuery(); return <div className="page-content"><PageHeader title="Settlements" action="Review payments" onAction={() => window.location.href = "/payments"} /><div className="balance-hero card"><div><span className="eyebrow">Ready to settle</span><strong>${summary.data?.availableUsdc ?? "0.00"}</strong><p><span className="live-dot" /> Arc Testnet · payout execution disabled</p></div><img src={settleVisual} alt="Settlement abstraction" /></div><div className="balance-grid"><Metric label="Verified gross" value={`$${summary.data?.grossUsdc ?? "0.00"}`} delta={`${verified.data?.length ?? 0} transfers`} positive icon={<Check size={14} />} /><Metric label="Pending" value={`$${summary.data?.pendingUsdc ?? "0.00"}`} delta="Awaiting verification" icon={<Timer size={14} />} /><Metric label="Platform fees" value="N/A" delta="No fee ledger configured" icon={<LockKeyhole size={14} />} /></div><div className="card empty-feature"><h3>No payout execution yet</h3><p>Druto can verify the buyer’s direct USDC transfer and show the merchant’s verified balance. Settlement movement will be added after the ledger, compliance, and payout policy layers are approved.</p></div></div>; }
-function RiskPage() { return <div className="page-content"><PageHeader title="Risk & compliance" action="View allowlist" onAction={() => toast.info("Allowlist monitoring is active across all registered seller destinations.")} /><div className="risk-banner"><ShieldCheck size={21} /><div><strong>Compliance engine active on Arc Testnet</strong><span>Direct-to-wallet transactions are screened against official ERC-20 contract specifications.</span></div><StatusPill status="Active" tone="success" /></div><div className="risk-layout"><div className="card table-card"><div className="card-heading"><div><span className="eyebrow">Review queue</span><h3>Open risk cases</h3></div><span className="queue-count">0</span></div><div className="queue-empty"><ShieldCheck size={17} /><span>No policy violations or risk holds detected. All registered seller workspaces are in good standing.</span></div></div><div className="card controls-card"><span className="eyebrow">Policy snapshot</span><h3>Guardrails & settlement rules</h3><Policy label="Merchant status" value="Active" ok /><Policy label="Destination allowlist" value="Enforced" ok /><Policy label="Arc token verification" value="USDC (0x3600...)" ok /><Policy label="Single-use intent nonces" value="Active" ok /></div></div></div>; }
+function BalancesPage() { const summary = trpc.payments.summary.useQuery(); return <div className="page-content"><PageHeader title="Seller transfers" action="View payments" onAction={() => window.location.href = "/payments"} /><div className="balance-hero card"><div><span className="eyebrow">Verified transfers to seller wallets</span><strong>${summary.data?.grossUsdc ?? "0.00"}</strong><p><span className="live-dot" /> Arc Testnet · confirmed onchain payments</p><p className="mt-2 text-sm text-muted-foreground">Buyers send USDC directly to the seller’s wallet. Druto does not hold this balance.</p></div><img src={settleVisual} alt="Direct buyer-to-seller payment" /></div><div className="balance-grid"><Metric label="Verified transfers" value={`$${summary.data?.grossUsdc ?? "0.00"}`} delta="Sent directly to seller wallets" positive icon={<Check size={14} />} /><Metric label="Pending verification" value={`$${summary.data?.pendingUsdc ?? "0.00"}`} delta={`${summary.data?.pendingCount ?? 0} intents`} icon={<Timer size={14} />} /><Metric label="Druto-held funds" value="0.00" delta="Non-custodial flow" icon={<LockKeyhole size={14} />} /></div><div className="card table-card"><div className="card-heading"><div><span className="eyebrow">Verified movements</span><h3>Recent Arc transfers</h3></div><button className="text-button" onClick={() => toast.info("CSV export will be added with the reporting API.")}>Export CSV <ArrowDownRight size={14} /></button></div><PaymentTable compact /></div></div>; }
+function SettlementsPage() { const summary = trpc.payments.summary.useQuery(); return <div className="page-content"><PageHeader title="Direct settlement" action="Review payments" onAction={() => window.location.href = "/payments"} /><div className="balance-hero card"><div><span className="eyebrow">Verified direct-to-seller payments</span><strong>${summary.data?.grossUsdc ?? "0.00"}</strong><p><span className="live-dot" /> Arc Testnet · buyer wallet to seller wallet</p></div><img src={settleVisual} alt="Direct buyer-to-seller payment" /></div><div className="balance-grid"><Metric label="Verified volume" value={`$${summary.data?.grossUsdc ?? "0.00"}`} delta={`${summary.data?.successfulCount ?? 0} transfers`} positive icon={<Check size={14} />} /><Metric label="Pending verification" value={`$${summary.data?.pendingUsdc ?? "0.00"}`} delta="Awaiting onchain verification" icon={<Timer size={14} />} /><Metric label="Druto custody" value="None" delta="Funds are sent directly to seller wallets" icon={<LockKeyhole size={14} />} /></div><div className="card empty-feature"><h3>Druto does not execute seller payouts</h3><p>Each buyer payment goes directly from the buyer’s wallet to the seller’s registered Arc wallet. Druto verifies and reports the transfer; it does not hold, reserve, or later disburse these funds.</p></div></div>; }
+function RiskPage() { return <div className="page-content"><PageHeader title="Risk controls & limitations" action="Read release scope" onAction={() => window.location.href = "/developers#scope"} /><div className="risk-banner"><ShieldCheck size={21} /><div><strong>Testnet payment verification only</strong><span>This status is not a compliance approval or seller-risk assessment.</span></div><StatusPill status="Limited scope" tone="warning" /></div><div className="risk-layout"><div className="card table-card"><div className="card-heading"><div><span className="eyebrow">What this view does not provide</span><h3>No compliance screening claim</h3></div></div><div className="queue-empty"><AlertTriangle size={17} /><span>This Testnet release does not represent sanctions screening, seller KYC/KYB, fraud scoring, or country eligibility checks. Do not use this page as proof that a buyer, seller, or transaction is compliant.</span></div></div><div className="card controls-card"><span className="eyebrow">Payment verification scope</span><h3>Onchain checks</h3><Policy label="Network and asset" value="Arc Testnet · USDC" ok /><Policy label="Payment result" value="Verified against intent" ok /><Policy label="Sanctions / KYC / fraud review" value="Not provided" /><Policy label="Seller funds" value="Sent directly to seller wallet" /></div></div></div>; }
 function Policy({ label, value, ok }: { label: string; value: string; ok?: boolean }) { return <div className="policy-row"><span>{ok ? <Check size={14} /> : <AlertTriangle size={14} />}{label}</span><strong>{value}</strong></div>; }
 function SellerOwnershipDemo() { return <div className="card p-6 mt-6"><div className="flex items-start gap-3"><ShieldCheck size={20} /><div><span className="eyebrow">Seller activation</span><h3 className="mt-2">Wallet verification is paused</h3><p className="mt-2 text-muted-foreground">Seller records, payment destinations, API keys, and signed webhooks remain available. Wallet ownership verification will be restored later as a separate integration module.</p></div></div></div>; }
-function DeveloperIntegrationPage() { const [copied, setCopied] = useState<string | null>(null); const snippet = developerSdkSnippet; const copy = (value: string, key: string) => { navigator.clipboard?.writeText(value); setCopied(key); toast.success("Code copied"); }; return <div className="page-content"><PageHeader title="Developer kit" action="Open marketplace demo" onAction={() => window.location.href = "/marketplace"} /><div className="card p-6 md:p-8" style={{ background: "linear-gradient(135deg, #e8f5ee 0%, #f7f8f1 55%, #eaf0ff 100%)" }}><div className="grid gap-8 lg:grid-cols-[1.2fr_.8fr] items-center"><div><span className="eyebrow">Druto Payment Kit</span><h2 className="text-3xl md:text-4xl font-semibold mt-3 max-w-xl">One integration surface for checkout, settlement, and receipts.</h2><p className="mt-4 max-w-2xl text-muted-foreground">Use the SDK for the buyer-facing handoff and the Payment Intent API for server-side order creation. Druto hosts the payment window; your site keeps control of the cart, fulfillment, and return experience.</p><div className="flex flex-wrap gap-3 mt-6"><button className="button button-primary" onClick={() => document.getElementById("sdk-quickstart")?.scrollIntoView({ behavior: "smooth" })}><Code2 size={16} /> View quickstart</button><button className="button button-quiet" onClick={() => toast.info("SDK package publishing is planned; use the contract below for the current demo integration.")}><BookOpen size={16} /> Read contract</button></div></div><div className="rounded-2xl bg-white/75 border border-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="eyebrow">Supported demo rail</span><span className="status-pill success">Ready</span></div><div className="mt-5 grid grid-cols-2 gap-3"><div className="mini-card"><small>Network</small><strong>Arc Testnet</strong></div><div className="mini-card"><small>Asset</small><strong>USDC</strong></div><div className="mini-card"><small>Buyer UX</small><strong>Wallet + QR</strong></div><div className="mini-card"><small>Return</small><strong>Receipt URL</strong></div></div></div></div></div><div id="sdk-quickstart" className="developer-grid mt-6"><div className="card code-card"><div className="card-heading"><div><span className="eyebrow">SDK quickstart</span><h3>Embed the hosted checkout</h3></div><button className="small-link" onClick={() => copy(snippet, "sdk")}>{copied === "sdk" ? "Copied" : "Copy code"}</button></div><pre className="code-block whitespace-pre-wrap overflow-auto"><code>{snippet}</code></pre><p className="code-note"><InfoDot /> The SDK snippet opens the hosted Druto checkout. Keep secret API credentials on your server; never ship them in browser code.</p></div><div className="card endpoint-card"><span className="eyebrow">Integration flow</span><h3>Six steps to go live</h3><div className="mt-4 space-y-4"><div className="flex gap-3"><span className="queue-count">01</span><span><strong>Register the seller</strong><small>Provide the marketplace seller ID and intended Arc receiving wallet.</small></span></div><div className="flex gap-3"><span className="queue-count">02</span><span><strong>Sign ownership challenge</strong><small>Use the seller wallet to sign a domain-bound message; no funds move.</small></span></div><div className="flex gap-3"><span className="queue-count">03</span><span><strong>Create an intent</strong><small>Send amount, order, buyer, and return context from your server.</small></span></div><div className="flex gap-3"><span className="queue-count">04</span><span><strong>Open Druto</strong><small>Redirect the buyer to the hosted wallet and QR payment window.</small></span></div><div className="flex gap-3"><span className="queue-count">05</span><span><strong>Verify transfer</strong><small>Wait for Arc finality and consume the verified payment event.</small></span></div><div className="flex gap-3"><span className="queue-count">06</span><span><strong>Fulfill and reconcile</strong><small>Match the external order ID to the buyer receipt and ledger row.</small></span></div></div></div></div><div className="grid gap-6 lg:grid-cols-2 mt-6"><div className="card p-6"><span className="eyebrow">Payment Intent contract</span><h3 className="mt-2">Server request</h3><pre className="code-block mt-4 whitespace-pre-wrap overflow-auto"><code>{`POST /api/trpc/payments.createIntent\n\n{\n  externalOrderId: "order_123",\n  idempotencyKey: "order_123-v1",\n  itemName: "Arc Testnet Starter × 1",\n  amount: "1.00",\n  buyerLabel: "buyer@example.com",\n  returnUrl: "https://shop.example/paid",\n  orderContext: {\n    items: [{ productId, name, seller, unitPrice, quantity }],\n    delivery, shippingAddress, buyerEmail\n  }\n}`}</code></pre></div><div className="card p-6"><span className="eyebrow">Production checklist</span><h3 className="mt-2">What your team owns</h3><div className="mt-4 space-y-3"><Policy label="Keep API credentials server-side" value="Required" ok /><Policy label="Use a unique idempotency key per order" value="Required" ok /><Policy label="Verify Arc transaction finality before fulfillment" value="Required" ok /><Policy label="Persist buyer return and order context" value="Recommended" ok /><Policy label="Use the demo fallback only for rehearsals" value="Test only" /></div></div></div><div className="developer-links mt-6"><div><WalletCards size={18} /><strong>Hosted checkout</strong><span>Buyers return through the hosted payment flow when the settlement rail is enabled.</span></div><div><ShieldCheck size={18} /><strong>Safe payment states</strong><span>Ready, submitted, verified, expired, and mismatch states are explicit in the flow.</span></div><div><GitBranch size={18} /><strong>Sandbox to production</strong><span>Start on Arc Testnet with USDC, then replace the environment configuration after operational review.</span></div></div><SellerOwnershipDemo /><div className="card p-6 mt-6"><div className="flex items-start gap-3"><AlertTriangle size={18} /><div><strong>Current project status</strong><p className="mt-1 text-muted-foreground">This Druto demo has the real Arc Testnet verification foundation and merchant-wallet transfer flow. The SDK package shown here is an integration contract and starter pattern; package publishing, production API authentication, webhooks, and automated fulfillment remain the next backend release steps.</p></div></div></div></div> }
-function DeveloperPage() { const [copied, setCopied] = useState(false); return <div className="page-content"><PageHeader title="Developers" action="Create API key" onAction={() => toast.info("API key creation is intentionally deferred until the backend is connected.")} /><div className="developer-grid"><div className="card code-card"><div className="card-heading"><div><span className="eyebrow">Quickstart</span><h3>Create a payment intent</h3></div><Terminal size={18} /></div><div className="code-block"><div className="code-top"><span><i /> test request</span><button onClick={() => { setCopied(true); toast.success("Code copied"); }}><Copy size={13} /> {copied ? "Copied" : "Copy"}</button></div><pre><code>{`curl https://api.druto.example/v1/payment_intents \\\n  -H "Authorization: Bearer druto_test_..." \\\n  -H "Idempotency-Key: order_123" \\\n  -d amount=100000000 \\\n  -d asset=USDC \\\n  -d network=arc`}</code></pre></div><div className="code-note"><InfoDot /> API, auth, and idempotency are represented here as documentation only. No request is sent.</div></div><div className="card endpoint-card"><span className="eyebrow">Integration status</span><h3>Connection map</h3><Endpoint icon={<GitBranch />} label="REST API" status="Deferred" /><Endpoint icon={<Network />} label="Arc Testnet" status="Deferred" /><Endpoint icon={<WalletCards />} label="Circle Wallets" status="Deferred" /><Endpoint icon={<ShieldCheck />} label="Webhook signing" status="Designed" /></div></div><div className="developer-links"><div><Code2 size={18} /><strong>API reference</strong><span>Resources, errors, and idempotency model</span></div><div><FileCheck2 size={18} /><strong>Integration checklist</strong><span>What must be verified before production</span></div><div><LockKeyhole size={18} /><strong>Security guide</strong><span>Keys, scopes, and replay protection</span></div></div></div>; }
-function InfoDot() { return <span className="info-dot">i</span>; }
-function Endpoint({ icon, label, status }: { icon: React.ReactNode; label: string; status: string }) { return <div className="endpoint-row"><span className="endpoint-icon">{icon}</span><span><strong>{label}</strong><small>Adapter boundary</small></span><StatusPill status={status} tone={status === "Designed" ? "success" : "neutral"} /></div>; }
 function CustomersPage() {
+  const [search, setSearch] = useState("");
   const verified = trpc.payments.verifiedPayments.useQuery();
   const customers = useMemo(() => {
     const byBuyer = new Map<string, { email: string; volume: number; payments: number }>();
@@ -1050,10 +805,23 @@ function CustomersPage() {
     }
     return Array.from(byBuyer.entries()).map(([name, details]) => ({ name, ...details }));
   }, [verified.data]);
-  return <div className="page-content"><PageHeader title="Customers" action="Refresh buyers" onAction={() => void verified.refetch()} /><div className="filter-bar"><div className="search-field wide"><Search size={15} /><input placeholder="Search verified buyers" aria-label="Search verified buyers" /></div><button className="filter-button" onClick={() => toast.info("Buyer filters are coming with the reporting API.")}><ListFilter size={15} /> Filters</button></div>{!customers.length ? <div className="card empty-feature"><h3>No verified buyers yet</h3><p>Complete an Arc Testnet USDC payment from a customer wallet to populate this workspace.</p></div> : <div className="card table-card full-table"><table><thead><tr><th>Buyer</th><th>Contact</th><th>Payment volume</th><th>Payments</th><th>Status</th></tr></thead><tbody>{customers.map(customer => <tr key={customer.name}><td><div className="customer-cell"><div className="avatar small">{customer.name.slice(0, 2).toUpperCase()}</div><strong>{customer.name}</strong></div></td><td className="muted-cell">{customer.email}</td><td className="amount-cell">${customer.volume.toFixed(2)}<small>USDC</small></td><td>{customer.payments}</td><td><StatusPill status="Verified" tone="success" /></td></tr>)}</tbody></table></div>}</div>;
+  const filteredCustomers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return query ? customers.filter(customer => `${customer.name} ${customer.email}`.toLowerCase().includes(query)) : customers;
+  }, [customers, search]);
+  return <div className="page-content">
+    <PageHeader title="Customers" action="Refresh buyers" onAction={() => void verified.refetch()} />
+    <div className="filter-bar">
+      <div className="search-field wide"><Search size={15} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search verified buyers" aria-label="Search verified buyers" /></div>
+      <span className="history-scope">Verified Arc Testnet buyers</span>
+    </div>
+    {verified.error && <div className="dashboard-data-message is-error" role="alert"><span>Buyer data could not be loaded.</span><button className="small-link" onClick={() => void verified.refetch()}>Try again</button></div>}
+    {verified.isLoading && <div className="dashboard-data-message" role="status">Loading verified buyers…</div>}
+    {!verified.isLoading && !verified.error && filteredCustomers.length === 0 ? <div className="card empty-feature"><h3>{customers.length ? "No matching buyers" : "No verified buyers yet"}</h3><p>{customers.length ? "Try another name or wallet address." : "Complete an Arc Testnet USDC payment from a customer wallet to populate this workspace."}{customers.length > 0 && <button className="small-link" onClick={() => setSearch("")}> Clear search</button>}</p></div> : filteredCustomers.length > 0 && <div className="card table-card full-table"><table><thead><tr><th>Buyer</th><th>Contact</th><th>Payment volume</th><th>Payments</th><th>Status</th></tr></thead><tbody>{filteredCustomers.map(customer => <tr key={customer.name}><td><div className="customer-cell"><div className="avatar small">{customer.name.slice(0, 2).toUpperCase()}</div><strong>{customer.name}</strong></div></td><td className="muted-cell">{customer.email}</td><td className="amount-cell">${customer.volume.toFixed(2)}<small>USDC</small></td><td>{customer.payments}</td><td><StatusPill status="Verified" tone="success" /></td></tr>)}</tbody></table></div>}
+  </div>;
 }
 function DetailDrawer({ id, close }: { id: string; close: () => void }) {
-  const intentQuery = trpc.payments.getIntent.useQuery({ id });
+  const intentQuery = trpc.payments.getPrivateIntent.useQuery({ id });
   const intent = intentQuery.data;
   const amountUsdc = intent ? (Number(intent.amountAtomic) / 1_000_000).toFixed(2) : "—";
   return (
@@ -1075,8 +843,8 @@ function DetailDrawer({ id, close }: { id: string; close: () => void }) {
         <DetailLine label="Merchant Destination" value={intent?.merchantAddress ? `${intent.merchantAddress.slice(0, 10)}…${intent.merchantAddress.slice(-8)}` : "—"} mono copy />
         <DetailLine label="Transaction" value={intent?.transactionHash ? `${intent.transactionHash.slice(0, 12)}…${intent.transactionHash.slice(-8)}` : "Pending onchain"} mono copy />
         {intent?.transactionHash && (
-          <a className="button button-primary full-width" href={`https://testnet.arcscan.app/tx/${intent.transactionHash}`} target="_blank" rel="noreferrer" style={{ marginTop: "1rem" }}>
-            <ExternalLink size={15} /> View on ArcScan Explorer
+          <a className="button button-primary full-width" href={`${ARC_TESTNET_EXPLORER_URL}/tx/${intent.transactionHash}`} target="_blank" rel="noreferrer" style={{ marginTop: "1rem" }}>
+            <ExternalLink size={15} /> View on Arc Testnet Explorer
           </a>
         )}
       </aside>
@@ -1104,6 +872,13 @@ function DetailLine({ label, value, displayValue, mono, copy }: { label: string;
   );
 }
 
+function PaymentLoadState({ error, retry, receipt = false }: { error?: { message: string } | null; retry: () => void; receipt?: boolean }) {
+  return <div className="checkout-shell"><div className="checkout-brand"><Mark full /></div><main className="checkout-main"><div className="checkout-card" role={error ? "alert" : "status"}>
+    <h1>{error ? "Payment unavailable" : receipt ? "Loading buyer receipt…" : "Loading checkout…"}</h1>
+    {error && <><p>{error.message}</p><button className="button button-primary" onClick={retry}>Try again</button><Link href="/" className="button button-quiet">Back to home</Link></>}
+  </div></main></div>;
+}
+
 function ReceiptPage() {
   const [location] = useLocation();
   const pathname = typeof window !== "undefined" ? window.location.pathname : location.split("?")[0];
@@ -1112,7 +887,7 @@ function ReceiptPage() {
   const utils = trpc.useUtils();
   const query = trpc.payments.getIntent.useQuery(
     { id: intentId },
-    { enabled: Boolean(intentId) && !receiptPreview, refetchInterval: (query) => (query.state.data?.status === "succeeded" ? false : 3000) }
+    { enabled: Boolean(intentId) && !receiptPreview, retry: false, refetchInterval: (query) => (query.state.error || query.state.data?.status === "succeeded" ? false : 3000) }
   );
   const verifyTransfer = trpc.payments.verifyTransfer.useMutation();
   const [manualHash, setManualHash] = useState("");
@@ -1121,7 +896,7 @@ function ReceiptPage() {
   const [paymentQueue] = useState<MarketplacePaymentQueue | null>(() => { try { if (receiptPreview) return { orderId: "DR-MULTI-PREVIEW", intentIds: ["preview-intent-a", "preview-intent-b"], checkoutUrls: ["/receipt/preview-intent-a?demo=mixed-receipt", "/receipt/preview-intent-b?demo=mixed-receipt"], sellerNames: ["Druto Labs", "Mosaic Works"] }; const saved = window.localStorage.getItem(MARKETPLACE_PAYMENT_QUEUE_KEY); return saved ? JSON.parse(saved) as MarketplacePaymentQueue : null; } catch { return null; } });
   const previewSeller = intentId === "preview-intent-b" ? { name: "Mosaic Works", productId: "ledger-kit", itemName: "Ledger Operations Kit", amountAtomic: "2500000", sellerId: "mosaic-works" } : { name: "Druto Labs", productId: "api-pro", itemName: "Arc API Pro", amountAtomic: "1000000", sellerId: "druto-labs" };
   const previewOrderContext = JSON.stringify({ items: [{ productId: previewSeller.productId, name: previewSeller.itemName, seller: previewSeller.name, unitPrice: Number(previewSeller.amountAtomic) / 1_000_000, quantity: 1 }], delivery: "Digital delivery", shippingAddress: { name: "Alex Rivera", line1: "1 Main St", city: "Arc City", postalCode: "10001", country: "United States" }, buyerEmail: "buyer@example.com" });
-  const previewIntent = { id: intentId, externalOrderId: `DR-MULTI-PREVIEW-${previewSeller.sellerId}`, marketplaceId: "druto-demo-marketplace", sellerId: previewSeller.sellerId, merchantAccountId: `legacy-demo-${previewSeller.sellerId}`, idempotencyKey: `preview-${previewSeller.sellerId}`, itemName: previewSeller.itemName, buyerLabel: "buyer@example.com", returnUrl: "/marketplace", orderContext: previewOrderContext, amountAtomic: previewSeller.amountAtomic, asset: "USDC", network: "arc-testnet", merchantAddress: "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217", buyerAddress: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e", status: "succeeded", transactionHash: "0x3f7a18b9c6f2e8319e7a8f94cb44d32e185c7210e3954f9a0c3b84a9235d72f1", expiresAt: new Date(), createdAt: new Date(), updatedAt: new Date() } as NonNullable<typeof query.data>;
+  const previewIntent = { id: intentId, itemName: previewSeller.itemName, buyerLabel: "buyer@example.com", returnUrl: "/marketplace", orderContext: previewOrderContext, amountAtomic: previewSeller.amountAtomic, asset: "USDC", network: "arc-testnet", merchantAddress: "0xA32c7bbB2fb634bED4DfC812c15AF87a0C727217", status: "succeeded", transactionHash: "0x3f7a18b9c6f2e8319e7a8f94cb44d32e185c7210e3954f9a0c3b84a9235d72f1", expiresAt: new Date(), platformFeeBps: 0, platformFeeAmount: "0", merchantPayoutAmount: previewSeller.amountAtomic, splitContractAddress: null, verificationOrigin: window.location.origin } as NonNullable<typeof query.data>;
   const intent = query.data ?? (receiptPreview ? previewIntent : undefined);
   const nextCheckout = paymentQueue ? getNextMarketplaceCheckout(paymentQueue, intentId) : null;
 
@@ -1135,6 +910,7 @@ function ReceiptPage() {
       await verifyTransfer.mutateAsync({
         paymentIntentId: intent.id,
         transactionHash: manualHash.trim(),
+        payerSignature: await signPaymentConfirmation(intent, manualHash.trim()),
       });
       await query.refetch();
       await utils.payments.summary.invalidate();
@@ -1147,7 +923,7 @@ function ReceiptPage() {
     }
   };
 
-  if (!intent) return <div className="checkout-shell"><div className="checkout-brand"><Mark full /></div><main className="checkout-main"><div className="checkout-card"><strong>Loading buyer receipt…</strong></div></main></div>;
+  if (!intent) return <PaymentLoadState error={query.error} retry={() => { void query.refetch(); }} receipt />;
   const { amount, isSucceeded, orderContext, lineItems, buyerEmail, shipping } = buildReceiptSummary(intent);
   const statusLabel = isSucceeded ? "Payment Receipt" : "Verification in progress";
   const copyValue = async (value: string, label: string) => { const copied = await copyReceiptValue(value); if (copied) toast.success(`${label} copied`); else toast.info(`Select and copy the ${label.toLowerCase()} manually.`); };
@@ -1168,7 +944,7 @@ function ReceiptPage() {
           <div className="checkout-trust">
             <span><ShieldCheck size={14} /> Verified payment state</span>
             <span><LockKeyhole size={14} /> Non-custodial checkout</span>
-            <span><ReceiptText size={14} /> Order context preserved</span>
+            <span><ReceiptText size={14} /> Payment reference available</span>
           </div>
           <div className="receipt-side-actions">
             <button className="button button-quiet receipt-print" onClick={() => window.print()}>
@@ -1177,20 +953,20 @@ function ReceiptPage() {
             {intent.transactionHash ? (
               <a
                 className="button button-primary receipt-side-btn"
-                href={`https://testnet.arcscan.app/tx/${intent.transactionHash}`}
+                href={`${ARC_TESTNET_EXPLORER_URL}/tx/${intent.transactionHash}`}
                 target="_blank"
                 rel="noreferrer"
               >
-                <ExternalLink size={15} /> View on ArcScan Explorer
+                <ExternalLink size={15} /> View on Arc Testnet Explorer
               </a>
             ) : (
               <a
                 className="button button-quiet receipt-side-btn"
-                href={`https://testnet.arcscan.app/address/${intent.merchantAddress}`}
+                href={`${ARC_TESTNET_EXPLORER_URL}/address/${intent.merchantAddress}`}
                 target="_blank"
                 rel="noreferrer"
               >
-                <ExternalLink size={15} /> View Merchant on ArcScan Explorer
+                <ExternalLink size={15} /> View Merchant on Arc Testnet Explorer
               </a>
             )}
           </div>
@@ -1209,8 +985,8 @@ function ReceiptPage() {
 
           <div className="receipt-order-banner">
             <div>
-              <span className="eyebrow">Order</span>
-              <strong>{intent.externalOrderId}</strong>
+              <span className="eyebrow">Payment reference</span>
+              <strong>{intent.id}</strong>
             </div>
             <div className="receipt-order-badge">
               <Box size={14} /> {lineItems.length} {lineItems.length === 1 ? "item" : "items"}
@@ -1239,7 +1015,7 @@ function ReceiptPage() {
             </div>
           </section>
 
-          <section className="receipt-section receipt-meta-grid">
+          {receiptPreview ? <section className="receipt-section receipt-meta-grid">
             <div>
               <span className="receipt-meta-label"><RefreshCw size={13} /> Delivery</span>
               <strong>{orderContext?.delivery ?? "Digital delivery"}</strong>
@@ -1255,7 +1031,7 @@ function ReceiptPage() {
                 <small>{shipping.line1}, {shipping.city}, {shipping.postalCode}, {shipping.country}</small>
               </div>
             )}
-          </section>
+          </section> : <section className="receipt-section"><p>Buyer contact, shipping and delivery details are available from the marketplace through its authorized order access.</p></section>}
 
           <section className="receipt-section proof-section">
             <div className="receipt-section-heading">
@@ -1287,7 +1063,7 @@ function ReceiptPage() {
               <span style={{ fontSize: "12px", fontWeight: 600, color: "#2d3436", display: "block", marginBottom: "4px" }}>
                 Already sent USDC on Arc Testnet?
               </span>
-              <p style={{ fontSize: "11px", color: "#636e72", margin: "0 0 8px" }}>
+              <p style={{ fontSize: "12px", color: "#636e72", margin: "0 0 8px" }}>
                 Paste the Arc transaction hash from your wallet or ArcScan to instantly finalize verification.
               </p>
               <div style={{ display: "flex", gap: "6px" }}>
@@ -1296,13 +1072,13 @@ function ReceiptPage() {
                   placeholder="0x..."
                   value={manualHash}
                   onChange={e => setManualHash(e.target.value)}
-                  style={{ flex: 1, padding: "6px 8px", fontSize: "11px", border: "1px solid #ced6e0", borderRadius: "6px" }}
+                  style={{ flex: 1, padding: "6px 8px", fontSize: "12px", border: "1px solid #ced6e0", borderRadius: "6px" }}
                 />
                 <button
                   className="button button-primary"
                   onClick={handleManualVerify}
                   disabled={isVerifyingManual || !manualHash.trim()}
-                  style={{ fontSize: "11px", padding: "0 10px", height: "30px" }}
+                  style={{ fontSize: "12px", padding: "0 10px", height: "30px" }}
                 >
                   {isVerifyingManual ? "Verifying…" : "Verify Tx"}
                 </button>
@@ -1340,28 +1116,62 @@ function CheckoutPage() {
   const [location] = useLocation();
   const pathname = typeof window !== "undefined" ? window.location.pathname : location.split("?")[0];
   const intentId = pathname.split("/").filter(Boolean).pop() || "";
-  const intentQuery = trpc.payments.getIntent.useQuery({ id: intentId }, { enabled: Boolean(intentId) });
+  const intentQuery = trpc.payments.getIntent.useQuery({ id: intentId }, { enabled: Boolean(intentId), retry: false });
   const verifyTransfer = trpc.payments.verifyTransfer.useMutation();
   const intent = intentQuery.data;
-  const amountDisplay = intent ? (Number(intent.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00";
+  const amountDisplay = intent ? (Number(intent.amountAtomic) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) : "0.00";
 
   const [address, setAddress] = useState<`0x${string}` | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
   const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
+  const [balanceStatus, setBalanceStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [connecting, setConnecting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [txHash, setTxHash] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(() => { try { return window.localStorage.getItem(`druto:payment:${intentId}`); } catch { return null; } });
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [checkoutQr, setCheckoutQr] = useState<{ intentId: string; dataUrl: string } | null>(null);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const isArc = chainId === ARC_CHAIN_ID;
   const isSucceeded = intent?.status === "succeeded";
+  const isExpired = Boolean(intent && !txHash && new Date(intent.expiresAt).getTime() <= nowMs);
+  const requiresNewPaymentLink = Boolean(intent && (intent.platformFeeBps !== 0 || intent.splitContractAddress));
+  const marketplaceReturnUrl = safeMarketplaceReturnUrl(intent?.returnUrl);
+
+  useEffect(() => {
+    setCheckoutQr(null);
+    if (!intent || isSucceeded || isExpired || requiresNewPaymentLink || typeof window === "undefined") {
+      return;
+    }
+
+    let cancelled = false;
+    void QRCode.toDataURL(window.location.href, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 180,
+      color: { dark: "#172b27", light: "#ffffff" },
+    }).then((dataUrl) => {
+      if (!cancelled) setCheckoutQr({ intentId: intent.id, dataUrl });
+    }).catch(() => {
+      if (!cancelled) setCheckoutQr(null);
+    });
+    return () => { cancelled = true; };
+  }, [intent?.id, isSucceeded, isExpired, requiresNewPaymentLink]);
 
   const updateBalance = async (addr: `0x${string}`) => {
+    setBalanceStatus("loading");
     try {
       const bal = await fetchArcUsdcBalance(addr);
       setUsdcBalance(bal);
+      setBalanceStatus("ready");
     } catch {
-      setUsdcBalance("0.00");
+      setUsdcBalance(null);
+      setBalanceStatus("unavailable");
     }
   };
 
@@ -1454,7 +1264,7 @@ function CheckoutPage() {
                 chainName: "Arc Testnet",
                 nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
                 rpcUrls: [ARC_RPC_URL],
-                blockExplorerUrls: ["https://testnet.arcscan.app"],
+                blockExplorerUrls: [ARC_TESTNET_EXPLORER_URL],
               },
             ],
           });
@@ -1469,7 +1279,15 @@ function CheckoutPage() {
   };
 
   const handlePay = async () => {
-    if (!intent) return;
+    if (!intent || paying || verifying || isSucceeded) return;
+    if (intent.platformFeeBps !== 0 || intent.splitContractAddress) {
+      toast.error("This payment link uses older fee terms. Ask the marketplace for a new link; contact support if you already paid.");
+      return;
+    }
+    if (!txHash && new Date(intent.expiresAt).getTime() <= Date.now()) {
+      toast.error("This checkout has expired. Ask the merchant for a new payment link.");
+      return;
+    }
     if (!address) {
       await connectWallet();
       return;
@@ -1480,9 +1298,13 @@ function CheckoutPage() {
     }
 
     setPaying(true);
+    let submittedHash = txHash;
     try {
-      const data = encodeArcUsdcTransfer(intent.merchantAddress as `0x${string}`, intent.amountAtomic);
-      const hash = await window.ethereum.request({
+      let hash = submittedHash;
+      if (!hash) {
+        if (!window.ethereum) throw new Error("Reconnect your EVM wallet before sending this payment");
+        const data = encodeArcUsdcTransfer(intent.merchantAddress as `0x${string}`, intent.amountAtomic);
+        hash = await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [
           {
@@ -1491,16 +1313,21 @@ function CheckoutPage() {
             data,
           },
         ],
-      });
+        });
+      }
+      if (!hash) throw new Error("The wallet did not return a transaction hash");
 
+      submittedHash = hash;
       setTxHash(hash);
+      try { window.localStorage.setItem(`druto:payment:${intent.id}`, hash); } catch { /* in-memory hash still prevents a second send */ }
       setPaying(false);
       setVerifying(true);
-      toast.info("Transaction broadcast. Verifying on Arc Testnet…");
+      toast.info("Transaction sent. Sign the confirmation to link it to this order. Retrying will not send another payment.");
 
       const result = await verifyTransfer.mutateAsync({
         paymentIntentId: intent.id,
         transactionHash: hash,
+        payerSignature: await signPaymentConfirmation(intent, hash),
       });
 
       toast.success("Payment verified onchain!");
@@ -1508,9 +1335,11 @@ function CheckoutPage() {
     } catch (err: any) {
       setPaying(false);
       setVerifying(false);
-      toast.error(err?.message || "Payment transaction failed or was rejected");
+      toast.error(checkoutWalletError(err, Boolean(submittedHash)));
     }
   };
+
+  if (!intent) return <PaymentLoadState error={intentQuery.error} retry={() => { void intentQuery.refetch(); }} />;
 
   return (
     <div className="checkout-shell">
@@ -1541,7 +1370,7 @@ function CheckoutPage() {
 
         <div className="checkout-card">
           <div className="checkout-card-head">
-            <span>Order #{(intent?.externalOrderId ?? intentId) || "pending"}</span>
+            <span>Payment #{(intent?.id ?? intentId) || "pending"}</span>
             <span className="checkout-expiry">
               <Timer size={14} /> {intent ? "Item: " + intent.itemName : "Intent unavailable"}
             </span>
@@ -1551,6 +1380,17 @@ function CheckoutPage() {
             <span>Total due</span>
             <strong>{"$" + amountDisplay} <small>USDC</small></strong>
           </div>
+
+          {requiresNewPaymentLink && !isSucceeded && (
+            <div role="alert" className="checkout-note" style={{ margin: "14px 0" }}>
+              This payment link uses unsupported fee terms and cannot be paid. Return to the marketplace for a new link. If you already paid, contact the marketplace with your transaction hash.
+            </div>
+          )}
+          {isExpired && !isSucceeded && (
+            <div role="alert" className="checkout-note" style={{ margin: "14px 0" }}>
+              This checkout has expired. Ask the marketplace for a new payment link; do not send funds using this one.
+            </div>
+          )}
 
           <div className="checkout-network">
             <span className="network-symbol">A</span>
@@ -1576,8 +1416,8 @@ function CheckoutPage() {
             {address && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", paddingTop: "6px", borderTop: "1px solid #f0f0f0" }}>
                 <span style={{ color: "#666" }}>Arc USDC Balance:</span>
-                <strong style={{ color: Number(usdcBalance ?? 0) < Number(intent ? Number(intent.amountAtomic) / 1_000_000 : 0) ? "#e17055" : "#1e9b83" }}>
-                  {usdcBalance !== null ? `${usdcBalance} USDC` : "Loading…"}
+                <strong style={{ color: usdcBalance === null ? "#666" : Number(usdcBalance) < Number(intent ? Number(intent.amountAtomic) / 1_000_000 : 0) ? "#e17055" : "#1e9b83" }}>
+                  {usdcBalance !== null ? `${usdcBalance} USDC` : balanceStatus === "unavailable" ? "Balance unavailable" : "Loading…"}
                 </strong>
               </div>
             )}
@@ -1605,7 +1445,15 @@ function CheckoutPage() {
             </button>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {!address ? (
+              {isExpired || requiresNewPaymentLink ? (
+                marketplaceReturnUrl ? (
+                  <a className="button button-primary full-width" href={marketplaceReturnUrl}>
+                    <ArrowUpRight size={16} /> Return to marketplace for a new payment link
+                  </a>
+                ) : (
+                  <p className="checkout-note" role="status">Ask the marketplace for a new payment link. This checkout cannot be paid.</p>
+                )
+              ) : !address ? (
                 <button
                   className="button button-primary full-width"
                   onClick={connectWallet}
@@ -1623,6 +1471,8 @@ function CheckoutPage() {
                     <>Confirm in wallet…</>
                   ) : verifying ? (
                     <><RefreshCw size={14} className="animate-spin" /> Verifying on Arc Testnet…</>
+                  ) : txHash ? (
+                    <>Retry verification</>
                   ) : (
                     <>Pay ${amountDisplay} USDC with Wallet</>
                   )}
@@ -1639,6 +1489,19 @@ function CheckoutPage() {
                   View receipt / pending state
                 </button>
               )}
+            </div>
+          )}
+
+          {checkoutQr?.intentId === intent.id && !isExpired && !requiresNewPaymentLink && !isSucceeded && (
+            <div className="qr-panel" role="group" aria-label="Share this hosted checkout">
+              <div><img src={checkoutQr.dataUrl} alt="QR code that opens this Druto hosted checkout" /></div>
+              <span>
+                <strong>Open this checkout on another device</strong>
+                <small>Scan to open the secure checkout link. Wallet support depends on the browser or wallet app.</small>
+                <button type="button" className="text-button" onClick={() => { void copyReceiptValue(window.location.href).then(copied => copied ? toast.success("Checkout link copied") : toast.info("Copy the checkout link from your browser address bar.")); }}>
+                  <Copy size={13} /> Copy checkout link
+                </button>
+              </span>
             </div>
           )}
 
@@ -2038,17 +1901,38 @@ function MarketplacePage() {
 function OrderSummary({ subtotal, shipping, total, actionLabel, onAction, disabled }: { subtotal: number; shipping: number; total: number; actionLabel: string; onAction: () => void; disabled?: boolean }) { return <aside className="card order-summary"><div className="card-heading"><div><span className="eyebrow">Order summary</span><h3>Review total</h3></div><ReceiptText size={18} /></div><div className="summary-row"><span>Subtotal</span><strong>${subtotal.toFixed(2)} USDC</strong></div><div className="summary-row"><span>Delivery</span><strong>{shipping ? `$${shipping.toFixed(2)} USDC` : "Free"}</strong></div><div className="summary-total"><span>Total</span><strong>${total.toFixed(2)} <small>USDC</small></strong></div><button className="button button-primary full-width" onClick={onAction} disabled={disabled}>{actionLabel} <ArrowUpRight size={15} /></button><small className="summary-safe"><LockKeyhole size={12} /> You’ll review the exact amount in Druto before signing.</small></aside>; }
 
 
-function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: string | null; email?: string | null } }) {
+export function DashboardWorkspace({ user, onExitPreview }: { user: { name?: string | null; openId?: string | null; email?: string | null }; onExitPreview?: () => void }) {
+  const { theme, toggleTheme } = useDashboardTheme();
   const [location] = useLocation();
-  const [active, setActive] = useState(location.startsWith("/payments") ? "Payments" : "Overview");
+  const readSection = () => {
+    if (typeof window === "undefined") return location.startsWith("/payments") ? "Payments" : "Overview";
+    const section = new URLSearchParams(window.location.search).get("section");
+    const names: Record<string,string> = { overview:"Overview", payments:"Payments", sellers:"Sellers", wallets:"Receiving wallets", developers:"Developers", keys:"API Keys", webhooks:"Webhooks", settings:"Settings", support:"Support" };
+    return names[section ?? ""] ?? (window.location.pathname.startsWith("/payments") ? "Payments" : "Overview");
+  };
+  const [active, setActive] = useState(readSection);
+  useEffect(() => {
+    const onBack = () => setActive(readSection());
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, []);
+  useEffect(() => {
+    const names: Record<string,string> = { Overview:"overview", Payments:"payments", Sellers:"sellers", "Receiving wallets":"wallets", Developers:"developers", "API Keys":"keys", Webhooks:"webhooks", Settings:"settings", Support:"support" };
+    const url = new URL(window.location.href);
+    const desired = names[active];
+    if (!desired || (url.searchParams.get("section") ?? (url.pathname === "/payments" ? "payments" : "overview")) === desired) return;
+    url.searchParams.set("section", desired);
+    window.history.pushState(null, "", url.pathname + url.search + url.hash);
+  }, [active]);
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [moduleToggles, setModuleToggles] = useState<ModuleToggles>(getStoredModuleToggles);
 
   const handleToggleModule = (key: keyof ModuleToggles, val: boolean) => {
     const updated = { ...moduleToggles, [key]: val };
     setModuleToggles(updated);
-    saveStoredModuleToggles(updated);
+    if (!onExitPreview) saveStoredModuleToggles(updated);
     const labels: Record<keyof ModuleToggles, string> = {
       paymentLinks: "Payment Links",
       invoices: "Invoices",
@@ -2058,24 +1942,73 @@ function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: s
     toast.success(`${labels[key]} ${val ? "added to sidebar" : "removed from sidebar"}`);
   };
 
+  const focusPayments = () => {
+    setActive("Overview");
+    window.setTimeout(() => document.getElementById("dashboard-payment-search")?.focus(), 80);
+  };
+  useEffect(() => {
+    const keyboard = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && !document.querySelector('[role="dialog"]')) { event.preventDefault(); focusPayments(); }
+    };
+    document.addEventListener("keydown", keyboard);
+    return () => document.removeEventListener("keydown", keyboard);
+  }, []);
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const nav = document.getElementById("druto-dashboard-sidebar");
+    const focusables = () => Array.from(nav?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input, select') ?? []).filter(node => node.getClientRects().length);
+    const focusNavigation = () => {
+      if (nav && !nav.contains(document.activeElement)) focusables()[0]?.focus({ preventScroll: true });
+    };
+    const focusFrame = window.requestAnimationFrame(focusNavigation);
+    // A closing dialog can restore focus after this drawer begins opening.
+    // Recheck once after the visibility transition without disturbing focus inside.
+    const focusAfterTransition = window.setTimeout(focusNavigation, 300);
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setMobileNavOpen(false); return; }
+      if (event.key !== "Tab") return;
+      const nodes = focusables(), first = nodes[0], last = nodes[nodes.length - 1];
+      if (!nav?.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first)?.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    const mq = window.matchMedia("(min-width: 901px)");
+    const closeOnDesktop = () => { if (mq.matches) setMobileNavOpen(false); };
+    mq.addEventListener("change", closeOnDesktop);
+    document.addEventListener("keydown", keyboard);
+    return () => { window.cancelAnimationFrame(focusFrame); window.clearTimeout(focusAfterTransition); document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", keyboard); mq.removeEventListener("change", closeOnDesktop); previous?.focus(); };
+  }, [mobileNavOpen]);
+
   const title = active === "Overview" ? "Overview" : active;
-  const create = () => setShowCreate(true);
+  const create = () => onExitPreview
+    ? toast.info("Preview is read-only. Sign in to create real payment intents.")
+    : D1_WALLET_ONLY
+    ? setActive("Sellers")
+    : setShowCreate(true);
   return (
-    <div className="app-shell">
+    <div className="app-shell dashboard-glass">
+      {mobileNavOpen && <button type="button" className="dg-nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
       <Sidebar
         active={active}
-        setActive={setActive}
+        setActive={page => { setActive(page); setMobileNavOpen(false); }}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         user={user}
         moduleToggles={moduleToggles}
+        onExitPreview={onExitPreview}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
       />
       <main className="main-shell">
-        <Topbar title={title} onCreate={create} />
+        <Topbar theme={theme} onToggleTheme={toggleTheme} title={title} onCreate={create} onExitPreview={onExitPreview} overview={active === "Overview"} onSearch={focusPayments} onOpenNavigation={() => setMobileNavOpen(true)} />
+        <div className="dg-view-frame" key={active}>
         {active === "Overview" ? (
-          <Overview setActive={setActive} onCreate={create} />
+          <DashboardOverview setActive={setActive} onCreate={create} createLabel={D1_WALLET_ONLY && !onExitPreview ? "Set up checkout" : "Create payment"} />
         ) : (
-          <PagePanel
+          <PagePanel onNavigate={setActive}
             active={active}
             onCreate={create}
             moduleToggles={moduleToggles}
@@ -2083,6 +2016,7 @@ function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: s
             user={user}
           />
         )}
+        </div>
       </main>
       {showCreate && <CreatePayment close={() => setShowCreate(false)} />}
     </div>
@@ -2090,60 +2024,38 @@ function DashboardWorkspace({ user }: { user: { name?: string | null; openId?: s
 }
 
 function DashboardAccess() {
-  const session = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
-  const privyLogin = trpc.auth.privyLogin.useMutation();
-  const utils = trpc.useUtils();
-  const [privyExchangeState, setPrivyExchangeState] = useState<"idle" | "loading" | "error">("idle");
-
-  let privy: any = null;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    privy = usePrivy();
-  } catch {
-    privy = null;
+  const [preview, setPreview] = useState(() => import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("preview") === "dashboard");
+  const enterPreview = () => {
+    window.history.replaceState(null, "", "/dashboard?preview=dashboard");
+    setPreview(true);
+  };
+  const exitPreview = () => {
+    window.history.replaceState(null, "", "/dashboard");
+    setPreview(false);
+  };
+  if (import.meta.env.DEV && preview && DevDashboardPreview) {
+    return <Suspense fallback={<div className="dashboard-loading" role="status">Loading sample workspace…</div>}>
+      <DevDashboardPreview onExit={exitPreview} />
+    </Suspense>;
   }
+  return <AuthenticatedDashboardAccess onPreview={import.meta.env.DEV ? enterPreview : undefined} />;
+}
 
-  const privyReady = privy?.ready;
-  const privyAuthenticated = privy?.authenticated;
-  const getAccessToken = privy?.getAccessToken;
-
-  useEffect(() => {
-    if (!privyReady || !privyAuthenticated || session.data || privyExchangeState !== "idle" || !getAccessToken) return;
-    let active = true;
-    setPrivyExchangeState("loading");
-    void getAccessToken().then(async (accessToken: string | null) => {
-      if (!active) return;
-      if (!accessToken) {
-        setPrivyExchangeState("error");
-        return;
-      }
-      try {
-        await privyLogin.mutateAsync({ accessToken });
-        await utils.auth.me.invalidate();
-      } catch (error) {
-        if (active) {
-          setPrivyExchangeState("error");
-          toast.error(error instanceof Error ? error.message : "Privy session could not be established");
-        }
-      }
-    });
-    return () => { active = false; };
-  }, [getAccessToken, privyAuthenticated, privyReady, privyExchangeState, session.data, utils.auth.me, privyLogin]);
-
-  const waitingForPrivy = privyAuthenticated && !session.data && privyExchangeState !== "error";
-  if (session.isLoading || privyExchangeState === "loading" || waitingForPrivy) {
+function AuthenticatedDashboardAccess({ onPreview }: { onPreview?: () => void }) {
+  const session = trpc.auth.me.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
+  if (session.isLoading) {
     return (
       <div className="dashboard-loading">
         <Mark />
         <div className="auth-spinner" aria-hidden="true" />
         <strong>Loading Druto workspace…</strong>
-        <span>{privyAuthenticated ? "Finishing secure sign-in with Privy." : "Verifying your sign-in session."}</span>
+        <span>Verifying your sign-in session.</span>
       </div>
     );
   }
 
   if (!session.data || dashboardAccessState(session.data) !== "workspace") {
-    return <AccountLoginCard />;
+    return <AccountLoginCard onPreview={onPreview} />;
   }
 
   return <DashboardWorkspace user={session.data} />;
@@ -2152,7 +2064,7 @@ function DashboardAccess() {
 export default function Home() { const [location] = useLocation(); if (location.startsWith("/receipt")) return <ReceiptPage />; if (location.startsWith("/checkout")) return <CheckoutPage />; return <DashboardAccess />; }
 function CreatePayment({ close }: { close: () => void }) {
   const [amount, setAmount] = useState("1.00");
-  const [orderId, setOrderId] = useState("DR-1842");
+  const [orderId, setOrderId] = useState(() => `DR-${crypto.randomUUID()}`);
   const [itemName, setItemName] = useState("Arc API Pro — annual access");
   const createIntent = trpc.payments.createIntent.useMutation();
   const submit = async () => {

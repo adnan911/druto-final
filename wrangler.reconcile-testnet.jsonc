@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "druto-d1-testnet-reconciler",
+  "main": "workers/testnet-reconciler/index.ts",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": false,
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "d1_databases": [
+    { "binding": "DRUTO_D1", "database_name": "druto-d1-testnet",
+      "database_id": "d1f68dd0-c984-4b56-8167-d4ae0ee70ca2" }
+  ],
+  "observability": { "enabled": true, "issues": { "enabled": true } }
+}

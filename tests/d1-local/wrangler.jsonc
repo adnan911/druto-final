@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "druto-d1-local-proof",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "druto-d1-local-probe",
+      "database_id": "00000000-0000-0000-0000-000000000001"
+    }
+  ]
+}

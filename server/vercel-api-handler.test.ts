@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
-import handler from "../api/index";
-import trpcHandler from "../api/trpc/[...path]";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import handler from "../api/index.src";
+import trpcHandler from "../api/trpc/[...path].src";
 
 const servers: ReturnType<typeof createServer>[] = [];
 
@@ -14,6 +14,7 @@ afterEach(async () => {
       }),
     ),
   );
+  vi.unstubAllEnvs();
 });
 
 function listen(handlerFn: (req: any, res: any) => unknown) {
@@ -37,6 +38,24 @@ describe("Vercel API handlers", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(await response.json()).toEqual({ ok: true, service: "druto" });
+  });
+
+  it("reports not ready when the durable database is not configured", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const { port } = await listen(handler);
+    const response = await fetch(`http://127.0.0.1:${port}/api/ready`);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ ready: false });
+  });
+
+  it("keeps the source serverless drain route disabled without its own token", async () => {
+    vi.stubEnv("DRUTO_OUTBOX_DRAIN_TOKEN", "");
+    const { port } = await listen(handler);
+    const response = await fetch(`http://127.0.0.1:${port}/api/internal/webhook-outbox/drain`, { method: "POST" });
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ ok: false });
   });
 
   it("serves the wallet tRPC catch-all as JSON without requiring a wallet signature", async () => {

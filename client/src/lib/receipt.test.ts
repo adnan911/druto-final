@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { buildReceiptSummary, copyReceiptValue } from "./receipt";
 
 describe("buyer receipt utilities", () => {
+  it("preserves the six decimal places supported by USDC", () => {
+    expect(buildReceiptSummary({ amountAtomic: "1", status: "succeeded", itemName: "Tiny payment" }).amount).toBe("0.000001");
+  });
+
+  it("falls back when valid JSON has an invalid receipt structure", () => {
+    for (const context of [{ items: "bad" }, { items: [null] }, { buyerEmail: {} }, []]) {
+      const summary = buildReceiptSummary({ amountAtomic: "1000000", status: "succeeded", itemName: "Fallback", orderContext: JSON.stringify(context) });
+      expect(summary.orderContext).toBeNull();
+      expect(summary.lineItems[0].name).toBe("Fallback");
+    }
+  });
   it("builds a structured marketplace receipt summary", () => {
     const summary = buildReceiptSummary({
       amountAtomic: "1250000",

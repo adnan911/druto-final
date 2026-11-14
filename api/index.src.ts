@@ -4,14 +4,19 @@ import { appRouter } from "../server/routers.js";
 import { createContext } from "../server/_core/context.js";
 import { registerOAuthRoutes } from "../server/_core/oauth.js";
 import { registerStorageProxy } from "../server/_core/storageProxy.js";
+import { checkDatabaseReadiness } from "../server/db.js";
+import { assertWebhookEncryptionConfigured } from "../server/webhooks.js";
+import { registerWebhookDrainRoute } from "../server/webhook-drain-route.js";
+import { assertCloudflareRuntimeConfiguration } from "../server/public-origin.js";
 
 type VercelRequest = Request;
 type VercelResponse = Response;
 
 let appPromise: Promise<Express> | undefined;
 
-async function createApp(): Promise<Express> {
+export async function createApp(): Promise<Express> {
   const app = express();
+  app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use((req, _res, next) => {
@@ -29,9 +34,22 @@ async function createApp(): Promise<Express> {
   });
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  registerWebhookDrainRoute(app);
 
   app.get("/api/health", (_req, res) => {
     res.status(200).json({ ok: true, service: "druto" });
+  });
+
+  app.get("/api/ready", async (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      await checkDatabaseReadiness();
+      assertWebhookEncryptionConfigured();
+      assertCloudflareRuntimeConfiguration();
+      res.status(200).json({ ready: true });
+    } catch {
+      res.status(503).json({ ready: false });
+    }
   });
 
   const trpcMiddleware = createExpressMiddleware({

@@ -1,60 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
-import { dispatchPaymentVerified } from "./webhook-delivery";
-import { encryptWebhookSecret } from "./webhooks";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { drainWebhookOutbox, enqueuePaymentVerified, postWebhook } from "./webhook-delivery";
 
-describe("webhook delivery dispatch", () => {
-  it("delivers payment.verified once per endpoint/event", async () => {
-    const endpoint = { id: "wh_1", merchantAccountId: "ma_1", url: "https://market.example/hooks", active: 1, secretCiphertext: encryptWebhookSecret("secret") };
-    let selectCalls = 0; let insertCalls = 0; const updates: unknown[] = [];
-    const db = {
-      select: vi.fn(() => {
-        selectCalls += 1;
-        const rows = selectCalls === 3 ? [{ id: "wd_existing", status: "succeeded" }] : [endpoint];
-        const result = { limit: vi.fn(async () => rows), then: (resolve: (value: unknown[]) => unknown) => Promise.resolve(rows).then(resolve) };
-        return { from: vi.fn(() => ({ where: vi.fn(() => result) })) };
-      }),
-      insert: vi.fn(() => ({ values: vi.fn(async () => { insertCalls += 1; if (insertCalls > 1) throw new Error("duplicate"); }) })),
-      update: vi.fn(() => ({ set: vi.fn((value: unknown) => { updates.push(value); return { where: vi.fn(async () => undefined) }; }) })),
-    };
-    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-    const intent = { id: "pi_1", externalOrderId: "order_1", merchantAccountId: "ma_1", marketplaceId: "market", sellerId: "seller", merchantAddress: "0x2222222222222222222222222222222222222222", buyerAddress: null, orderContext: null };
-    const transaction = { transactionHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", amountAtomic: "1000000" };
-    await expect(dispatchPaymentVerified(db, intent as never, transaction as never)).resolves.toHaveLength(1);
-    await expect(dispatchPaymentVerified(db, intent as never, transaction as never)).resolves.toHaveLength(1);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(insertCalls).toBe(2);
-    expect(updates).toHaveLength(1);
-    vi.unstubAllGlobals();
+beforeEach(() => vi.stubEnv("DRUTO_WEBHOOK_ALLOWED_ORIGINS", "https://market.example"));
+afterEach(() => { vi.unstubAllEnvs(); });
+describe("durable webhook delivery boundaries", () => {
+  it.each(["http://localhost/hooks", "https://private.example/hooks", "https://user:pass@market.example/hooks", "https://127.0.0.1/hooks", "https://market.example/hooks#fragment", "bad-url"])("blocks an unapproved destination: %s", async url => {
+    expect((await postWebhook(url, "secret", "evt_1", "{}")).ok).toBe(false);
   });
-
-  it("does not retry before nextAttemptAt", async () => {
-    const db = { select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ limit: vi.fn(async () => [{ id: "wd_1", status: "failed", nextAttemptAt: new Date(10_000), attempts: 1 }]) })) })) })) };
-    await expect((await import("./webhook-delivery")).retryWebhookDelivery(db, "wd_1", new Date(5_000))).resolves.toMatchObject({ ok: false, status: 425 });
+  it("fails closed without an operator origin list", async () => {
+    vi.stubEnv("DRUTO_WEBHOOK_ALLOWED_ORIGINS", "");
+    expect((await postWebhook("https://market.example/hooks", "secret", "evt_1", "{}")).ok).toBe(false);
   });
-
-  it("records failed replay metadata when the receiver rejects a due delivery", async () => {
-    const endpoint = { id: "wh_fail", url: "https://market.example/hooks", active: 1, secretCiphertext: encryptWebhookSecret("secret") };
-    const delivery = { id: "wd_fail", endpointId: "wh_fail", eventId: "evt_fail", payload: "{}", status: "failed", attempts: 2, nextAttemptAt: new Date(1_000) };
-    let selectCalls = 0; const updates: any[] = [];
-    const db = { select: vi.fn(() => { selectCalls += 1; const rows = selectCalls === 1 ? [delivery] : [endpoint]; const result = { limit: vi.fn(async () => rows), then: (resolve: (value: unknown[]) => unknown) => Promise.resolve(rows).then(resolve) }; return { from: vi.fn(() => ({ where: vi.fn(() => result) })) }; }), update: vi.fn(() => ({ set: vi.fn((value: unknown) => { updates.push(value); return { where: vi.fn(async () => undefined) }; }) })) };
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("no", { status: 500 })));
-    const { retryWebhookDelivery } = await import("./webhook-delivery");
-    await expect(retryWebhookDelivery(db, "wd_fail", new Date(2_000))).resolves.toMatchObject({ ok: false, status: 500 });
-    expect(updates[0]).toMatchObject({ status: "failed", attempts: 3, lastError: "Receiver returned HTTP 500" });
-    expect(updates[0].nextAttemptAt).toBeInstanceOf(Date);
-    vi.unstubAllGlobals();
+  it("propagates outbox insertion failure instead of sending or silently losing the event", async () => {
+    const tx = { select: () => ({ from: () => ({ where: async () => [{ id: "wh_1" }] }) }), insert: () => ({ values: async () => { throw new Error("disk unavailable"); } }) };
+    await expect(enqueuePaymentVerified(tx, { id: "pi_1", merchantAccountId: "ma_1" } as never, { amountAtomic: "1" } as never)).rejects.toThrow("disk unavailable");
   });
-
-  it("retries a due delivery and records success or failure", async () => {
-    const endpoint = { id: "wh_1", url: "https://market.example/hooks", active: 1, secretCiphertext: encryptWebhookSecret("secret") };
-    const delivery = { id: "wd_1", endpointId: "wh_1", eventId: "evt_1", payload: "{}", status: "failed", attempts: 1, nextAttemptAt: new Date(1_000) };
-    let selectCalls = 0; const updates: any[] = [];
-    const db = { select: vi.fn(() => { selectCalls += 1; const rows = selectCalls === 1 ? [delivery] : [endpoint]; const result = { limit: vi.fn(async () => rows), then: (resolve: (value: unknown[]) => unknown) => Promise.resolve(rows).then(resolve) }; return { from: vi.fn(() => ({ where: vi.fn(() => result) })) }; }), update: vi.fn(() => ({ set: vi.fn((value: unknown) => { updates.push(value); return { where: vi.fn(async () => undefined) }; }) })) };
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("ok", { status: 200 })));
-    const { retryWebhookDelivery } = await import("./webhook-delivery");
-    await expect(retryWebhookDelivery(db, "wd_1", new Date(2_000))).resolves.toMatchObject({ ok: true, status: 200 });
-    expect(updates[0]).toMatchObject({ status: "succeeded", attempts: 2 });
-    vi.unstubAllGlobals();
+  it("bounds worker batches before querying the database", async () => {
+    await expect(drainWebhookOutbox({}, 4)).rejects.toThrow("batch limit");
   });
 });

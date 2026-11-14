@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { requestInjectedWalletAddress, signInjectedWalletMessage } from "@/lib/injectedWalletAuth";
 import { Link } from "wouter";
 import {
   ArrowRight,
@@ -7,39 +8,21 @@ import {
   ExternalLink,
   KeyRound,
   Lock,
-  Mail,
+
   RefreshCw,
   ShieldCheck,
   Sparkles,
-  UserCheck,
   Wallet,
 } from "lucide-react";
-import { usePrivy } from "@privy-io/react-auth";
-import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { toast } from "sonner";
-
-export default function AccountLoginCard() {
-  const [email, setEmail] = useState("");
+export default function AccountLoginCard({ onPreview }: { onPreview?: () => void }) {
   const [isWalletSigning, setIsWalletSigning] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<`0x${string}` | null>(null);
   const auraCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  const directLogin = trpc.auth.directAccountLogin.useMutation();
-  const privyAccountLogin = trpc.auth.privyLogin.useMutation();
   const createChallenge = trpc.auth.createWalletChallenge.useMutation();
   const verifyWallet = trpc.auth.verifyWalletLogin.useMutation();
   const utils = trpc.useUtils();
 
-  const { address, isConnected } = useAccount();
-  const { connectAsync, connectors } = useConnect();
-  const { signMessageAsync } = useSignMessage();
-
-  let privy: any = null;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    privy = usePrivy();
-  } catch {
-    privy = null;
-  }
 
   // Dynamic Aura Wave Animation
   useEffect(() => {
@@ -102,34 +85,14 @@ export default function AccountLoginCard() {
   const handleWalletSignIn = async () => {
     try {
       setIsWalletSigning(true);
-      let activeAddress = address;
-
-      if (!isConnected || !activeAddress) {
-        const injectedConnector = connectors.find(
-          (c) => c.id === "injected" || c.name.toLowerCase().includes("metamask")
-        ) || connectors[0];
-
-        if (injectedConnector) {
-          const connectResult = await connectAsync({ connector: injectedConnector });
-          activeAddress = connectResult.accounts[0];
-        } else {
-          toast.error("No compatible EVM wallet detected");
-          setIsWalletSigning(false);
-          return;
-        }
-      }
-
-      if (!activeAddress) {
-        toast.error("Could not retrieve wallet address");
-        setIsWalletSigning(false);
-        return;
-      }
+      const activeAddress = await requestInjectedWalletAddress();
+      setWalletAddress(activeAddress);
 
       const { challengeId, message } = await createChallenge.mutateAsync({
         walletAddress: activeAddress,
       });
 
-      const signature = await signMessageAsync({ message });
+      const signature = await signInjectedWalletMessage(message, activeAddress);
 
       await verifyWallet.mutateAsync({
         challengeId,
@@ -146,65 +109,7 @@ export default function AccountLoginCard() {
     }
   };
 
-  const handlePrivySignIn = async () => {
-    if (!privy) {
-      toast.error("Privy authentication not initialized");
-      return;
-    }
-
-    try {
-      if (!privy.authenticated) {
-        await privy.login();
-      }
-
-      const privyUser = privy.user;
-      if (!privyUser) return;
-
-      const accessToken = await privy.getAccessToken();
-      if (!accessToken) {
-        toast.error("Could not obtain Privy access token");
-        return;
-      }
-
-      const privyEmail = privyUser.email?.address || privyUser.google?.email;
-      const privyWallet = privyUser.wallet?.address;
-
-      await privyAccountLogin.mutateAsync({
-        accessToken,
-        email: privyEmail,
-        name: privyEmail ? privyEmail.split("@")[0] : undefined,
-        walletAddress: privyWallet,
-      });
-
-      toast.success("Privy account linked");
-      await utils.auth.me.invalidate();
-    } catch (err: any) {
-      toast.error(err?.message || "Privy login failed");
-    }
-  };
-
-  const handleDirectSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !email.includes("@")) {
-      toast.error("Please enter a valid operator email");
-      return;
-    }
-
-    try {
-      await directLogin.mutateAsync({
-        email: email.trim().toLowerCase(),
-        name: email.split("@")[0],
-      });
-      toast.success("Signed in to operator workspace");
-      await utils.auth.me.invalidate();
-    } catch (err: any) {
-      toast.error(err?.message || "Sign in failed");
-    }
-  };
-
   const isPending =
-    directLogin.isPending ||
-    privyAccountLogin.isPending ||
     isWalletSigning ||
     createChallenge.isPending ||
     verifyWallet.isPending;
@@ -222,7 +127,7 @@ export default function AccountLoginCard() {
           <Link href="/developers" className="text-xs font-mono font-medium text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors hidden sm:block">
             Developer Docs
           </Link>
-          <span className="px-3 py-1 rounded-full bg-[var(--card)] border border-[var(--border)] text-[11px] font-mono font-medium text-[var(--primary)] shadow-sm">
+          <span className="px-3 py-1 rounded-full bg-[var(--card)] border border-[var(--border)] text-[12px] font-mono font-medium text-[var(--primary)] shadow-sm">
             Arc Testnet (5042002)
           </span>
         </div>
@@ -237,7 +142,7 @@ export default function AccountLoginCard() {
             <span className="font-medium tracking-wide uppercase font-mono">Merchant & Operator Workspace</span>
           </div>
 
-          <h1 className="text-5xl lg:text-6xl font-light text-[var(--foreground)] font-serif tracking-tight leading-[1.12]">
+          <h1 className="text-5xl lg:text-6xl font-normal text-[var(--foreground)] font-serif tracking-tight leading-[1.12]">
             Operate your stablecoin <br />
             <span className="italic text-[var(--primary)] font-serif">flow from one ledger</span>
           </h1>
@@ -250,8 +155,8 @@ export default function AccountLoginCard() {
             <div className="bg-[var(--card)]/90 backdrop-blur-md p-4 rounded-2xl border border-[var(--border)] shadow-sm flex items-start gap-3">
               <ShieldCheck size={20} className="text-[var(--primary)] shrink-0 mt-0.5" />
               <div>
-                <strong className="text-xs font-semibold text-[var(--foreground)] block font-sans">EIP-712 Signature Auth</strong>
-                <span className="text-[11px] text-[var(--muted-foreground)] leading-tight block mt-0.5 font-sans">Non-custodial login. Your private keys never leave your device.</span>
+                <strong className="text-xs font-semibold text-[var(--foreground)] block font-sans">Wallet Signature Auth</strong>
+                <span className="text-[12px] text-[var(--muted-foreground)] leading-tight block mt-0.5 font-sans">Non-custodial login. Your private keys never leave your device.</span>
               </div>
             </div>
 
@@ -259,7 +164,7 @@ export default function AccountLoginCard() {
               <KeyRound size={20} className="text-[var(--primary)] shrink-0 mt-0.5" />
               <div>
                 <strong className="text-xs font-semibold text-[var(--foreground)] block font-sans">Immediate Credentials</strong>
-                <span className="text-[11px] text-[var(--muted-foreground)] leading-tight block mt-0.5 font-sans">Provision server API keys and HMAC secrets instantaneously.</span>
+                <span className="text-[12px] text-[var(--muted-foreground)] leading-tight block mt-0.5 font-sans">Provision server API keys and HMAC secrets instantaneously.</span>
               </div>
             </div>
           </div>
@@ -274,9 +179,9 @@ export default function AccountLoginCard() {
               <span className="text-xs font-mono font-semibold text-[var(--primary)] uppercase tracking-widest block mb-1">
                 Authentication
               </span>
-              <h2 className="text-2xl font-serif font-light text-[var(--foreground)]">Sign in to Druto</h2>
+              <h2 className="text-2xl font-serif font-normal text-[var(--foreground)]">Sign in to Druto</h2>
               <p className="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed font-sans">
-                Connect your EVM wallet or use direct operator credentials.
+                Verify your EVM wallet to access the Arc Testnet workspace.
               </p>
             </div>
 
@@ -296,63 +201,27 @@ export default function AccountLoginCard() {
                 ) : (
                   <>
                     <Wallet size={16} />
-                    <span>{address ? `Sign in (${address.slice(0, 6)}…${address.slice(-4)})` : "Sign in with EVM Wallet"}</span>
+                    <span>{walletAddress ? `Sign in (${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)})` : "Sign in with EVM Wallet"}</span>
                     <ArrowRight size={15} />
                   </>
                 )}
               </button>
 
-              {privy && (
-                <button
-                  type="button"
-                  onClick={handlePrivySignIn}
-                  disabled={!privy.ready || isPending}
-                  className="w-full py-3 px-5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] text-xs font-medium hover:bg-[var(--sidebar-accent)] transition-all flex items-center justify-center gap-2"
-                >
-                  <UserCheck size={14} className="text-[var(--muted-foreground)]" />
-                  <span>Sign in with Privy (Email / Social)</span>
+              {import.meta.env.DEV && onPreview && <div className="pt-3">
+                <button type="button" onClick={onPreview} disabled={isPending}
+                  className="w-full py-3 px-5 rounded-full border border-[var(--primary)] text-[var(--primary)] text-sm font-medium hover:bg-[var(--secondary)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--primary)] disabled:opacity-60">
+                  Skip sign-in · preview dashboard
                 </button>
-              )}
+                <p className="mt-2 text-center text-xs leading-relaxed text-[var(--muted-foreground)]">
+                  Development only. Sample data; no account or payment access.
+                </p>
+              </div>}
+
             </div>
 
-            {/* Divider */}
-            <div className="relative text-center my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[var(--border)]" />
-              </div>
-              <span className="relative bg-[var(--card)] px-3 text-[11px] font-mono uppercase text-[var(--muted-foreground)]">
-                or email access
-              </span>
-            </div>
 
-            {/* Email Direct Operator Form */}
-            <form onSubmit={handleDirectSignIn} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-[var(--foreground)] mb-1.5 font-sans">
-                  Operator Email Address
-                </label>
-                <div className="relative">
-                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
-                  <input
-                    type="email"
-                    placeholder="merchant@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[var(--border)] text-xs text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--primary)] transition-all bg-[var(--background)] font-sans"
-                  />
-                </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={isPending}
-                className="w-full py-2.5 px-4 rounded-xl bg-[var(--sidebar-accent)] hover:bg-[var(--sidebar-accent)]/80 text-[var(--foreground)] text-xs font-medium transition-all flex items-center justify-center gap-2"
-              >
-                <span>{email ? "Continue with Email" : "Direct Operator Sign-in"}</span>
-              </button>
-            </form>
-
-            <div className="mt-6 pt-4 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--muted-foreground)] font-sans">
+            <div className="mt-6 pt-4 border-t border-[var(--border)] flex items-center justify-between text-[12px] text-[var(--muted-foreground)] font-sans">
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 size={13} className="text-emerald-500" />
                 <span>Zero seed phrase requested</span>

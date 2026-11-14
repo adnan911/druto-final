@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   if (!eventId) return new Response("missing event id", { status: 400 });
 
   const event = parsePaymentVerifiedEvent(rawBody);
-  if (!event) return new Response("invalid event", { status: 400 });
+  if (!event || event.id !== eventId) return new Response("invalid event", { status: 400 });
 
   // Replace these comments with your database transaction:
   // 1. Return 200 immediately if eventId is already processed.

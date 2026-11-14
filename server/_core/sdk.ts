@@ -155,6 +155,7 @@ class SDKServer {
 
   private getSessionSecret() {
     const secret = ENV.cookieSecret;
+    if (ENV.isProduction && (!process.env.JWT_SECRET || secret.length < 32)) throw new Error("Production JWT_SECRET must contain at least 32 characters");
     return new TextEncoder().encode(secret);
   }
 
@@ -187,11 +188,13 @@ class SDKServer {
     const secretKey = this.getSessionSecret();
 
     return new SignJWT({
+      sessionVersion: 2,
       openId: payload.openId,
       appId: payload.appId,
       name: payload.name,
     })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setIssuedAt()
       .setExpirationTime(expirationSeconds)
       .sign(secretKey);
   }
@@ -211,7 +214,7 @@ class SDKServer {
       });
       const { openId, appId, name } = payload as Record<string, unknown>;
 
-      if (!isNonEmptyString(openId) || !isNonEmptyString(name)) {
+      if (!isNonEmptyString(openId) || typeof name !== "string" || payload.sessionVersion !== 2 || appId !== ENV.appId || openId.startsWith("druto-operator-")) {
         console.warn("[Auth] Session payload missing required fields");
         return null;
       }
@@ -307,12 +310,14 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
+    if (user.openId !== sessionUserId || user.loginMethod === "account") throw ForbiddenError("Unverified account identity");
+
     await db.upsertUser({
       openId: user.openId,
       lastSignedIn: signedInAt,
     });
 
-    return user;
+    return { ...user, role: ENV.ownerOpenId && user.openId === ENV.ownerOpenId ? "admin" : "user" };
   }
 }
 
