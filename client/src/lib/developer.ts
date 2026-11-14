@@ -1,20 +1,23 @@
 export const developerSdkSnippet = `import { Druto } from "@druto/sdk";
 
-// Server or Cloudflare Worker only; keep the API key out of browser code.
-const druto = new Druto({ apiKey: process.env.DRUTO_API_KEY! });
+// Node server. In a Worker use env.DRUTO_API_KEY and env.DRUTO_BASE_URL.
+const druto = new Druto({ apiKey: process.env.DRUTO_API_KEY!, baseUrl: process.env.DRUTO_BASE_URL });
+// Load an authenticated pending order and trusted amount from your database.
 const session = await druto.createPayment({
-  externalOrderId: "order_123",
-  idempotencyKey: "order_123_seller_456_v1",
-  itemName: "Arc Testnet order",
-  amount: "1.00",
-  seller: { marketplaceId: "your-marketplace", sellerId: "seller_456" },
-  returnUrl: "https://shop.example/orders/order_123"
+  externalOrderId: order.id,
+  idempotencyKey: order.idempotencyKey,
+  itemName: order.title,
+  amount: order.amountUsdc,
+  seller: { marketplaceId: order.marketplaceId, sellerId: order.sellerId },
+  returnUrl: "https://shop.example/orders/" + order.id
 });
 
-// Redirect the buyer to session.checkoutUrl from your browser.`;
+// Persist the intent/order binding before exposing the hosted checkout URL.
+await bindIntentToOrder(order.id, session.id);
+return Response.json({ checkoutUrl: session.checkoutUrl });`;
 
-export const developerIntegrationSteps = ["Register the seller", "Request the ownership challenge", "Sign the message with the seller wallet", "Create a seller-routed intent", "Open Druto wallet/QR checkout", "Verify and fulfill"] as const;
+export const developerIntegrationSteps = ["Register the seller", "Request the ownership challenge", "Sign the message with the seller wallet", "Create and bind a seller-routed intent", "Return the hosted checkout URL to the buyer", "Scan or open the checkout on the buyer device", "Verify the signed event and fulfill once"] as const;
 
 export function getDeveloperContractSummary() {
-  return { network: "Arc Testnet", asset: "USDC", buyerMethods: ["wallet", "QR"], sellerOwnership: "offchain personal-signature challenge; no transaction required", requiredFields: ["externalOrderId", "idempotencyKey", "amount", "seller.marketplaceId", "seller.sellerId", "returnUrl"] };
+  return { network: "Arc Testnet", asset: "USDC", buyerMethods: ["hosted EVM wallet checkout", "QR link to hosted checkout"], qrSupport: "QR opens the hosted checkout URL; wallet support depends on browser or wallet app", sellerOwnership: "offchain personal-signature challenge; no transaction required", requiredFields: ["externalOrderId", "idempotencyKey", "amount", "seller.marketplaceId", "seller.sellerId", "returnUrl"] };
 }

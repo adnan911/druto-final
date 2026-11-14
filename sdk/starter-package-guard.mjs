@@ -20,3 +20,13 @@ export function assertStandalonePackage(meta, lock) {
     }
   }
 }
+
+// .4 is a documentation-only release. Keep the reviewed .3 Worker runtime and
+// types identical after LF normalization; future runtime changes require review.
+export function assertStarterSdkCompatibility(version, runtime, baselineRuntime, types, baselineTypes) {
+  const normalize = value => Buffer.from(value).toString("utf8").replace(/\r\n?/g, "\n");
+  if (version === '0.2.0-testnet.3') return;
+  if (version === '0.2.0-testnet.4' && normalize(runtime) === normalize(baselineRuntime) &&
+      normalize(types) === normalize(baselineTypes)) return;
+  throw new Error('Review starter compatibility before upgrading the bundled SDK');
+}

@@ -10,6 +10,8 @@ import { developerSdkSnippet } from "@/lib/developer";
 import AccountLoginCard from "@/components/AccountLoginCard";
 import DashboardOverview from "@/components/DashboardOverview";
 import DashboardWallets from "@/components/DashboardWallets";
+import DashboardWebhooks from "@/components/DashboardWebhooks";
+import DashboardDevelopers from "@/components/DashboardDevelopers";
 import FluidSurface from "@/components/FluidSurface";
 import { useDashboardTheme } from "@/lib/dashboardTheme";
 import "@/styles/dashboard-theme.css";
@@ -144,7 +146,7 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggl
   const [editModalOpen, setEditModalOpen] = useState(false);
   const navGroups = [
     { label: "Workspace", items: ["Overview", "Payments", "Sellers"] },
-    { label: "Manage", items: ["Receiving wallets", "Developers", "Settings"] },
+    { label: "Manage", items: ["Receiving wallets", "Developers", "API Keys", "Webhooks", "Settings"] },
   ];
   const logout = async () => {
     if (onExitPreview) return onExitPreview();
@@ -195,7 +197,7 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, user, moduleToggl
 }
 
 function NavIcon({ item }: { item: string }) {
-  const icons: Record<string, any> = { Overview: LayoutGrid, Payments: CreditCard, Sellers: UsersRound, "Receiving wallets": WalletCards, "Payment Links": Link2, Invoices: ReceiptText, Subscriptions: RefreshCw, Customers: UsersRound, "Seller transfers": WalletCards, "Direct settlement": Send, Reports: Table2, "Risk controls & limitations": ShieldCheck, Developers: Code2, "API Keys": KeyRound, Settings: Settings2 };
+  const icons: Record<string, any> = { Overview: LayoutGrid, Payments: CreditCard, Sellers: UsersRound, "Receiving wallets": WalletCards, "Payment Links": Link2, Invoices: ReceiptText, Subscriptions: RefreshCw, Customers: UsersRound, "Seller transfers": WalletCards, "Direct settlement": Send, Reports: Table2, "Risk controls & limitations": ShieldCheck, Webhooks: Activity, Developers: Code2, "API Keys": KeyRound, Settings: Settings2 };
   const Icon = icons[item] || Box; return <Icon size={17} />;
 }
 
@@ -208,7 +210,7 @@ function Topbar({ title, onCreate, onExitPreview, overview, onSearch, onOpenNavi
   const refresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([utils.payments.listIntents.invalidate(), utils.payments.verifiedPayments.invalidate(), utils.payments.verifiedPaymentsPage.invalidate(), utils.payments.summary.invalidate(), utils.merchantAccounts.listMine.invalidate()]);
+      await Promise.all([utils.payments.listIntents.invalidate(), utils.payments.verifiedPayments.invalidate(), utils.payments.verifiedPaymentsPage.invalidate(), utils.payments.summary.invalidate(), utils.merchantAccounts.listMine.invalidate(), utils.merchantAccounts.webhookConsole.invalidate()]);
     } finally { setRefreshing(false); }
   };
   const disconnect = async () => {
@@ -223,7 +225,7 @@ function Topbar({ title, onCreate, onExitPreview, overview, onSearch, onOpenNavi
     <div className="topbar-title">
       <button type="button" className="icon-button dg-mobile-menu" aria-label="Open navigation" aria-controls="druto-dashboard-sidebar" onClick={onOpenNavigation}><Menu size={18} /></button>
       <div className="breadcrumb">Workspace <span>/</span> <strong>{title}</strong></div>
-      {!overview && <h1>{title}</h1>}
+      {!overview && title !== "Webhooks" && title !== "API Keys" && title !== "Developers" && <h1>{title}</h1>}
     </div>
     <div className="topbar-actions">
       <span className="dg-environment">{onExitPreview ? "Demo workspace" : "Arc Testnet"}</span>
@@ -727,10 +729,12 @@ function SettingsPage({ user }: { moduleToggles: ModuleToggles; onToggleModule: 
 function PagePanel({
   active,
   onCreate,
+  onNavigate,
   moduleToggles,
   onToggleModule,
   user,
 }: {
+  onNavigate: (section: string) => void;
   active: string;
   onCreate: () => void;
   moduleToggles: ModuleToggles;
@@ -747,8 +751,10 @@ function PagePanel({
   if (active === "Seller transfers") return <BalancesPage />;
   if (active === "Direct settlement") return <SettlementsPage />;
   if (active === "Risk controls & limitations") return <RiskPage />;
-  if (active === "Developers") return <DeveloperIntegrationPage />;
-  if (active === "Sellers" || active === "API Keys") return <SellerOnboarding />;
+  if (active === "Webhooks") return <DashboardWebhooks onSetup={() => onNavigate("Sellers")} readOnly={import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "dashboard"} />;
+  if (active === "Developers") return <DashboardDevelopers onNavigate={onNavigate} readOnly={import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "dashboard"} />;
+  if (active === "API Keys") return <ApiKeyManager onSellerSetup={() => onNavigate("Sellers")} readOnly={import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "dashboard"} />;
+  if (active === "Sellers") return <SellerOnboarding />;
   if (active === "Receiving wallets") return <DashboardWallets />;
   if (active === "Customers") return <CustomersPage />;
   return (
@@ -785,24 +791,6 @@ function SettlementsPage() { const summary = trpc.payments.summary.useQuery(); r
 function RiskPage() { return <div className="page-content"><PageHeader title="Risk controls & limitations" action="Read release scope" onAction={() => window.location.href = "/developers#scope"} /><div className="risk-banner"><ShieldCheck size={21} /><div><strong>Testnet payment verification only</strong><span>This status is not a compliance approval or seller-risk assessment.</span></div><StatusPill status="Limited scope" tone="warning" /></div><div className="risk-layout"><div className="card table-card"><div className="card-heading"><div><span className="eyebrow">What this view does not provide</span><h3>No compliance screening claim</h3></div></div><div className="queue-empty"><AlertTriangle size={17} /><span>This Testnet release does not represent sanctions screening, seller KYC/KYB, fraud scoring, or country eligibility checks. Do not use this page as proof that a buyer, seller, or transaction is compliant.</span></div></div><div className="card controls-card"><span className="eyebrow">Payment verification scope</span><h3>Onchain checks</h3><Policy label="Network and asset" value="Arc Testnet · USDC" ok /><Policy label="Payment result" value="Verified against intent" ok /><Policy label="Sanctions / KYC / fraud review" value="Not provided" /><Policy label="Seller funds" value="Sent directly to seller wallet" /></div></div></div>; }
 function Policy({ label, value, ok }: { label: string; value: string; ok?: boolean }) { return <div className="policy-row"><span>{ok ? <Check size={14} /> : <AlertTriangle size={14} />}{label}</span><strong>{value}</strong></div>; }
 function SellerOwnershipDemo() { return <div className="card p-6 mt-6"><div className="flex items-start gap-3"><ShieldCheck size={20} /><div><span className="eyebrow">Seller activation</span><h3 className="mt-2">Wallet verification is paused</h3><p className="mt-2 text-muted-foreground">Seller records, payment destinations, API keys, and signed webhooks remain available. Wallet ownership verification will be restored later as a separate integration module.</p></div></div></div>; }
-function DeveloperIntegrationPage() {
-  return <div className="page-content">
-    <PageHeader title="Storefront integration" action="Start setup checklist" onAction={() => window.location.href = "/developers/start"} />
-    <div className="card p-6 md:p-8">
-      <span className="eyebrow">Arc Testnet SDK · Testnet only</span>
-      <h2 className="text-3xl font-semibold mt-3">Build your marketplace integration</h2>
-      <p className="mt-4 text-muted-foreground">Create seller-scoped checkout sessions on your server, store each Druto intent against its marketplace order, and verify signed webhooks before fulfillment. Start with the checklist, then use the full guide for framework-specific examples.</p>
-      <div className="flex flex-wrap gap-3 mt-6">
-        <a className="button button-primary" href="/developers/start">Start setup checklist <ArrowUpRight size={15} /></a>
-        <a className="button button-quiet" href="/developers">Open developer guide</a>
-        <a className="button button-quiet" href="/downloads/druto-sdk-0.2.0-testnet.4.zip" download>Download SDK v0.2.0-testnet.4</a>
-      </div>
-      <h3 className="mt-8 text-lg font-semibold">Server quickstart</h3>
-      <pre className="code-block whitespace-pre-wrap overflow-auto mt-4"><code>{developerSdkSnippet}</code></pre>
-      <p className="mt-3 text-sm text-muted-foreground">Keep the API key and order authorization on your server. Never create payment amounts from untrusted browser input.</p>
-    </div>
-  </div>;
-}
 function CustomersPage() {
   const [search, setSearch] = useState("");
   const verified = trpc.payments.verifiedPayments.useQuery();
@@ -1916,7 +1904,26 @@ function OrderSummary({ subtotal, shipping, total, actionLabel, onAction, disabl
 export function DashboardWorkspace({ user, onExitPreview }: { user: { name?: string | null; openId?: string | null; email?: string | null }; onExitPreview?: () => void }) {
   const { theme, toggleTheme } = useDashboardTheme();
   const [location] = useLocation();
-  const [active, setActive] = useState(location.startsWith("/payments") ? "Payments" : "Overview");
+  const readSection = () => {
+    if (typeof window === "undefined") return location.startsWith("/payments") ? "Payments" : "Overview";
+    const section = new URLSearchParams(window.location.search).get("section");
+    const names: Record<string,string> = { overview:"Overview", payments:"Payments", sellers:"Sellers", wallets:"Receiving wallets", developers:"Developers", keys:"API Keys", webhooks:"Webhooks", settings:"Settings", support:"Support" };
+    return names[section ?? ""] ?? (window.location.pathname.startsWith("/payments") ? "Payments" : "Overview");
+  };
+  const [active, setActive] = useState(readSection);
+  useEffect(() => {
+    const onBack = () => setActive(readSection());
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, []);
+  useEffect(() => {
+    const names: Record<string,string> = { Overview:"overview", Payments:"payments", Sellers:"sellers", "Receiving wallets":"wallets", Developers:"developers", "API Keys":"keys", Webhooks:"webhooks", Settings:"settings", Support:"support" };
+    const url = new URL(window.location.href);
+    const desired = names[active];
+    if (!desired || (url.searchParams.get("section") ?? (url.pathname === "/payments" ? "payments" : "overview")) === desired) return;
+    url.searchParams.set("section", desired);
+    window.history.pushState(null, "", url.pathname + url.search + url.hash);
+  }, [active]);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -2001,7 +2008,7 @@ export function DashboardWorkspace({ user, onExitPreview }: { user: { name?: str
         {active === "Overview" ? (
           <DashboardOverview setActive={setActive} onCreate={create} createLabel={D1_WALLET_ONLY && !onExitPreview ? "Set up checkout" : "Create payment"} />
         ) : (
-          <PagePanel
+          <PagePanel onNavigate={setActive}
             active={active}
             onCreate={create}
             moduleToggles={moduleToggles}

@@ -15,7 +15,7 @@ execFileSync(process.execPath, [path.join(root, "node_modules", "typescript", "b
 const zip = new JSZip();
 const files = ["package.json", "LICENSE", "README.md", "dist/index.js", "dist/index.d.ts", "examples/node-checkout.mjs"];
 const fixedDate = new Date("2026-10-08T00:00:00.000Z");
-for (const file of files) zip.file(`druto-sdk/${file}`, await readFile(path.join(sdk, file)), { date: fixedDate, createFolders: false });
+for (const file of files) zip.file(`druto-sdk/${file}`, (await readFile(path.join(sdk, file), "utf8")).replace(/\r\n?/g, "\n"), { date: fixedDate, createFolders: false });
 const bytes = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 9 } });
 const sha256 = createHash("sha256").update(bytes).digest("hex");
 await mkdir(output, { recursive: true });

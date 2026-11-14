@@ -1,3 +1,4 @@
+import { assertStarterSdkCompatibility } from "./starter-package-guard.mjs";
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { assertStandalonePackage } from './starter-package-guard.mjs';
@@ -22,4 +23,20 @@ describe('standalone starter archive dependency guard',()=>{
     const lock=read('package-lock.json');lock.version='0.0.0';
     expect(()=>assertStandalonePackage(read('package.json'),lock)).toThrow('identity mismatch');
   });
+});
+
+describe('documentation-only SDK compatibility', () => {
+  it('accepts the .4 documentation release only with unchanged runtime and types', () => {
+    expect(() => assertStarterSdkCompatibility('0.2.0-testnet.4', Buffer.from('runtime'), Buffer.from('runtime'), Buffer.from('types'), Buffer.from('types'))).not.toThrow();
+  });
+  it('rejects changed runtime or types and all unknown versions', () => {
+    for (const [version, runtime, types] of [
+      ['0.2.0-testnet.4', 'changed', 'types'],
+      ['0.2.0-testnet.4', 'runtime', 'changed'],
+      ['0.2.0-testnet.5', 'runtime', 'types'],
+    ]) expect(() => assertStarterSdkCompatibility(version, Buffer.from(runtime), Buffer.from('runtime'), Buffer.from(types), Buffer.from('types'))).toThrow('Review starter compatibility');
+  });
+});
+it('normalizes only line endings for documentation-only compatibility', () => {
+  expect(() => assertStarterSdkCompatibility('0.2.0-testnet.4', Buffer.from('runtime\r\n'), Buffer.from('runtime\n'), Buffer.from('types\r\n'), Buffer.from('types\n'))).not.toThrow();
 });

@@ -198,3 +198,28 @@ existing >500kB chunk warning. One batched inspection and one confirmation cover
 toggle visibility passed, light preference survived reload, detail focus remained
 contained and the dashboard marker was removed on preview exit. Static Impeccable
 scan ran once; parsed contrast rules were not part of that static scan.
+
+## Webhook operations surface — 2026-11-13
+The Webhooks console expands the existing dashboard identity. Reuse glass panels,
+Manrope, mint actions, existing dark/light tokens and FluidSurface filters.
+Desktop uses a compact delivery table with right-side details; <=600px switches
+to divided record rows with a visible details action. No chart, 3D, notification
+simulation or independent palette. Summary values are database-derived and must
+not be replaced with sample counts in authenticated mode. Delivery success means
+HTTP acknowledgement, never fulfillment. Read-only DEV fixtures remain explicit.
+See docs/DASHBOARD_WEBHOOK_CONSOLE_2026-11-13.md for behavior and acceptance evidence.
+
+## Dedicated credential console — 2026-11-13
+API Keys is a separate section, preserving the existing glass/light system.
+Revoke confirmation identifies the selected masked key and seller. Secret reveal
+is an in-memory panel with saved acknowledgement before hide. No motion loop,
+diagram or unrelated effect is added around credential handling.
+See docs/DASHBOARD_API_KEYS_2026-11-13.md for behavior and validation limits.
+
+## Developer integration console — 2026-11-14
+The dashboard Developers section is an evidence-driven seller/endpoint checklist,
+followed by SDK/starter resources and a copyable server fragment. It preserves
+the same glass and light palette with quiet divided checklist rows, actionable
+links and explicit unknown/blocked states. No chart or decorative 3D is added.
+Five observed signals are not a claim of production, compliance or fulfillment.
+See docs/DASHBOARD_DEVELOPER_CHECKLIST_2026-11-14.md for data boundaries and QA.

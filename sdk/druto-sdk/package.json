@@ -1,6 +1,6 @@
 {
   "name": "@druto/sdk",
-  "version": "0.2.0-testnet.3",
+  "version": "0.2.0-testnet.4",
   "description": "Server-side Druto Arc Testnet USDC checkout and webhook SDK",
   "type": "module",
   "engines": { "node": ">=20" },

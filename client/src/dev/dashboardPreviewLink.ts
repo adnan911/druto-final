@@ -37,6 +37,18 @@ const payments = intents.filter(row => row.status === "succeeded").map((row, ind
   amountAtomic: row.amountAtomic, createdAt: row.createdAt, finalizedAt: row.createdAt,
   transactionHash: "DEMO — no onchain transaction", fromAddress: "0x0000000000000000000000000000000000000004", toAddress: row.merchantAddress,
 }));
+const deliveries = payments.map((payment, index) => ({
+  id: "demo_wd_" + index, endpointId: "demo_wh_store", eventId: "demo_evt_" + index,
+  eventType: "payment.verified", paymentIntentId: payment.paymentIntentId,
+  externalOrderId: payment.externalOrderId, sellerName: "Fieldwork Goods",
+  status: index === 0 ? "pending" : index === 1 ? "failed" : "succeeded",
+  attempts: index === 0 ? 0 : 1, nextAttemptAt: null,
+  deliveredAt: index > 1 ? payment.createdAt : null, createdAt: payment.createdAt,
+  updatedAt: payment.createdAt, endpointActive: true, retryAvailable: index < 2,
+  payload: { id: "demo_evt_" + index, type: "payment.verified",
+    data: { paymentIntentId: payment.paymentIntentId, externalOrderId: payment.externalOrderId,
+      amountAtomic: payment.amountAtomic, asset: "USDC", network: "arc-testnet" } },
+}));
 function queryFixture(path: string, input: unknown) {
   switch (path) {
     case "auth.me": return user;
@@ -56,7 +68,33 @@ function queryFixture(path: string, input: unknown) {
     }
     case "payments.getPrivateIntent": return intents.find(row => row.id === (input as { id?: string } | undefined)?.id) ?? null;
     case "merchantAccounts.listMine": return accounts;
-    case "apiKeys.list": return [];
+    case "merchantAccounts.webhookConsole": {
+      const filter = input as { endpointId?: string; status?: string; search?: string; limit?: number; cursor?: { createdAt: number; id: string } };
+      const scoped = deliveries.filter(row => !filter.endpointId || row.endpointId === filter.endpointId);
+      const items = scoped.filter(row => (!filter.status || row.status === filter.status)
+        && (!filter.search || [row.eventId,row.paymentIntentId,row.externalOrderId].some(value => value.toLowerCase().includes(filter.search!.toLowerCase())))
+        && (!filter.cursor || row.createdAt.getTime() < filter.cursor.createdAt || (row.createdAt.getTime() === filter.cursor.createdAt && row.id < filter.cursor.id)));
+      const shown = items.slice(0,filter.limit ?? 25);
+      const last = shown[shown.length - 1];
+      return { items: shown.map(row => ({...row,payload:null})), counts: {
+        delivered: scoped.filter(row => row.status === "succeeded").length,
+        pending: scoped.filter(row => row.status === "pending").length,
+        failed: scoped.filter(row => row.status === "failed").length,
+      }, nextCursor: items.length > shown.length && last ? { createdAt: last.createdAt.getTime(),id:last.id } : null };
+    }
+    case "merchantAccounts.webhookDelivery": {
+      const row = deliveries.find(row => row.id === (input as { deliveryId: string }).deliveryId);
+      if (!row) throw new Error("Sample delivery not found");
+      return row;
+    }
+    case "apiKeys.list": return [
+      { id:"demo_key_active",name:"Storefront test backend",prefix:"demo_",lastFour:"0001",
+        merchantAccountId:"demo_ma_fieldwork",marketplaceId:"demo-marketplace",sellerId:"fieldwork",
+        sellerDisplayName:"Fieldwork Goods",createdAt:new Date(Date.now()-86400000),lastUsedAt:new Date(),revokedAt:null },
+      { id:"demo_key_revoked",name:"Retired test adapter",prefix:"demo_",lastFour:"0002",
+        merchantAccountId:"demo_ma_studio",marketplaceId:"demo-marketplace",sellerId:"studio",
+        sellerDisplayName:"Studio Linen",createdAt:new Date(Date.now()-172800000),lastUsedAt:null,revokedAt:new Date() },
+    ];
     default: throw new Error("This view has no sample fixture. Exit preview and sign in to use it.");
   }
 }

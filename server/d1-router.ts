@@ -1,6 +1,7 @@
+import { webhookConsoleInput, webhookDeliveryView } from "./webhook-console";
 import { COOKIE_NAME } from "@shared/const";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, like, lt, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, sql, like, lt, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { nanoid } from "nanoid";
 import { getAddress, verifyMessage } from "viem";
@@ -174,6 +175,55 @@ export const d1Router = router({
         createdAt: webhookEndpointsD1.createdAt, updatedAt: webhookEndpointsD1.updatedAt }).from(webhookEndpointsD1)
         .where(eq(webhookEndpointsD1.merchantAccountId, account.id));
     }),
+    webhookConsole: protectedProcedure.input(webhookConsoleInput).query(async ({ input, ctx }) => {
+      const database = db();
+      const base = ctx.user.role === "admin" ? [] : [eq(merchantAccountsD1.ownerUserId, ctx.user.id)];
+      if (input.endpointId) base.push(eq(webhookEndpointsD1.id, input.endpointId));
+      const totals = await database.select({ status: webhookDeliveriesD1.status, count: sql<number>`count(*)` })
+        .from(webhookDeliveriesD1).innerJoin(webhookEndpointsD1, eq(webhookDeliveriesD1.endpointId, webhookEndpointsD1.id))
+        .innerJoin(merchantAccountsD1, eq(webhookEndpointsD1.merchantAccountId, merchantAccountsD1.id)).where(and(...base)).groupBy(webhookDeliveriesD1.status);
+      const filters = [...base];
+      if (input.status) filters.push(eq(webhookDeliveriesD1.status, input.status));
+      if (input.search) {
+        const term = '%' + input.search + '%';
+        filters.push(or(like(webhookDeliveriesD1.eventId, term), like(webhookDeliveriesD1.paymentIntentId, term), like(webhookDeliveriesD1.id, term),
+          like(paymentIntentsD1.externalOrderId, term))!);
+      }
+      if (input.cursor) filters.push(or(lt(webhookDeliveriesD1.createdAt, new Date(input.cursor.createdAt)),
+        and(eq(webhookDeliveriesD1.createdAt, new Date(input.cursor.createdAt)), lt(webhookDeliveriesD1.id, input.cursor.id)))!);
+      const rows = await database.select({
+        id: webhookDeliveriesD1.id, endpointId: webhookDeliveriesD1.endpointId, eventId: webhookDeliveriesD1.eventId, eventType: webhookDeliveriesD1.eventType,
+        paymentIntentId: webhookDeliveriesD1.paymentIntentId, status: webhookDeliveriesD1.status, attempts: webhookDeliveriesD1.attempts,
+        nextAttemptAt: webhookDeliveriesD1.nextAttemptAt, deliveredAt: webhookDeliveriesD1.deliveredAt, createdAt: webhookDeliveriesD1.createdAt,
+        updatedAt: webhookDeliveriesD1.updatedAt, endpointActive: webhookEndpointsD1.active, url: webhookEndpointsD1.url, sellerName: merchantAccountsD1.displayName,
+        externalOrderId: paymentIntentsD1.externalOrderId,
+      }).from(webhookDeliveriesD1).innerJoin(webhookEndpointsD1, eq(webhookDeliveriesD1.endpointId, webhookEndpointsD1.id)).innerJoin(merchantAccountsD1, eq(webhookEndpointsD1.merchantAccountId, merchantAccountsD1.id))
+        .leftJoin(paymentIntentsD1, and(eq(webhookDeliveriesD1.paymentIntentId, paymentIntentsD1.id), eq(paymentIntentsD1.merchantAccountId, merchantAccountsD1.id)))
+        .where(and(...filters)).orderBy(desc(webhookDeliveriesD1.createdAt), desc(webhookDeliveriesD1.id)).limit(input.limit + 1);
+      const items = rows.slice(0, input.limit).map(row => webhookDeliveryView(row));
+      const last = items[items.length - 1];
+      return { items, counts: {
+        delivered: Number(totals.find(row => row.status === "succeeded")?.count ?? 0),
+        pending: Number(totals.find(row => row.status === "pending")?.count ?? 0),
+        failed: Number(totals.find(row => row.status === "failed")?.count ?? 0),
+      }, nextCursor: rows.length > input.limit && last ? { createdAt: last.createdAt.getTime(), id: last.id } : null };
+    }),
+    webhookDelivery: protectedProcedure.input(z.object({ deliveryId: z.string().min(1).max(32) })).query(async ({ input, ctx }) => {
+      const database = db();
+      const filters = [eq(webhookDeliveriesD1.id, input.deliveryId)];
+      if (ctx.user.role !== "admin") filters.push(eq(merchantAccountsD1.ownerUserId, ctx.user.id));
+      const [row] = await database.select({
+        id: webhookDeliveriesD1.id, endpointId: webhookDeliveriesD1.endpointId, eventId: webhookDeliveriesD1.eventId, eventType: webhookDeliveriesD1.eventType,
+        paymentIntentId: webhookDeliveriesD1.paymentIntentId, payload: webhookDeliveriesD1.payload, status: webhookDeliveriesD1.status, attempts: webhookDeliveriesD1.attempts,
+        nextAttemptAt: webhookDeliveriesD1.nextAttemptAt, deliveredAt: webhookDeliveriesD1.deliveredAt, createdAt: webhookDeliveriesD1.createdAt,
+        updatedAt: webhookDeliveriesD1.updatedAt, endpointActive: webhookEndpointsD1.active, url: webhookEndpointsD1.url, sellerName: merchantAccountsD1.displayName,
+        externalOrderId: paymentIntentsD1.externalOrderId,
+      }).from(webhookDeliveriesD1).innerJoin(webhookEndpointsD1, eq(webhookDeliveriesD1.endpointId, webhookEndpointsD1.id)).innerJoin(merchantAccountsD1, eq(webhookEndpointsD1.merchantAccountId, merchantAccountsD1.id))
+        .leftJoin(paymentIntentsD1, and(eq(webhookDeliveriesD1.paymentIntentId, paymentIntentsD1.id), eq(paymentIntentsD1.merchantAccountId, merchantAccountsD1.id)))
+        .where(and(...filters)).limit(1);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Webhook delivery not found" });
+      return webhookDeliveryView(row, true);
+    }),
     retryWebhook: protectedProcedure.input(z.object({ deliveryId: z.string().min(1).max(32) })).mutation(async ({ input, ctx }) => {
       const [delivery] = await db().select().from(webhookDeliveriesD1).where(eq(webhookDeliveriesD1.id, input.deliveryId)).limit(1);
       if (!delivery) throw new TRPCError({ code: "NOT_FOUND", message: "Webhook delivery not found" });
@@ -183,7 +233,11 @@ export const d1Router = router({
       if (!account || (ctx.user.role !== "admin" && account.ownerUserId !== ctx.user.id)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Seller account ownership required" });
       }
-      return sendD1Webhook(delivery.id, true);
+      if (endpoint.active !== 1) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Webhook endpoint is paused" });
+      console.info(JSON.stringify({ event: "druto_webhook_retry_requested", actorUserId: ctx.user.id, deliveryId: delivery.id, eventId: delivery.eventId }));
+      const result = await sendD1Webhook(delivery.id, true);
+      console.info(JSON.stringify({ event: "druto_webhook_retry_result", actorUserId: ctx.user.id, deliveryId: delivery.id, ok: result.ok, skipped: result.skipped }));
+      return result;
     }),
     approve: adminProcedure.mutation(unavailable),
   }),

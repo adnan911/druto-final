@@ -4,20 +4,20 @@
 
 ## Install the Cloudflare-hosted package
 
-Download [druto-sdk-0.2.0-testnet.3.zip](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.3.zip), verify its [SHA-256 checksum](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.3.zip.sha256), unzip it, then install the extracted `druto-sdk` directory:
+Download [druto-sdk-0.2.0-testnet.4.zip](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.4.zip), verify its [SHA-256 checksum](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-sdk-0.2.0-testnet.4.zip.sha256), unzip it, then install the extracted `druto-sdk` directory:
 
 ```sh
 npm install ./druto-sdk
 ```
 
-This is a downloadable package, **not** an npm registry publication. Node.js 20+ or an ESM-capable Worker runtime is required. The current gateway endpoint is `https://druto-d1-testnet.robobq.workers.dev`.
+This documentation refresh is version `0.2.0-testnet.4`; the SDK runtime is unchanged from `0.2.0-testnet.3`. This is a downloadable package, **not** an npm registry publication. Node.js 20+ or an ESM-capable Worker runtime is required. The current gateway endpoint is `https://druto-d1-testnet.robobq.workers.dev`. For a marketplace using Cloudflare D1, prefer the [standalone storefront starter](https://druto-d1-testnet.robobq.workers.dev/downloads/druto-cloudflare-starter-0.1.0-testnet.2.zip); it demonstrates the Worker `env` bindings, durable orders and webhook checks.
 
 ## Create a checkout session on your server
 
 ```ts
 import { Druto } from "@druto/sdk";
 
-const druto = new Druto({ apiKey: process.env.DRUTO_API_KEY! });
+const druto = new Druto({ apiKey: process.env.DRUTO_API_KEY!, baseUrl: process.env.DRUTO_BASE_URL });
 const session = await druto.createPayment({
   externalOrderId: "order_123",
   idempotencyKey: "order_123_seller_456_v1",
@@ -46,6 +46,7 @@ const event = await verifyPaymentWebhook({
   eventId: request.headers.get("x-druto-event-id") ?? undefined,
 });
 if (!event) return new Response("invalid event", { status: 401 });
+if (event.version !== "2026-08-23") return new Response("unsupported event version", { status: 400 });
 
 // In one database transaction: compare order ID, seller, recipient, amount and
 // transaction hash to your pending order; insert event.id under a unique key;
@@ -54,7 +55,33 @@ await settleOrderOnce(event);
 return new Response("ok", { status: 200 });
 ```
 
-The signature covers the raw body and timestamp with HMAC-SHA256. The SDK enforces a five-minute timestamp tolerance and checks the optional event-ID header against the signed body. Your application must use a durable unique constraint for duplicate events and order fulfillment. A browser return, wallet popup, or transaction hash alone is not payment proof. If webhook processing fails, return a non-2xx response so Druto can retry. `getPayment(id)` is a read-only reconciliation aid; match its payment ID, amount, seller recipient, and chain transaction to your own order record.
+The signature covers the raw body and timestamp with HMAC-SHA256. The SDK enforces a five-minute timestamp tolerance and checks the optional event-ID header against the signed body. The receiving application must also allow only the event versions it implements; the current Testnet event version is `2026-08-23`. Return non-2xx for unknown versions. Your application must use a durable unique constraint for duplicate events and order fulfillment. A browser return, wallet popup, or transaction hash alone is not payment proof. If webhook processing fails, return a non-2xx response so Druto can retry. `getPayment(id)` is a read-only reconciliation aid; compare its ID, status, atomic amount, asset/network, recipient and transaction hash with your own order record before using it to investigate a pending event. It does not accept or settle an order by itself.
+
+### Cloudflare Worker bindings
+
+Worker secrets are passed as bindings. Do not use `process.env` unless your Worker explicitly enables and configures Node.js compatibility.
+
+```js
+import { Druto } from "@druto/sdk";
+
+export default {
+  async fetch(request, env) {
+    const druto = new Druto({ apiKey: env.DRUTO_API_KEY, baseUrl: env.DRUTO_BASE_URL });
+    // Load an authorized pending order from env.DB before this call.
+    const session = await druto.createPayment({
+      externalOrderId: order.id,
+      idempotencyKey: order.idempotencyKey,
+      itemName: order.title,
+      amount: order.amountUsdc,
+      seller: { marketplaceId: order.marketplaceId, sellerId: order.sellerId },
+      returnUrl: `${env.APP_URL}/orders/${order.id}`,
+    });
+    // Persist session.id before redirecting the buyer to session.checkoutUrl.
+  },
+};
+```
+
+This abbreviated handler assumes the named `order` was authenticated, loaded, and price-calculated by your own application. It is not a copy-and-deploy payment app. The ZIP starter provides the complete D1 flow.
 
 ## Current scope
 

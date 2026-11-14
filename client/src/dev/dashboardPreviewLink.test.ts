@@ -30,7 +30,7 @@ describe("development dashboard transport isolation", () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
     const client = createTRPCUntypedClient<AppRouter>({ links: [dashboardPreviewLink()] });
-    for (const path of ["auth.verifyWalletLogin", "auth.updateProfile", "payments.createIntent", "apiKeys.create", "merchantAccounts.register"]) {
+    for (const path of ["auth.verifyWalletLogin", "auth.updateProfile", "payments.createIntent", "apiKeys.create", "apiKeys.revoke", "merchantAccounts.register", "merchantAccounts.retryWebhook"]) {
       await expect(client.mutation(path, {})).rejects.toThrow("Preview is read-only");
     }
     await expect(client.query("unlisted.procedure")).rejects.toThrow("no sample fixture");
